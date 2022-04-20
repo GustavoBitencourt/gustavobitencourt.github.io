@@ -18,3 +18,43 @@
 body {
     background-color: grey;
 }
+
+.heart {
+    width: 200px;
+    height: 200px;
+    position: relative;
+    margin: auto;
+    background: red;
+    animation: pulse 1s infinite alternate;
+
+  }
+  
+  .square {
+    width: 200px;
+    height: 200px;
+    position: absolute;
+    top: 0;
+    left: 0;
+    background: red;
+  }
+  
+  .circle {
+    width: 200px;
+    height: 200px;
+    border-radius: 50%;
+    position: absolute;
+    background:red;
+  }
+  
+  .top {
+    top: 100px;
+  }
+  
+  .left {
+    left: 100px;
+  }
+  
+  @keyframes pulse {
+    0%   {transform: scale(0.9) rotate(-135deg);}
+    100% {transform: scale(1.1) rotate(-135deg);}
+  }
