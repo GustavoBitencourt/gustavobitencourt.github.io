@@ -1,0 +1,46 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100vh;
+    background-color: rgb(1, 14, 1);
+}
+
+.line {
+    border-right: 2px solid #00a500;
+    color: #00a500;
+    font-family: "Roboto Serif";
+    font-size: 3em;
+    margin: 0 auto;
+    white-space: nowrap;
+    overflow: hidden;
+    text-align: center;
+}
+
+.typing-animation {
+    animation: blinkCursor 500ms infinite normal, typing 4s steps(40) 1s normal both;
+}
+
+@keyframes typing {
+    from {
+        width: 0;
+    }
+    to {
+        width: 18em;
+    }
+}
+
+@keyframes blinkCursor {
+    from {
+        border-right-color: rgba(255, 255, 255, 0.75);
+    }
+    to{
+        border-right-color: transparent;
+    }
+}
