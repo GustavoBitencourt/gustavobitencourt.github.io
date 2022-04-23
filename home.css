@@ -15,7 +15,7 @@ body {
 .line {
     border-right: 2px solid #00a500;
     color: #00a500;
-    font-family: "Roboto Serif";
+    font-family: "Roboto Mono";
     font-size: 3em;
     margin: 0 auto;
     white-space: nowrap;

@@ -11,6 +11,13 @@
     border: 1px solid #B0042C;
 }
 
+.img {
+  
+    
+    width: auto;
+    height: auto;
+}
+
 .image:hover{
     border: 5px solid #B0042C;
 }
@@ -24,6 +31,7 @@ body {
     height: 200px;
     position: relative;
     margin: auto;
+    margin-top: 20%;
     background: red;
     animation: pulse 1s infinite alternate;
 
