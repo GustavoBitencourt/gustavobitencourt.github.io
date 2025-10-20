@@ -1,31 +1,8 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useCallback } from 'react';
 
 const SkillsSection = ({ t }) => {
   const containerRef = useRef(null);
   const isGenerating = useRef(false);
-
-  const words = [
-    "Commerce Cloud",
-    "Salesforce",
-    "JavaScript",
-    "NodeJs",
-    "Postman",
-    "Express",
-    "React",
-    "API",
-    "Visual Studio",
-    "Content Assets",
-    "Page Designer",
-    "Einstein",
-    "Insomnia",
-    "Jira",
-    "Trello",
-    "Git",
-    "Bitbucket",
-    "Docker",
-    "Prisma",
-    "TypeScript"
-  ];
 
   const isColliding = (rect1, rect2) => {
     const margin = 25;
@@ -36,7 +13,30 @@ const SkillsSection = ({ t }) => {
             rect1.y + rect1.height + margin < rect2.y);
   };
 
-  const generateWords = () => {
+  const generateWords = useCallback(() => {
+    const words = [
+      "Commerce Cloud",
+      "Salesforce",
+      "JavaScript",
+      "NodeJs",
+      "Postman",
+      "Express",
+      "React",
+      "API",
+      "Visual Studio",
+      "Content Assets",
+      "Page Designer",
+      "Einstein",
+      "Insomnia",
+      "Jira",
+      "Trello",
+      "Git",
+      "Bitbucket",
+      "Docker",
+      "Prisma",
+      "TypeScript"
+    ];
+    
     const container = containerRef.current;
     if (!container || isGenerating.current) return;
 
@@ -180,7 +180,7 @@ const SkillsSection = ({ t }) => {
       
       isGenerating.current = false;
     }, 50);
-  };
+  }, []); // useCallback sem dependências pois tudo está interno
 
   useEffect(() => {
     const handleResize = () => {
@@ -196,7 +196,7 @@ const SkillsSection = ({ t }) => {
     return () => {
       window.removeEventListener('resize', handleResize);
     };
-  }, []);
+  }, [generateWords]); // Incluir generateWords nas dependências
 
   return (
     <section id="skills-tools">
