@@ -5,7 +5,7 @@ body,
 html {
   margin: 0;
   padding: 0;
-  font-family: Arial, sans-serif;
+  font-family: "Fira Code", monospace;
   overflow-x: hidden; /* Elimina barra de rolagem horizontal */
   width: 100%;
   max-width: 100vw;
@@ -229,6 +229,7 @@ canvas {
   user-select: none;
   backface-visibility: hidden;
   will-change: transform, color;
+  font-family: Arial, sans-serif;
 }
 
 .word:hover {
