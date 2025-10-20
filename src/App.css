@@ -381,6 +381,32 @@ canvas {
   height: 28px;
 }
 
+.linkedin-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 60px;
+  height: 60px;
+  background-color: #0077B5;
+  color: white;
+  text-decoration: none;
+  border-radius: 50%;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 15px rgba(0, 119, 181, 0.3);
+  margin-left: 15px;
+}
+
+.linkedin-btn:hover {
+  background-color: #005885;
+  transform: translateY(-3px) scale(1.1);
+  box-shadow: 0 8px 25px rgba(0, 119, 181, 0.5);
+}
+
+.linkedin-btn svg {
+  width: 28px;
+  height: 28px;
+}
+
 /* Responsividade do Footer */
 @media (max-width: 768px) {
   #contact-footer {
@@ -410,6 +436,17 @@ canvas {
   }
   
   .whatsapp-btn svg {
+    width: 24px;
+    height: 24px;
+  }
+  
+  .linkedin-btn {
+    width: 55px;
+    height: 55px;
+    margin-left: 10px;
+  }
+  
+  .linkedin-btn svg {
     width: 24px;
     height: 24px;
   }
