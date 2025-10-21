@@ -66,10 +66,10 @@ const ProjectsSection = ({ t }) => {
                   <div className="placeholder-icon">
                     <svg width="60" height="60" viewBox="0 0 24 24" fill="none">
                       <path d="M14 2H6C4.9 2 4 2.9 4 4V20C4 21.1 4.89 22 5.99 22H18C19.1 22 20 21.1 20 20V8L14 2Z" stroke="#00ffcc" strokeWidth="2" fill="none"/>
-                      <path d="14 2V8H20" stroke="#00ffcc" strokeWidth="2" fill="none"/>
-                      <path d="16 13H8" stroke="#00ffcc" strokeWidth="2"/>
-                      <path d="16 17H8" stroke="#00ffcc" strokeWidth="2"/>
-                      <path d="10 9H9H8" stroke="#00ffcc" strokeWidth="2"/>
+                      <path d="M14 2V8H20" stroke="#00ffcc" strokeWidth="2" fill="none"/>
+                      <path d="M16 13H8" stroke="#00ffcc" strokeWidth="2"/>
+                      <path d="M16 17H8" stroke="#00ffcc" strokeWidth="2"/>
+                      <path d="M10 9H9M9 9H8" stroke="#00ffcc" strokeWidth="2"/>
                     </svg>
                   </div>
                   <p>{t('image-coming-soon')}</p>
@@ -148,10 +148,10 @@ const ProjectsSection = ({ t }) => {
                 <div className="placeholder-icon">
                   <svg width="60" height="60" viewBox="0 0 24 24" fill="none">
                     <path d="M14 2H6C4.9 2 4 2.9 4 4V20C4 21.1 4.89 22 5.99 22H18C19.1 22 20 21.1 20 20V8L14 2Z" stroke="#00ffcc" strokeWidth="2" fill="none"/>
-                    <path d="14 2V8H20" stroke="#00ffcc" strokeWidth="2" fill="none"/>
-                    <path d="16 13H8" stroke="#00ffcc" strokeWidth="2"/>
-                    <path d="16 17H8" stroke="#00ffcc" strokeWidth="2"/>
-                    <path d="10 9H9H8" stroke="#00ffcc" strokeWidth="2"/>
+                    <path d="M14 2V8H20" stroke="#00ffcc" strokeWidth="2" fill="none"/>
+                    <path d="M16 13H8" stroke="#00ffcc" strokeWidth="2"/>
+                    <path d="M16 17H8" stroke="#00ffcc" strokeWidth="2"/>
+                    <path d="M10 9H9M9 9H8" stroke="#00ffcc" strokeWidth="2"/>
                   </svg>
                 </div>
                 <p>{t('image-coming-soon')}</p>
