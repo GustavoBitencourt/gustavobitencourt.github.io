@@ -7,6 +7,7 @@ import SkillsSection from './components/SkillsSection';
 import ProjectsSection from './components/ProjectsSection';
 import ContactSection from './components/ContactSection';
 import Player from './components/Player';
+import CS2 from './components/CS2';
 import { useLanguage } from './hooks/useLanguage';
 import './App.css';
 
@@ -33,6 +34,7 @@ function App() {
             </>
           } />
           <Route path="/player" element={<Player />} />
+          <Route path="/cs2" element={<CS2 />} />
         </Routes>
       </div>
     </Router>

@@ -1,0 +1,570 @@
+/* CS2 Loading Screen */
+.cs2-loading {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 9999;
+  overflow: hidden;
+}
+
+.loading-background {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 50%, #1a1a1a 100%);
+  background-size: 200% 200%;
+  animation: backgroundShift 3s ease-in-out;
+}
+
+@keyframes backgroundShift {
+  0%, 100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
+.countdown-container {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+}
+
+.ready-container {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 40px;
+  text-align: center;
+}
+
+.ready-title h1 {
+  font-size: 4rem;
+  font-weight: bold;
+  color: #DE7E21;
+  text-shadow: 0 0 30px rgba(222, 126, 33, 0.5);
+  margin-bottom: 20px;
+  font-family: "Fira Code", monospace;
+  animation: titleGlow 2s ease-in-out infinite alternate;
+}
+
+.ready-title p {
+  font-size: 1.8rem;
+  color: #ffffff;
+  font-family: "Fira Code", monospace;
+  margin: 0;
+}
+
+@keyframes titleGlow {
+  0% {
+    text-shadow: 0 0 20px rgba(222, 126, 33, 0.5);
+  }
+  100% {
+    text-shadow: 0 0 40px rgba(222, 126, 33, 0.8);
+  }
+}
+
+.start-button {
+  background: linear-gradient(135deg, #DE7E21 0%, #f7931e 100%);
+  border: none;
+  border-radius: 15px;
+  padding: 20px 40px;
+  font-size: 1.5rem;
+  font-weight: bold;
+  color: #ffffff;
+  cursor: pointer;
+  font-family: "Fira Code", monospace;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  box-shadow: 0 8px 25px rgba(222, 126, 33, 0.3);
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.start-button:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 12px 35px rgba(222, 126, 33, 0.5);
+  background: linear-gradient(135deg, #f7931e 0%, #DE7E21 100%);
+}
+
+.start-button:active {
+  transform: translateY(-1px);
+}
+
+.button-text-pt {
+  display: block;
+  font-size: 1.3rem;
+}
+
+.button-text-en {
+  display: block;
+  font-size: 1rem;
+  opacity: 0.7;
+  margin-top: 5px;
+}
+
+.countdown-number {
+  font-size: 8rem;
+  font-weight: bold;
+  color: #DE7E21;
+  text-shadow: 0 0 20px rgba(222, 126, 33, 0.5);
+  font-family: "Fira Code", monospace;
+  animation: countdownPulse 0.8s ease-out;
+}
+
+@keyframes countdownPulse {
+  0% {
+    transform: scale(0.5);
+    opacity: 0;
+  }
+  50% {
+    transform: scale(1.2);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.audio-hint {
+  font-size: 1.2rem;
+  color: #DE7E21;
+  text-shadow: 0 0 10px rgba(222, 126, 33, 0.5);
+  font-family: "Fira Code", monospace;
+  opacity: 0.8;
+  animation: pulse 2s ease-in-out infinite;
+  text-align: center;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 0.6;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+/* CS2 Main Page */
+.cs2-container {
+  min-height: 100vh;
+  background: #0a0a0a;
+  color: #ffffff;
+  font-family: "Fira Code", monospace;
+}
+
+.cs2-background {
+  position: relative;
+  min-height: 100vh;
+  background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 25%, #1e3c72 50%, #2a5298 75%, #1a1a1a 100%);
+  background-size: 300% 300%;
+  animation: gradientShift 15s ease infinite;
+}
+
+@keyframes gradientShift {
+  0%, 100% {
+    background-position: 0% 50%;
+  }
+  25% {
+    background-position: 100% 0%;
+  }
+  50% {
+    background-position: 100% 100%;
+  }
+  75% {
+    background-position: 0% 100%;
+  }
+}
+
+.cs2-content {
+  position: relative;
+  z-index: 2;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 80px 20px;
+}
+
+.cs2-header {
+  text-align: center;
+  margin-bottom: 80px;
+  animation: slideInFromTop 1s ease-out;
+}
+
+@keyframes slideInFromTop {
+  0% {
+    transform: translateY(-50px);
+    opacity: 0;
+  }
+  100% {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.cs2-title {
+  font-size: 4rem;
+  font-weight: 700;
+  color: #DE7E21;
+  text-shadow: 0 0 30px rgba(222, 126, 33, 0.3);
+  margin-bottom: 20px;
+  letter-spacing: 2px;
+}
+
+.cs2-subtitle {
+  font-size: 1.5rem;
+  color: #cccccc;
+  text-transform: uppercase;
+  letter-spacing: 4px;
+}
+
+.cs2-main-content {
+  animation: fadeInUp 1s ease-out 0.5s both;
+}
+
+@keyframes fadeInUp {
+  0% {
+    transform: translateY(30px);
+    opacity: 0;
+  }
+  100% {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.cs2-section {
+  background: rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 107, 53, 0.2);
+  border-radius: 15px;
+  padding: 40px;
+  margin-bottom: 40px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.cs2-section:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 12px 40px rgba(255, 107, 53, 0.1);
+}
+
+.cs2-section h2 {
+  font-size: 2.5rem;
+  color: #ff6b35;
+  margin-bottom: 25px;
+  text-align: center;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+}
+
+.cs2-section p {
+  font-size: 1.2rem;
+  line-height: 1.8;
+  color: #e0e0e0;
+  text-align: center;
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.features-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 30px;
+  margin-top: 40px;
+}
+
+.feature-item {
+  background: rgba(255, 107, 53, 0.1);
+  border: 1px solid rgba(255, 107, 53, 0.3);
+  border-radius: 10px;
+  padding: 30px 20px;
+  text-align: center;
+  transition: transform 0.3s ease, background 0.3s ease;
+}
+
+.feature-item:hover {
+  transform: scale(1.05);
+  background: rgba(255, 107, 53, 0.2);
+}
+
+.feature-item h3 {
+  font-size: 1.4rem;
+  color: #ff6b35;
+  margin-bottom: 15px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.feature-item p {
+  font-size: 1rem;
+  color: #cccccc;
+  margin: 0;
+}
+
+.stats-container {
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 30px;
+  margin-top: 40px;
+}
+
+.stat-item {
+  text-align: center;
+  background: rgba(255, 107, 53, 0.1);
+  border: 1px solid rgba(255, 107, 53, 0.3);
+  border-radius: 15px;
+  padding: 30px 20px;
+  min-width: 150px;
+  transition: transform 0.3s ease;
+}
+
+.stat-item:hover {
+  transform: scale(1.1);
+}
+
+.stat-number {
+  display: block;
+  font-size: 3rem;
+  font-weight: bold;
+  color: #ff6b35;
+  text-shadow: 0 0 20px rgba(255, 107, 53, 0.3);
+  margin-bottom: 10px;
+}
+
+.stat-label {
+  display: block;
+  font-size: 1rem;
+  color: #cccccc;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+/* Team Section */
+.team-section {
+  background: rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(222, 126, 33, 0.2);
+  border-radius: 15px;
+  padding: 40px;
+  margin-bottom: 40px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+
+.team-section h2 {
+  font-size: 2.5rem;
+  color: #DE7E21;
+  margin-bottom: 25px;
+  text-align: center;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+}
+
+.team-description {
+  font-size: 1.2rem;
+  line-height: 1.8;
+  color: #e0e0e0;
+  text-align: center;
+  max-width: 800px;
+  margin: 0 auto 40px;
+}
+
+.team-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 30px;
+  margin-top: 40px;
+}
+
+.player-card {
+  background: rgba(222, 126, 33, 0.1);
+  border: 1px solid rgba(222, 126, 33, 0.3);
+  border-radius: 15px;
+  padding: 20px;
+  text-align: center;
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.player-card:hover {
+  transform: translateY(-10px) scale(1.05);
+  background: rgba(222, 126, 33, 0.2);
+  box-shadow: 0 15px 40px rgba(222, 126, 33, 0.3);
+}
+
+.player-image-container {
+  position: relative;
+  margin-bottom: 20px;
+  overflow: hidden;
+  border-radius: 50%;
+  width: 150px;
+  height: 150px;
+  margin: 0 auto 20px;
+}
+
+.player-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+  transition: transform 0.3s ease;
+}
+
+.player-card:hover .player-image {
+  transform: scale(1.1);
+}
+
+.player-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(222, 126, 33, 0.8);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.player-card:hover .player-overlay {
+  opacity: 1;
+}
+
+.player-stats {
+  color: #ffffff;
+  font-weight: bold;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  font-size: 0.9rem;
+}
+
+.player-info {
+  padding: 0;
+}
+
+.player-nick {
+  font-size: 1.5rem;
+  color: #DE7E21;
+  margin-bottom: 10px;
+  letter-spacing: 2px;
+  font-weight: bold;
+}
+
+.player-role {
+  font-size: 1rem;
+  color: #cccccc;
+  margin: 0;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .countdown-number {
+    font-size: 6rem;
+  }
+
+  .cs2-title {
+    font-size: 2.5rem;
+  }
+
+  .cs2-subtitle {
+    font-size: 1.2rem;
+    letter-spacing: 2px;
+  }
+
+  .cs2-section {
+    padding: 30px 20px;
+  }
+
+  .cs2-section h2 {
+    font-size: 2rem;
+  }
+
+  .cs2-section p {
+    font-size: 1rem;
+  }
+
+  .features-grid {
+    grid-template-columns: 1fr;
+    gap: 20px;
+  }
+
+  .stats-container {
+    flex-direction: column;
+    gap: 20px;
+  }
+
+  .stat-number {
+    font-size: 2.5rem;
+  }
+
+  .team-grid {
+    grid-template-columns: 1fr;
+    gap: 20px;
+  }
+
+  .player-image-container {
+    width: 120px;
+    height: 120px;
+  }
+
+  .player-nick {
+    font-size: 1.3rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .countdown-number {
+    font-size: 4rem;
+  }
+
+  .cs2-title {
+    font-size: 2rem;
+  }
+
+  .cs2-content {
+    padding: 60px 15px;
+  }
+
+  .cs2-section, .team-section {
+    padding: 25px 15px;
+    margin-bottom: 30px;
+  }
+
+  .player-image-container {
+    width: 100px;
+    height: 100px;
+  }
+
+  .player-nick {
+    font-size: 1.1rem;
+  }
+
+  .team-description {
+    font-size: 1rem;
+  }
+}
