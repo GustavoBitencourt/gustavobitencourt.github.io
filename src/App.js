@@ -1,5 +1,5 @@
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { HashRouter as Router, Routes, Route } from 'react-router-dom';
 import StarryBackground from './components/StarryBackground';
 import LanguageSwitcher from './components/LanguageSwitcher';
 import IntroSection from './components/IntroSection';
