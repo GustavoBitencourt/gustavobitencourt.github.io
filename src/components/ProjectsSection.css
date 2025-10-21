@@ -152,6 +152,32 @@
   background: rgba(0, 255, 204, 0.8);
 }
 
+/* Imagem Única (para projetos sem carrossel) */
+.project-image.single-image {
+  width: 100%;
+  height: 280px;
+  position: relative;
+  border-radius: 10px;
+  margin-bottom: 20px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.project-image.single-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  object-position: center;
+  transition: transform 0.3s ease;
+  border-radius: 8px;
+}
+
+.project-card:hover .project-image.single-image img {
+  transform: scale(1.05);
+}
+
 .image-placeholder {
   width: 100%;
   height: 100%;
@@ -292,6 +318,12 @@
     margin-bottom: 0;
   }
   
+  .project-image.single-image {
+    height: 350px;
+    min-height: auto;
+    margin-bottom: 0;
+  }
+  
   .project-content {
     display: flex;
     flex-direction: column;
@@ -302,6 +334,10 @@
 
 @media (min-width: 1024px) {
   .project-carousel {
+    height: 400px;
+  }
+  
+  .project-image.single-image {
     height: 400px;
   }
   
@@ -324,6 +360,12 @@
   }
   
   .project-carousel {
+    height: 280px;
+    margin-top: 15px;
+    margin-bottom: 20px;
+  }
+  
+  .project-image.single-image {
     height: 280px;
     margin-top: 15px;
     margin-bottom: 20px;
