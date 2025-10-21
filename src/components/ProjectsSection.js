@@ -1,10 +1,41 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import './ProjectsSection.css';
 
 const ProjectsSection = ({ t }) => {
+  const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  
+  const projectImages = [
+    '/images/tcc-app-screenshot.png',
+    '/images/tcc-app-screenshot2.png',
+    '/images/tcc-app-screenshot3.png',
+    '/images/tcc-app-screenshot4.png'
+  ];
+
   const handleTCCRedirect = () => {
     window.open('https://www.gustavobit.com/tcc-express-supermarket-fe', '_blank');
   };
+
+  const nextImage = () => {
+    setCurrentImageIndex((prevIndex) => 
+      prevIndex === projectImages.length - 1 ? 0 : prevIndex + 1
+    );
+  };
+
+  const prevImage = () => {
+    setCurrentImageIndex((prevIndex) => 
+      prevIndex === 0 ? projectImages.length - 1 : prevIndex - 1
+    );
+  };
+
+  // Auto-play do carrossel
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setCurrentImageIndex((prevIndex) => 
+        prevIndex === projectImages.length - 1 ? 0 : prevIndex + 1
+      );
+    }, 4000); // Troca a cada 4 segundos
+    return () => clearInterval(interval);
+  }, [projectImages.length]);
 
   return (
     <section id="projects">
@@ -16,26 +47,53 @@ const ProjectsSection = ({ t }) => {
         
         <div className="projects-grid">
           <div className="project-card">
-            <div className="project-image">
-              <img 
-                src="/images/tcc-app-screenshot.png" 
-                alt={t('tcc-express-supermarket')}
-                onError={(e) => {
-                  e.target.style.display = 'none';
-                  e.target.nextSibling.style.display = 'flex';
-                }}
-              />
-              <div className="image-placeholder" style={{display: 'none'}}>
-                <div className="placeholder-icon">
-                  <svg width="60" height="60" viewBox="0 0 24 24" fill="none">
-                    <path d="M14 2H6C4.9 2 4 2.9 4 4V20C4 21.1 4.89 22 5.99 22H18C19.1 22 20 21.1 20 20V8L14 2Z" stroke="#00ffcc" strokeWidth="2" fill="none"/>
-                    <path d="14 2V8H20" stroke="#00ffcc" strokeWidth="2" fill="none"/>
-                    <path d="16 13H8" stroke="#00ffcc" strokeWidth="2"/>
-                    <path d="16 17H8" stroke="#00ffcc" strokeWidth="2"/>
-                    <path d="10 9H9H8" stroke="#00ffcc" strokeWidth="2"/>
-                  </svg>
+            <div className="project-carousel">
+              <div className="carousel-container">
+                <img 
+                  src={projectImages[currentImageIndex]} 
+                  alt={`${t('tcc-express-supermarket')} - ${currentImageIndex + 1}`}
+                  className="carousel-image"
+                  onError={(e) => {
+                    e.target.style.display = 'none';
+                    e.target.nextSibling.style.display = 'flex';
+                  }}
+                />
+                <div className="image-placeholder" style={{display: 'none'}}>
+                  <div className="placeholder-icon">
+                    <svg width="60" height="60" viewBox="0 0 24 24" fill="none">
+                      <path d="M14 2H6C4.9 2 4 2.9 4 4V20C4 21.1 4.89 22 5.99 22H18C19.1 22 20 21.1 20 20V8L14 2Z" stroke="#00ffcc" strokeWidth="2" fill="none"/>
+                      <path d="14 2V8H20" stroke="#00ffcc" strokeWidth="2" fill="none"/>
+                      <path d="16 13H8" stroke="#00ffcc" strokeWidth="2"/>
+                      <path d="16 17H8" stroke="#00ffcc" strokeWidth="2"/>
+                      <path d="10 9H9H8" stroke="#00ffcc" strokeWidth="2"/>
+                    </svg>
+                  </div>
+                  <p>{t('image-coming-soon')}</p>
                 </div>
-                <p>{t('image-coming-soon')}</p>
+                
+                {/* Botões de navegação */}
+                <button className="carousel-btn prev" onClick={prevImage}>
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                    <path d="M15 18L9 12L15 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                </button>
+                
+                <button className="carousel-btn next" onClick={nextImage}>
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                    <path d="M9 18L15 12L9 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                </button>
+                
+                {/* Indicadores */}
+                <div className="carousel-indicators">
+                  {projectImages.map((_, index) => (
+                    <button
+                      key={index}
+                      className={`indicator ${index === currentImageIndex ? 'active' : ''}`}
+                      onClick={() => setCurrentImageIndex(index)}
+                    />
+                  ))}
+                </div>
               </div>
             </div>
             
