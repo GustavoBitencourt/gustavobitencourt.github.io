@@ -35,20 +35,41 @@ const CS2 = () => {
         setCountdown((prev) => {
           if (prev <= 1) {
             clearInterval(timer);
-            // Tocar som após contagem terminar
-            const audio = new Audio('/sounds/pl_respawn.wav');
-            audio.volume = 0.5;
-            audio.play().then(() => {
-              console.log('🔊 Som de respawn tocado com sucesso!');
+            // Tocar som do beep para o número "1"
+            const beepAudio = new Audio('/sounds/c4_beep2.wav');
+            beepAudio.volume = 0.6;
+            beepAudio.play().then(() => {
+              console.log('🔊 Beep para número 1 tocado com sucesso!');
             }).catch(err => {
-              console.log('Erro ao tocar áudio:', err);
+              console.log('Erro ao tocar áudio do beep:', err);
             });
+            
+            // Tocar som após contagem terminar
+            setTimeout(() => {
+              const audio = new Audio('/sounds/pl_respawn.wav');
+              audio.volume = 0.5;
+              audio.play().then(() => {
+                console.log('🔊 Som de respawn tocado com sucesso!');
+              }).catch(err => {
+                console.log('Erro ao tocar áudio:', err);
+              });
+            }, 300);
             
             setTimeout(() => {
               setGameState('loaded');
             }, 500); // Pequeno delay após o "1"
             return 0;
           }
+          
+          // Tocar som do beep para os números 3 e 2
+          const beepAudio = new Audio('/sounds/c4_beep2.wav');
+          beepAudio.volume = 0.6;
+          beepAudio.play().then(() => {
+            console.log(`🔊 Beep para número ${prev} tocado com sucesso!`);
+          }).catch(err => {
+            console.log('Erro ao tocar áudio do beep:', err);
+          });
+          
           return prev - 1;
         });
       }, 1000);
