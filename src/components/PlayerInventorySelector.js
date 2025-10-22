@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
 import SteamInventoryViewer from './SteamInventoryViewer';
+import CustomSteamInput from './CustomSteamInput';
 
 const PlayerInventorySelector = () => {
   const [selectedPlayer, setSelectedPlayer] = useState(null);
+  const [showCustomSearch, setShowCustomSearch] = useState(false);
 
   const players = [
     {
@@ -39,6 +41,10 @@ const PlayerInventorySelector = () => {
     }
   ];
 
+  if (showCustomSearch) {
+    return <CustomSteamInput onBack={() => setShowCustomSearch(false)} />;
+  }
+
   if (selectedPlayer) {
     return (
       <div>
@@ -53,7 +59,10 @@ const PlayerInventorySelector = () => {
           border: '1px solid rgba(222, 126, 33, 0.3)'
         }}>
           <button
-            onClick={() => setSelectedPlayer(null)}
+            onClick={() => {
+              setSelectedPlayer(null);
+              setShowCustomSearch(false);
+            }}
             style={{
               background: 'rgba(222, 126, 33, 0.2)',
               border: '2px solid #DE7E21',
@@ -219,6 +228,96 @@ const PlayerInventorySelector = () => {
             }} />
           </div>
         ))}
+
+        {/* Opção de busca personalizada */}
+        <div
+          onClick={() => setShowCustomSearch(true)}
+          style={{
+            background: 'linear-gradient(135deg, rgba(0,0,0,0.6) 0%, rgba(222, 126, 33, 0.2) 100%)',
+            border: '2px dashed rgba(222, 126, 33, 0.5)',
+            borderRadius: '15px',
+            padding: '25px',
+            textAlign: 'center',
+            cursor: 'pointer',
+            transition: 'all 0.3s ease',
+            position: 'relative',
+            overflow: 'hidden'
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.transform = 'translateY(-8px) scale(1.02)';
+            e.currentTarget.style.boxShadow = '0 15px 40px rgba(222, 126, 33, 0.4)';
+            e.currentTarget.style.borderColor = '#DE7E21';
+            e.currentTarget.style.borderStyle = 'solid';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.transform = 'translateY(0) scale(1)';
+            e.currentTarget.style.boxShadow = 'none';
+            e.currentTarget.style.borderColor = 'rgba(222, 126, 33, 0.5)';
+            e.currentTarget.style.borderStyle = 'dashed';
+          }}
+        >
+          {/* Ícone */}
+          <div style={{
+            width: '80px',
+            height: '80px',
+            borderRadius: '50%',
+            background: 'rgba(222, 126, 33, 0.2)',
+            margin: '0 auto 20px auto',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            border: '3px dashed #DE7E21'
+          }}>
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="none">
+              <path d="M21 21L16.65 16.65M19 11C19 15.4183 15.4183 19 11 19C6.58172 19 3 15.4183 3 11C3 6.58172 6.58172 3 11 3C15.4183 3 19 6.58172 19 11Z" stroke="#DE7E21" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          </div>
+
+          {/* Texto */}
+          <h3 style={{
+            color: '#fff',
+            fontSize: '1.4rem',
+            fontWeight: 'bold',
+            margin: '0 0 10px 0'
+          }}>
+            Buscar Inventário
+          </h3>
+
+          <p style={{
+            color: '#DE7E21',
+            fontSize: '1rem',
+            fontWeight: 'bold',
+            margin: '0 0 15px 0'
+          }}>
+            Steam ID Personalizado
+          </p>
+
+          {/* Descrição */}
+          <div style={{
+            background: 'rgba(0,0,0,0.3)',
+            padding: '8px 12px',
+            borderRadius: '20px',
+            fontSize: '0.8rem',
+            color: '#ccc',
+            margin: '15px 0'
+          }}>
+            Digite seu Steam ID ou nome de usuário
+          </div>
+
+          {/* Call to Action */}
+          <div style={{
+            background: 'rgba(222, 126, 33, 0.3)',
+            color: '#DE7E21',
+            padding: '10px 20px',
+            borderRadius: '8px',
+            fontSize: '0.9rem',
+            fontWeight: 'bold',
+            border: '1px solid rgba(222, 126, 33, 0.5)',
+            marginTop: '10px'
+          }}>
+            🔍 Buscar Agora
+          </div>
+        </div>
       </div>
 
       {/* Nota */}
