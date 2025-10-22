@@ -845,7 +845,7 @@ const SteamMarketSearch = () => {
             alignItems: 'flex-start', // Alinha no topo em vez do centro
             justifyContent: 'center',
             zIndex: 999999,
-            padding: '50px 20px 20px 20px', // Margem maior no topo
+            padding: window.innerWidth <= 480 ? '80px 10px 20px 10px' : '50px 20px 20px 20px', // Mais margem no topo para mobile
             margin: '0px',
             overflow: 'auto', // Permite scroll se necessário
             boxSizing: 'border-box',
@@ -857,12 +857,12 @@ const SteamMarketSearch = () => {
             style={{
               background: 'linear-gradient(135deg, #1a1a1a, #2d2d2d)',
               border: '1px solid #DE7E21',
-              borderRadius: '15px',
+              borderRadius: window.innerWidth <= 480 ? '10px' : '15px',
               padding: '0px',
-              maxWidth: '700px',
-              width: '95%',
-              maxHeight: '80vh', // Reduzir altura máxima
-              minHeight: '400px', // Altura mínima para garantir visibilidade
+              maxWidth: window.innerWidth <= 480 ? '95%' : '700px',
+              width: window.innerWidth <= 480 ? '95%' : '95%',
+              maxHeight: window.innerWidth <= 480 ? '75vh' : '80vh', // Menor altura no mobile
+              minHeight: window.innerWidth <= 480 ? '300px' : '400px', // Menor altura mínima no mobile
               position: 'relative',
               boxShadow: '0 0 30px rgba(222, 126, 33, 0.3)',
               display: 'flex',
@@ -874,7 +874,7 @@ const SteamMarketSearch = () => {
           >
             {/* Cabeçalho fixo do modal */}
             <div style={{
-              padding: '20px 30px',
+              padding: window.innerWidth <= 480 ? '15px 20px' : '20px 30px', // Menos padding no mobile
               borderBottom: '1px solid rgba(222, 126, 33, 0.3)',
               position: 'relative',
               flexShrink: 0
@@ -909,15 +909,19 @@ const SteamMarketSearch = () => {
               
               <h2 style={{ 
                 color: selectedItem.name_color ? `#${selectedItem.name_color}` : '#DE7E21', 
-                marginBottom: '10px',
-                fontSize: '1.6rem',
-                paddingRight: '50px'
+                marginBottom: window.innerWidth <= 480 ? '8px' : '10px',
+                fontSize: window.innerWidth <= 480 ? '1.3rem' : '1.6rem', // Menor no mobile
+                paddingRight: window.innerWidth <= 480 ? '40px' : '50px'
               }}>
                 {selectedItem.market_name_pt || selectedItem.market_name}
               </h2>
               
               {selectedItem.market_name_pt && (
-                <div style={{ fontSize: '1.1rem', color: '#999', fontStyle: 'italic' }}>
+                <div style={{ 
+                  fontSize: window.innerWidth <= 480 ? '0.95rem' : '1.1rem', // Menor no mobile
+                  color: '#999', 
+                  fontStyle: 'italic' 
+                }}>
                   Original: {selectedItem.market_name}
                 </div>
               )}
@@ -925,24 +929,32 @@ const SteamMarketSearch = () => {
             
             {/* Conteúdo com scroll */}
             <div style={{
-              padding: '30px',
+              padding: window.innerWidth <= 480 ? '20px 15px' : '30px', // Menos padding no mobile
               overflowY: 'auto',
               flex: 1,
               scrollbarWidth: 'thin',
               scrollbarColor: '#DE7E21 rgba(0,0,0,0.3)'
             }}>
               {/* Conteúdo do Modal */}
-              <div style={{ display: 'flex', gap: '30px', alignItems: 'flex-start' }}>
+              <div style={{ 
+                display: 'flex', 
+                gap: window.innerWidth <= 480 ? '15px' : '30px', // Menos gap no mobile
+                alignItems: 'flex-start',
+                flexDirection: window.innerWidth <= 480 ? 'column' : 'row' // Coluna no mobile
+              }}>
                 {/* Imagem Grande */}
-                <div style={{ minWidth: '200px' }}>
+                <div style={{ 
+                  minWidth: window.innerWidth <= 480 ? '150px' : '200px',
+                  alignSelf: window.innerWidth <= 480 ? 'center' : 'flex-start' // Centralizar no mobile
+                }}>
                   <img
                     src={selectedItem.image}
                     alt={selectedItem.market_name}
                     style={{
-                      width: '200px',
-                      height: '200px',
+                      width: window.innerWidth <= 480 ? '150px' : '200px', // Menor no mobile
+                      height: window.innerWidth <= 480 ? '150px' : '200px', // Menor no mobile
                       objectFit: 'contain',
-                      borderRadius: '12px',
+                      borderRadius: window.innerWidth <= 480 ? '8px' : '12px',
                       background: selectedItem.background_color ? `#${selectedItem.background_color}` : 'rgba(0,0,0,0.3)',
                       border: selectedItem.name_color ? `2px solid #${selectedItem.name_color}` : '2px solid #DE7E21'
                     }}
@@ -953,11 +965,11 @@ const SteamMarketSearch = () => {
                   
                   {/* Informações técnicas */}
                   <div style={{
-                    marginTop: '15px',
-                    padding: '10px',
+                    marginTop: window.innerWidth <= 480 ? '10px' : '15px',
+                    padding: window.innerWidth <= 480 ? '8px' : '10px',
                     background: 'rgba(0,0,0,0.3)',
                     borderRadius: '8px',
-                    fontSize: '0.8rem',
+                    fontSize: window.innerWidth <= 480 ? '0.75rem' : '0.8rem', // Menor no mobile
                     color: '#ccc'
                   }}>
                     {selectedItem.classid && <p><strong>Class ID:</strong> {selectedItem.classid}</p>}
@@ -984,42 +996,63 @@ const SteamMarketSearch = () => {
                   {/* Informações de Preço */}
                   <div style={{ 
                     display: 'grid', 
-                    gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', 
-                    gap: '15px', 
-                    marginBottom: '25px' 
+                    gridTemplateColumns: window.innerWidth <= 480 ? '1fr' : 'repeat(auto-fit, minmax(200px, 1fr))', // Uma coluna no mobile
+                    gap: window.innerWidth <= 480 ? '10px' : '15px', // Menos gap no mobile
+                    marginBottom: window.innerWidth <= 480 ? '20px' : '25px' 
                   }}>
                     <div style={{ 
                       background: 'rgba(76, 175, 80, 0.1)', 
-                      padding: '15px', 
+                      padding: window.innerWidth <= 480 ? '12px' : '15px', // Menos padding no mobile
                       borderRadius: '8px',
                       border: '1px solid rgba(76, 175, 80, 0.3)'
                     }}>
-                      <div style={{ color: '#4caf50', fontWeight: 'bold' }}>💰 Menor Preço</div>
-                      <div style={{ fontSize: '1.3rem', marginTop: '5px' }}>
+                      <div style={{ 
+                        color: '#4caf50', 
+                        fontWeight: 'bold',
+                        fontSize: window.innerWidth <= 480 ? '0.9rem' : '1rem' // Menor no mobile
+                      }}>💰 Menor Preço</div>
+                      <div style={{ 
+                        fontSize: window.innerWidth <= 480 ? '1.1rem' : '1.3rem', // Menor no mobile
+                        marginTop: '5px' 
+                      }}>
                         {formatPrice(selectedItem.histogram?.lowest_sell_order, selectedItem.histogram?.lowest_sell_order_brl)}
                       </div>
                     </div>
                     
                     <div style={{ 
                       background: 'rgba(33, 150, 243, 0.1)', 
-                      padding: '15px', 
+                      padding: window.innerWidth <= 480 ? '12px' : '15px',
                       borderRadius: '8px',
                       border: '1px solid rgba(33, 150, 243, 0.3)'
                     }}>
-                      <div style={{ color: '#2196f3', fontWeight: 'bold' }}>📈 Maior Oferta</div>
-                      <div style={{ fontSize: '1.3rem', marginTop: '5px' }}>
+                      <div style={{ 
+                        color: '#2196f3', 
+                        fontWeight: 'bold',
+                        fontSize: window.innerWidth <= 480 ? '0.9rem' : '1rem'
+                      }}>📈 Maior Oferta</div>
+                      <div style={{ 
+                        fontSize: window.innerWidth <= 480 ? '1.1rem' : '1.3rem',
+                        marginTop: '5px' 
+                      }}>
                         {formatPrice(selectedItem.histogram?.highest_buy_order, selectedItem.histogram?.highest_buy_order_brl)}
                       </div>
                     </div>
                     
                     <div style={{ 
                       background: 'rgba(255, 152, 0, 0.1)', 
-                      padding: '15px', 
+                      padding: window.innerWidth <= 480 ? '12px' : '15px',
                       borderRadius: '8px',
                       border: '1px solid rgba(255, 152, 0, 0.3)'
                     }}>
-                      <div style={{ color: '#ff9800', fontWeight: 'bold' }}>📊 Listagens</div>
-                      <div style={{ fontSize: '1.3rem', marginTop: '5px' }}>
+                      <div style={{ 
+                        color: '#ff9800', 
+                        fontWeight: 'bold',
+                        fontSize: window.innerWidth <= 480 ? '0.9rem' : '1rem'
+                      }}>📊 Listagens</div>
+                      <div style={{ 
+                        fontSize: window.innerWidth <= 480 ? '1.1rem' : '1.3rem',
+                        marginTop: '5px' 
+                      }}>
                         {selectedItem.sell_listings || selectedItem.histogram?.sell_order_summary?.quantity || 0}
                       </div>
                     </div>
