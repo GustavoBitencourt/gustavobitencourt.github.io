@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 
 const SteamMarketSearch = () => {
   const [searchQuery, setSearchQuery] = useState('');
@@ -6,6 +6,99 @@ const SteamMarketSearch = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [searchResults, setSearchResults] = useState([]);
+  const [exchangeRate, setExchangeRate] = useState(5.5); // Taxa padrão USD -> BRL
+  const [selectedItem, setSelectedItem] = useState(null); // Para o modal
+  const [showModal, setShowModal] = useState(false);
+
+  // Controlar scroll da página quando o modal abrir/fechar
+  useEffect(() => {
+    if (showModal) {
+      // Apenas desabilitar scroll da página de forma simples
+      document.body.style.overflow = 'hidden';
+    } else {
+      // Restaurar scroll da página
+      document.body.style.overflow = '';
+    }
+
+    // Cleanup function para garantir que o scroll seja restaurado
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [showModal]);
+
+  // Dicionário de tradução para nomes das skins
+  const skinTranslations = {
+    // Condições
+    'Factory New': 'Nova de Fábrica',
+    'Minimal Wear': 'Pouco Usada',
+    'Field-Tested': 'Testada em Campo', 
+    'Well-Worn': 'Bem Desgastada',
+    'Battle-Scarred': 'Veterana de Guerra',
+    
+  };
+
+  // Função para buscar taxa de câmbio USD -> BRL
+  const getExchangeRate = async () => {
+    try {
+      console.log('💱 Buscando taxa de câmbio USD -> BRL...');
+      
+      // Usando API gratuita de câmbio
+      const exchangeUrl = 'https://api.exchangerate-api.com/v4/latest/USD';
+      
+      const proxies = [
+        `https://api.allorigins.win/get?url=${encodeURIComponent(exchangeUrl)}`,
+        exchangeUrl // Tentar direto também
+      ];
+      
+      for (let i = 0; i < proxies.length; i++) {
+        try {
+          const response = await fetch(proxies[i]);
+          const data = await response.json();
+          
+          let rates;
+          if (data.contents) {
+            rates = JSON.parse(data.contents).rates;
+          } else {
+            rates = data.rates;
+          }
+          
+          if (rates && rates.BRL) {
+            const rate = rates.BRL;
+            console.log(`✅ Taxa de câmbio obtida: 1 USD = ${rate} BRL`);
+            setExchangeRate(rate);
+            return rate;
+          }
+        } catch (err) {
+          console.warn(`⚠️ Tentativa ${i + 1} de câmbio falhou:`, err.message);
+        }
+      }
+      
+      console.warn('⚠️ Usando taxa padrão: 1 USD = 5.5 BRL');
+      return 5.5;
+      
+    } catch (error) {
+      console.warn('⚠️ Erro ao buscar câmbio:', error.message);
+      return 5.5; // Taxa padrão
+    }
+  };
+
+  // Função para traduzir nome da skin
+  const translateSkinName = (englishName) => {
+    let translatedName = englishName;
+    
+    // Aplicar traduções
+    Object.entries(skinTranslations).forEach(([english, portuguese]) => {
+      translatedName = translatedName.replace(new RegExp(english, 'gi'), portuguese);
+    });
+    
+    return translatedName;
+  };
+
+  // Função para converter preço USD para BRL
+  const convertToBRL = (usdPrice) => {
+    if (!usdPrice || isNaN(usdPrice)) return 0;
+    return (parseFloat(usdPrice) * exchangeRate).toFixed(2);
+  };
 
   // Função para buscar itens dinamicamente na Steam Community Market
   const searchSteamMarket = async (searchTerm) => {
@@ -69,15 +162,36 @@ const SteamMarketSearch = () => {
         throw new Error(`Nenhum item encontrado para "${searchTerm}"`);
       }
       
-      // Extrair nomes dos itens dos resultados
-      const itemNames = searchData.results
+      // Extrair dados completos dos itens dos resultados
+      const itemsData = searchData.results
         .filter(item => item.hash_name && item.hash_name.trim() !== '')
-        .map(item => item.hash_name)
-        .slice(0, 8); // Limitar a 8 resultados para melhor performance
+        .slice(0, 9) // Aumentar para 9 resultados
+        .map(item => ({
+          hash_name: item.hash_name,
+          name: item.name,
+          sell_listings: item.sell_listings,
+          sell_price: item.sell_price,
+          sell_price_text: item.sell_price_text,
+          sale_price_text: item.sale_price_text,
+          app_icon: item.app_icon,
+          app_name: item.app_name,
+          asset_description: item.asset_description || {},
+          // Extrair dados adicionais do asset_description
+          classid: item.asset_description?.classid,
+          instanceid: item.asset_description?.instanceid,
+          background_color: item.asset_description?.background_color,
+          icon_url: item.asset_description?.icon_url,
+          tradable: item.asset_description?.tradable,
+          name_color: item.asset_description?.name_color,
+          type: item.asset_description?.type,
+          market_name: item.asset_description?.market_name || item.name,
+          market_hash_name: item.asset_description?.market_hash_name || item.hash_name,
+          commodity: item.asset_description?.commodity
+        }));
       
-      console.log(`📋 ${itemNames.length} itens encontrados na busca:`, itemNames);
+      console.log(`📋 ${itemsData.length} itens encontrados na busca:`, itemsData);
       
-      return itemNames;
+      return itemsData;
       
     } catch (error) {
       console.error("❌ Erro na busca dinâmica:", error.message);
@@ -152,12 +266,20 @@ const SteamMarketSearch = () => {
       const medianPrice = priceData.median_price ? parseFloat(priceData.median_price.replace('$', '')) : lowestPrice;
       const volume = priceData.volume ? parseInt(priceData.volume.replace(',', '')) : 100;
       
-      console.log(`✅ Item encontrado! Preço: $${lowestPrice}, Volume: ${volume}`);
+      // Converter preços para BRL
+      const lowestPriceBRL = convertToBRL(lowestPrice);
+      
+      // Traduzir nome da skin
+      const translatedName = translateSkinName(itemName);
+      
+      console.log(`✅ Item encontrado! Preço: $${lowestPrice} (R$ ${lowestPriceBRL}), Volume: ${volume}`);
+      console.log(`🌍 Nome traduzido: "${itemName}" -> "${translatedName}"`);
       
       return {
         nameID: `steam_market_${Date.now()}_${Math.random()}`,
         appID: 730,
-        market_name: itemName,
+        market_name: itemName, // Nome original em inglês
+        market_name_pt: translatedName, // Nome traduzido
         market_hash_name: itemName,
         description: "Counter-Strike 2",
         url: `https://steamcommunity.com/market/listings/730/${encodeURIComponent(itemName)}`,
@@ -166,20 +288,26 @@ const SteamMarketSearch = () => {
         histogram: {
           sell_order_summary: {
             price: lowestPrice.toFixed(2),
+            price_brl: lowestPriceBRL,
             quantity: volume
           },
           buy_order_summary: {
             price: (lowestPrice * 0.87).toFixed(2),
+            price_brl: convertToBRL(lowestPrice * 0.87),
             quantity: Math.floor(volume * 0.6)
           },
           highest_buy_order: (lowestPrice * 0.87).toFixed(2),
-          lowest_sell_order: lowestPrice.toFixed(2)
+          highest_buy_order_brl: convertToBRL(lowestPrice * 0.87),
+          lowest_sell_order: lowestPrice.toFixed(2),
+          lowest_sell_order_brl: lowestPriceBRL
         },
         median_avg_prices_15days: Array.from({length: 15}, (_, i) => [
-          new Date(Date.now() - (14-i) * 24 * 60 * 60 * 1000).toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }),
+          new Date(Date.now() - (14-i) * 24 * 60 * 60 * 1000).toLocaleDateString('pt-BR', { month: 'short', day: '2-digit', year: 'numeric' }),
           (medianPrice * (0.9 + Math.random() * 0.2)).toFixed(2),
+          convertToBRL(medianPrice * (0.9 + Math.random() * 0.2)),
           Math.floor(volume * (0.8 + Math.random() * 0.4))
         ]),
+        exchange_rate: exchangeRate,
         updated_at: Date.now(),
         source: 'steam_market_real_time',
         steam_response: priceData,
@@ -205,27 +333,81 @@ const SteamMarketSearch = () => {
     
     try {
       // Buscar itens dinamicamente na Steam Market Search
-      const itemNames = await searchSteamMarket(searchTerm);
+      const itemsData = await searchSteamMarket(searchTerm);
       
-      if (itemNames.length === 0) {
+      if (itemsData.length === 0) {
         throw new Error(`Nenhum item encontrado para "${searchTerm}"`);
       }
       
-      console.log(`📋 ${itemNames.length} itens encontrados, buscando preços atualizados...`);
+      console.log(`📋 ${itemsData.length} itens encontrados, buscando preços atualizados...`);
       
-      const maxItems = 6; // Limitar a 6 resultados para melhor performance
+      const maxItems = 9; // Aumentar para 9 resultados
       
       // Buscar preços em paralelo para melhor performance
-      const itemPromises = itemNames.slice(0, maxItems).map(async (itemName, index) => {
+      const itemPromises = itemsData.slice(0, maxItems).map(async (itemData, index) => {
         try {
-          console.log(`🔄 Buscando preços ${index + 1}/${Math.min(itemNames.length, maxItems)}: ${itemName}`);
+          console.log(`🔄 Buscando preços ${index + 1}/${Math.min(itemsData.length, maxItems)}: ${itemData.hash_name}`);
           
-          const itemData = await searchViaSteamMarket(itemName);
-          return itemData;
+          const enhancedItemData = await searchViaSteamMarket(itemData.hash_name);
+          
+          // Combinar dados da busca Steam com dados do priceoverview
+          return {
+            ...enhancedItemData,
+            // Adicionar dados completos do Steam Search API
+            steam_search_data: itemData,
+            sell_listings: itemData.sell_listings,
+            sell_price: itemData.sell_price,
+            sell_price_text: itemData.sell_price_text,
+            sale_price_text: itemData.sale_price_text,
+            classid: itemData.classid,
+            instanceid: itemData.instanceid,
+            icon_url: itemData.icon_url,
+            background_color: itemData.background_color,
+            tradable: itemData.tradable,
+            name_color: itemData.name_color,
+            type: itemData.type,
+            commodity: itemData.commodity,
+            // Usar imagem do Steam se disponível
+            image: itemData.icon_url ? `https://community.steamstatic.com/economy/image/${itemData.icon_url}` : enhancedItemData.image
+          };
           
         } catch (itemError) {
-          console.warn(`⚠️ Falha ao buscar preços para ${itemName}:`, itemError.message);
-          return null; // Retornar null para itens que falharam
+          console.warn(`⚠️ Falha ao buscar preços para ${itemData.hash_name}:`, itemError.message);
+          
+          // Retornar dados básicos mesmo se o priceoverview falhar
+          const translatedName = translateSkinName(itemData.hash_name);
+          return {
+            nameID: `steam_search_${Date.now()}_${Math.random()}`,
+            appID: 730,
+            market_name: itemData.hash_name,
+            market_name_pt: translatedName,
+            market_hash_name: itemData.hash_name,
+            description: "Counter-Strike 2",
+            url: `https://steamcommunity.com/market/listings/730/${encodeURIComponent(itemData.hash_name)}`,
+            image: itemData.icon_url ? `https://community.steamstatic.com/economy/image/${itemData.icon_url}` : `https://api.steamapis.com/image/item/730/${encodeURIComponent(itemData.hash_name)}`,
+            border_color: itemData.background_color ? `#${itemData.background_color}` : "#D2D2D2",
+            // Dados do Steam Search API
+            steam_search_data: itemData,
+            sell_listings: itemData.sell_listings,
+            sell_price: itemData.sell_price,
+            sell_price_text: itemData.sell_price_text,
+            sale_price_text: itemData.sale_price_text,
+            classid: itemData.classid,
+            instanceid: itemData.instanceid,
+            icon_url: itemData.icon_url,
+            name_color: itemData.name_color,
+            type: itemData.type,
+            commodity: itemData.commodity,
+            histogram: {
+              sell_order_summary: { price: "N/A", price_brl: "N/A", quantity: itemData.sell_listings || 0 },
+              buy_order_summary: { price: "N/A", price_brl: "N/A", quantity: 0 },
+              highest_buy_order: "N/A",
+              highest_buy_order_brl: "N/A", 
+              lowest_sell_order: itemData.sell_price_text || "N/A",
+              lowest_sell_order_brl: "N/A"
+            },
+            source: 'steam_search_only'
+          };
         }
       });
       
@@ -280,6 +462,9 @@ const SteamMarketSearch = () => {
     try {
       console.log("🚀 Iniciando busca em tempo real...");
       
+      // Buscar taxa de câmbio atualizada primeiro
+      await getExchangeRate();
+      
       // Verificar se é busca de item específico (contém | ou ()) ou busca por categoria
       const isSpecificItem = searchQuery.includes('|') || searchQuery.includes('(');
       
@@ -305,9 +490,13 @@ const SteamMarketSearch = () => {
     }
   };
 
-  const formatPrice = (price) => {
+  const formatPrice = (price, priceBrl = null) => {
     if (!price || price === "N/A" || price === "0.00") return "N/A";
-    return `$${parseFloat(price).toFixed(2)}`;
+    const usdPrice = `$${parseFloat(price).toFixed(2)}`;
+    if (priceBrl) {
+      return `R$ ${parseFloat(priceBrl).toFixed(2)} (${usdPrice})`;
+    }
+    return usdPrice;
   };
 
   const formatDate = (timestamp) => {
@@ -315,13 +504,14 @@ const SteamMarketSearch = () => {
   };
 
   return (
-    <div style={{
-      background: 'linear-gradient(135deg, #1e1e1e 0%, #2d2d2d 100%)',
-      padding: '30px',
-      borderRadius: '15px',
-      color: '#fff',
-      fontFamily: 'Segoe UI, Tahoma, Geneva, Verdana, sans-serif'
-    }}>
+    <>
+      <div style={{
+        background: 'linear-gradient(135deg, #1e1e1e 0%, #2d2d2d 100%)',
+        padding: '30px',
+        borderRadius: '15px',
+        color: '#fff',
+        fontFamily: 'Segoe UI, Tahoma, Geneva, Verdana, sans-serif'
+      }}>
       <h2 style={{ 
         color: '#DE7E21', 
         marginBottom: '25px',
@@ -329,7 +519,7 @@ const SteamMarketSearch = () => {
         fontSize: '2rem',
         textShadow: '0 0 10px rgba(222, 126, 33, 0.5)'
       }}>
-        🛒 Steam Market Search (Real-Time)
+        🛒 Busca no Mercado da Steam
       </h2>
 
       <div style={{ marginBottom: '25px' }}>
@@ -378,7 +568,8 @@ const SteamMarketSearch = () => {
           borderRadius: '8px',
           border: '1px solid rgba(222, 126, 33, 0.3)'
         }}>
-          ⏱️ <strong>Busca em Tempo Real:</strong> Digite qualquer termo e obtenha preços atualizados direto da Steam Community Market!
+          ⏱️ <strong>Busca em Tempo Real:</strong> Digite qualquer termo e obtenha preços atualizados em Reais! 🇧🇷<br/>
+          💱 <strong>Câmbio atual:</strong> 1 USD = R$ {exchangeRate.toFixed(2)}
         </div>
       </div>
 
@@ -417,7 +608,12 @@ const SteamMarketSearch = () => {
                 border: '1px solid #DE7E21',
                 borderRadius: '12px',
                 padding: '20px',
-                transition: 'all 0.3s ease'
+                transition: 'all 0.3s ease',
+                cursor: 'pointer'
+              }}
+              onClick={() => {
+                setSelectedItem(item);
+                setShowModal(true);
               }}
               onMouseEnter={(e) => {
                 e.currentTarget.style.background = 'rgba(222, 126, 33, 0.2)';
@@ -453,13 +649,18 @@ const SteamMarketSearch = () => {
                       fontSize: '1rem',
                       lineHeight: '1.2'
                     }}>
-                      {item.market_name}
+                      {item.market_name_pt || item.market_name}
                     </h4>
+                    {item.market_name_pt && (
+                      <div style={{ fontSize: '0.8rem', color: '#999', marginBottom: '8px', fontStyle: 'italic' }}>
+                        {item.market_name}
+                      </div>
+                    )}
                     
                     <div style={{ fontSize: '0.9rem', lineHeight: '1.4' }}>
                       <div style={{ marginBottom: '5px' }}>
                         <strong>💰 Preço:</strong> <span style={{ color: '#4caf50' }}>
-                          {formatPrice(item.histogram.lowest_sell_order)}
+                          {formatPrice(item.histogram.lowest_sell_order, item.histogram.lowest_sell_order_brl)}
                         </span>
                       </div>
                       <div style={{ marginBottom: '5px' }}>
@@ -524,20 +725,25 @@ const SteamMarketSearch = () => {
                 marginBottom: '15px',
                 fontSize: '1.4rem'
               }}>
-                {marketData.market_name}
+                {marketData.market_name_pt || marketData.market_name}
               </h3>
+              {marketData.market_name_pt && (
+                <div style={{ fontSize: '1rem', color: '#999', marginBottom: '15px', fontStyle: 'italic' }}>
+                  {marketData.market_name}
+                </div>
+              )}
               
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '15px', marginBottom: '20px' }}>
                 <div>
                   <strong>💰 Menor Preço:</strong><br />
                   <span style={{ color: '#4caf50', fontSize: '1.2rem' }}>
-                    {formatPrice(marketData.histogram.lowest_sell_order)}
+                    {formatPrice(marketData.histogram.lowest_sell_order, marketData.histogram.lowest_sell_order_brl)}
                   </span>
                 </div>
                 <div>
                   <strong>📈 Maior Ordem:</strong><br />
                   <span style={{ color: '#2196f3', fontSize: '1.2rem' }}>
-                    {formatPrice(marketData.histogram.highest_buy_order)}
+                    {formatPrice(marketData.histogram.highest_buy_order, marketData.histogram.highest_buy_order_brl)}
                   </span>
                 </div>
                 <div>
@@ -620,7 +826,298 @@ const SteamMarketSearch = () => {
           </div>
         </div>
       )}
-    </div>
+      </div>
+      
+      {/* Modal de Detalhes do Item - Renderizado no final para sobrepor tudo */}
+      {showModal && selectedItem && (
+        <div
+          className="steam-modal-overlay"
+          style={{
+            position: 'fixed',
+            top: '0px',
+            left: '0px',
+            right: '0px',
+            bottom: '0px',
+            width: '100vw',
+            height: '100vh',
+            background: 'rgba(0, 0, 0, 0.8)',
+            display: 'flex',
+            alignItems: 'flex-start', // Alinha no topo em vez do centro
+            justifyContent: 'center',
+            zIndex: 999999,
+            padding: '50px 20px 20px 20px', // Margem maior no topo
+            margin: '0px',
+            overflow: 'auto', // Permite scroll se necessário
+            boxSizing: 'border-box',
+            backdropFilter: 'blur(2px)'
+          }}
+          onClick={() => setShowModal(false)}
+        >
+          <div
+            style={{
+              background: 'linear-gradient(135deg, #1a1a1a, #2d2d2d)',
+              border: '1px solid #DE7E21',
+              borderRadius: '15px',
+              padding: '0px',
+              maxWidth: '700px',
+              width: '95%',
+              maxHeight: '80vh', // Reduzir altura máxima
+              minHeight: '400px', // Altura mínima para garantir visibilidade
+              position: 'relative',
+              boxShadow: '0 0 30px rgba(222, 126, 33, 0.3)',
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden',
+              marginTop: '0px' // Garantir que não há margem extra
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Cabeçalho fixo do modal */}
+            <div style={{
+              padding: '20px 30px',
+              borderBottom: '1px solid rgba(222, 126, 33, 0.3)',
+              position: 'relative',
+              flexShrink: 0
+            }}>
+              {/* Botão de Fechar */}
+              <button
+                onClick={() => setShowModal(false)}
+                style={{
+                  position: 'absolute',
+                  top: '15px',
+                  right: '15px',
+                  background: 'none',
+                  border: 'none',
+                  color: '#fff',
+                  fontSize: '24px',
+                  cursor: 'pointer',
+                  padding: '5px',
+                  borderRadius: '50%',
+                  width: '40px',
+                  height: '40px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  transition: 'background 0.3s ease',
+                  zIndex: 1
+                }}
+                onMouseEnter={(e) => e.target.style.background = 'rgba(255, 255, 255, 0.1)'}
+                onMouseLeave={(e) => e.target.style.background = 'none'}
+              >
+                ×
+              </button>
+              
+              <h2 style={{ 
+                color: selectedItem.name_color ? `#${selectedItem.name_color}` : '#DE7E21', 
+                marginBottom: '10px',
+                fontSize: '1.6rem',
+                paddingRight: '50px'
+              }}>
+                {selectedItem.market_name_pt || selectedItem.market_name}
+              </h2>
+              
+              {selectedItem.market_name_pt && (
+                <div style={{ fontSize: '1.1rem', color: '#999', fontStyle: 'italic' }}>
+                  Original: {selectedItem.market_name}
+                </div>
+              )}
+            </div>
+            
+            {/* Conteúdo com scroll */}
+            <div style={{
+              padding: '30px',
+              overflowY: 'auto',
+              flex: 1,
+              scrollbarWidth: 'thin',
+              scrollbarColor: '#DE7E21 rgba(0,0,0,0.3)'
+            }}>
+              {/* Conteúdo do Modal */}
+              <div style={{ display: 'flex', gap: '30px', alignItems: 'flex-start' }}>
+                {/* Imagem Grande */}
+                <div style={{ minWidth: '200px' }}>
+                  <img
+                    src={selectedItem.image}
+                    alt={selectedItem.market_name}
+                    style={{
+                      width: '200px',
+                      height: '200px',
+                      objectFit: 'contain',
+                      borderRadius: '12px',
+                      background: selectedItem.background_color ? `#${selectedItem.background_color}` : 'rgba(0,0,0,0.3)',
+                      border: selectedItem.name_color ? `2px solid #${selectedItem.name_color}` : '2px solid #DE7E21'
+                    }}
+                    onError={(e) => {
+                      e.target.src = "https://steamuserimages-a.akamaihd.net/ugc/87094793200602665/47310654230B596C62658A147113B24845B9E156/";
+                    }}
+                  />
+                  
+                  {/* Informações técnicas */}
+                  <div style={{
+                    marginTop: '15px',
+                    padding: '10px',
+                    background: 'rgba(0,0,0,0.3)',
+                    borderRadius: '8px',
+                    fontSize: '0.8rem',
+                    color: '#ccc'
+                  }}>
+                    {selectedItem.classid && <p><strong>Class ID:</strong> {selectedItem.classid}</p>}
+                    {selectedItem.instanceid && <p><strong>Instance ID:</strong> {selectedItem.instanceid}</p>}
+                    {selectedItem.tradable !== undefined && <p><strong>Tradable:</strong> {selectedItem.tradable ? 'Sim' : 'Não'}</p>}
+                    {selectedItem.commodity !== undefined && <p><strong>Commodity:</strong> {selectedItem.commodity ? 'Sim' : 'Não'}</p>}
+                  </div>
+                </div>
+                
+                {/* Informações Detalhadas */}
+                <div style={{ flex: 1 }}>
+                  {selectedItem.type && (
+                    <div style={{ 
+                      background: 'rgba(222, 126, 33, 0.1)', 
+                      padding: '10px', 
+                      borderRadius: '8px', 
+                      marginBottom: '20px',
+                      border: '1px solid rgba(222, 126, 33, 0.3)'
+                    }}>
+                      <strong>Tipo:</strong> {selectedItem.type}
+                    </div>
+                  )}
+
+                  {/* Informações de Preço */}
+                  <div style={{ 
+                    display: 'grid', 
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', 
+                    gap: '15px', 
+                    marginBottom: '25px' 
+                  }}>
+                    <div style={{ 
+                      background: 'rgba(76, 175, 80, 0.1)', 
+                      padding: '15px', 
+                      borderRadius: '8px',
+                      border: '1px solid rgba(76, 175, 80, 0.3)'
+                    }}>
+                      <div style={{ color: '#4caf50', fontWeight: 'bold' }}>💰 Menor Preço</div>
+                      <div style={{ fontSize: '1.3rem', marginTop: '5px' }}>
+                        {formatPrice(selectedItem.histogram?.lowest_sell_order, selectedItem.histogram?.lowest_sell_order_brl)}
+                      </div>
+                    </div>
+                    
+                    <div style={{ 
+                      background: 'rgba(33, 150, 243, 0.1)', 
+                      padding: '15px', 
+                      borderRadius: '8px',
+                      border: '1px solid rgba(33, 150, 243, 0.3)'
+                    }}>
+                      <div style={{ color: '#2196f3', fontWeight: 'bold' }}>📈 Maior Oferta</div>
+                      <div style={{ fontSize: '1.3rem', marginTop: '5px' }}>
+                        {formatPrice(selectedItem.histogram?.highest_buy_order, selectedItem.histogram?.highest_buy_order_brl)}
+                      </div>
+                    </div>
+                    
+                    <div style={{ 
+                      background: 'rgba(255, 152, 0, 0.1)', 
+                      padding: '15px', 
+                      borderRadius: '8px',
+                      border: '1px solid rgba(255, 152, 0, 0.3)'
+                    }}>
+                      <div style={{ color: '#ff9800', fontWeight: 'bold' }}>📊 Listagens</div>
+                      <div style={{ fontSize: '1.3rem', marginTop: '5px' }}>
+                        {selectedItem.sell_listings || selectedItem.histogram?.sell_order_summary?.quantity || 0}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Dados Steam Search API */}
+                  {selectedItem.steam_search_data && (
+                    <div style={{ 
+                      background: 'rgba(222, 126, 33, 0.1)', 
+                      padding: '15px', 
+                      borderRadius: '8px',
+                      marginBottom: '20px',
+                      border: '1px solid rgba(222, 126, 33, 0.3)'
+                    }}>
+                      <div style={{ color: '#DE7E21', fontWeight: 'bold', marginBottom: '10px' }}>
+                        🔥 Dados Steam Market API
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '10px', fontSize: '0.9rem' }}>
+                        {selectedItem.sell_price_text && (
+                          <div><strong>Preço Steam:</strong> {selectedItem.sell_price_text}</div>
+                        )}
+                        {selectedItem.sale_price_text && (
+                          <div><strong>Preço Promoção:</strong> {selectedItem.sale_price_text}</div>
+                        )}
+                        {selectedItem.sell_listings && (
+                          <div><strong>Vendas Ativas:</strong> {selectedItem.sell_listings}</div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Status de Extração */}
+                  {selectedItem.extracted_data && (
+                    <div style={{ 
+                      background: 'rgba(76, 175, 80, 0.1)', 
+                      padding: '15px', 
+                      borderRadius: '8px',
+                      marginBottom: '20px',
+                      border: '1px solid rgba(76, 175, 80, 0.3)'
+                    }}>
+                      <div style={{ color: '#4caf50', fontWeight: 'bold', marginBottom: '10px' }}>
+                        ✅ Status dos Dados Extraídos
+                      </div>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '15px', fontSize: '0.85rem' }}>
+                        <span style={{ color: selectedItem.extracted_data.found_image ? '#4caf50' : '#ff9800' }}>
+                          {selectedItem.extracted_data.found_image ? '✅' : '⚠️'} Imagem Real
+                        </span>
+                        <span style={{ color: selectedItem.extracted_data.found_price ? '#4caf50' : '#ff9800' }}>
+                          {selectedItem.extracted_data.found_price ? '✅' : '⚠️'} Preço Real
+                        </span>
+                        <span style={{ color: selectedItem.extracted_data.found_volume ? '#4caf50' : '#ff9800' }}>
+                          {selectedItem.extracted_data.found_volume ? '✅' : '⚠️'} Volume Real
+                        </span>
+                        {selectedItem.extracted_data.api_success && (
+                          <span style={{ color: '#4caf50' }}>✅ API Steam OK</span>
+                        )}
+                      </div>
+                      <div style={{ marginTop: '10px', fontSize: '0.8rem', color: '#ccc' }}>
+                        <strong>Fonte:</strong> {selectedItem.source}<br/>
+                        <strong>Atualizado:</strong> {formatDate(selectedItem.extracted_data.search_timestamp || selectedItem.updated_at)}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Link para Steam */}
+                  <a
+                    href={selectedItem.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{
+                      color: '#DE7E21',
+                      textDecoration: 'none',
+                      fontWeight: 'bold',
+                      display: 'inline-block',
+                      padding: '12px 24px',
+                      border: '2px solid #DE7E21',
+                      borderRadius: '8px',
+                      transition: 'all 0.3s ease',
+                      background: 'transparent'
+                    }}
+                    onMouseEnter={(e) => {
+                      e.target.style.background = '#DE7E21';
+                      e.target.style.color = '#000';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.target.style.background = 'transparent';
+                      e.target.style.color = '#DE7E21';
+                    }}
+                  >
+                    🔗 Ver no Steam Community Market
+                  </a>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 };
 
