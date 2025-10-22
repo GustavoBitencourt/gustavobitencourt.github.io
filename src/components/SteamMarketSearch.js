@@ -1292,39 +1292,6 @@ const SteamMarketSearch = () => {
                     </div>
                   )}
 
-                  {/* Status de Extração */}
-                  {selectedItem.extracted_data && (
-                    <div style={{ 
-                      background: 'rgba(76, 175, 80, 0.1)', 
-                      padding: '15px', 
-                      borderRadius: '8px',
-                      marginBottom: '20px',
-                      border: '1px solid rgba(76, 175, 80, 0.3)'
-                    }}>
-                      <div style={{ color: '#4caf50', fontWeight: 'bold', marginBottom: '10px' }}>
-                        ✅ Status dos Dados Extraídos
-                      </div>
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '15px', fontSize: '0.85rem' }}>
-                        <span style={{ color: selectedItem.extracted_data.found_image ? '#4caf50' : '#ff9800' }}>
-                          {selectedItem.extracted_data.found_image ? '✅' : '⚠️'} Imagem Real
-                        </span>
-                        <span style={{ color: selectedItem.extracted_data.found_price ? '#4caf50' : '#ff9800' }}>
-                          {selectedItem.extracted_data.found_price ? '✅' : '⚠️'} Preço Real
-                        </span>
-                        <span style={{ color: selectedItem.extracted_data.found_volume ? '#4caf50' : '#ff9800' }}>
-                          {selectedItem.extracted_data.found_volume ? '✅' : '⚠️'} Volume Real
-                        </span>
-                        {selectedItem.extracted_data.api_success && (
-                          <span style={{ color: '#4caf50' }}>✅ API Steam OK</span>
-                        )}
-                      </div>
-                      <div style={{ marginTop: '10px', fontSize: '0.8rem', color: '#ccc' }}>
-                        <strong>Fonte:</strong> {selectedItem.source}<br/>
-                        <strong>Atualizado:</strong> {formatDate(selectedItem.extracted_data.search_timestamp || selectedItem.updated_at)}
-                      </div>
-                    </div>
-                  )}
-
                   {/* Link para Steam */}
                   <a
                     href={selectedItem.url}

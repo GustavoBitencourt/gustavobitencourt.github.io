@@ -563,9 +563,9 @@ const SteamInventoryViewer = ({ steamId, vanityUrl }) => {
             style={{
               background: 'linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%)',
               borderRadius: '20px',
-              padding: '30px',
-              maxWidth: '500px',
-              width: '90%',
+              padding: '25px',
+              maxWidth: '600px',
+              width: '95%',
               maxHeight: '90vh',
               overflow: 'auto',
               border: `3px solid ${selectedItem.rarityColor}`,
@@ -733,6 +733,267 @@ const SteamInventoryViewer = ({ steamId, vanityUrl }) => {
                   {selectedItem.weaponType || selectedItem.type}
                 </span>
               </div>
+
+              {/* Debug Info Compacta - só exibe se há dados extras */}
+              {selectedItem.description && (
+                selectedItem.description.tags?.length > 0 || 
+                selectedItem.description.actions?.length > 0
+              ) && (
+                <div style={{
+                  fontSize: '10px', 
+                  color: '#666', 
+                  marginTop: '15px',
+                  marginBottom: '5px', 
+                  padding: '3px 8px', 
+                  background: 'rgba(0,0,0,0.2)', 
+                  borderRadius: '3px', 
+                  opacity: 0.7,
+                  textAlign: 'center'
+                }}>
+                  🔍 Dados: {selectedItem.description.tags?.length || 0} tags, {selectedItem.description.actions?.length || 0} ações
+                </div>
+              )}
+
+              {/* Informações Detalhadas - só exibem quando disponíveis */}
+              {selectedItem.description && (
+                <div style={{ marginTop: '20px', textAlign: 'left' }}>
+                  
+                  {/* Status de Negociação Detalhado - só se há informações extras */}
+                  {(selectedItem.description.tradable !== undefined || 
+                    selectedItem.description.marketable !== undefined || 
+                    selectedItem.description.commodity !== undefined ||
+                    selectedItem.description.market_tradable_restriction || 
+                    selectedItem.description.market_marketable_restriction) && (
+                    <div style={{ 
+                      background: 'rgba(33, 150, 243, 0.1)', 
+                      padding: '15px', 
+                      borderRadius: '8px',
+                      marginBottom: '15px',
+                      border: '1px solid rgba(33, 150, 243, 0.3)'
+                    }}>
+                      <div style={{ color: '#2196F3', fontWeight: 'bold', marginBottom: '10px', fontSize: '0.9rem' }}>
+                        🔄 Status Detalhado
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: window.innerWidth <= 480 ? '1fr' : '1fr 1fr', gap: '8px', fontSize: '0.75rem' }}>
+                        {selectedItem.description.tradable !== undefined && (
+                          <div style={{ 
+                            display: 'flex', alignItems: 'center', gap: '6px',
+                            padding: '8px', background: 'rgba(255, 255, 255, 0.05)', borderRadius: '4px'
+                          }}>
+                            <span>{selectedItem.description.tradable ? '✅' : '❌'}</span>
+                            <div>
+                              <div style={{ fontWeight: 'bold', color: '#2196F3' }}>Negociável</div>
+                              <div style={{ color: selectedItem.description.tradable ? '#4caf50' : '#f44336' }}>
+                                {selectedItem.description.tradable ? 'Sim' : 'Não'}
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                        
+                        {selectedItem.description.marketable !== undefined && (
+                          <div style={{ 
+                            display: 'flex', alignItems: 'center', gap: '6px',
+                            padding: '8px', background: 'rgba(255, 255, 255, 0.05)', borderRadius: '4px'
+                          }}>
+                            <span>{selectedItem.description.marketable ? '🏪' : '🚫'}</span>
+                            <div>
+                              <div style={{ fontWeight: 'bold', color: '#2196F3' }}>Vendível</div>
+                              <div style={{ color: selectedItem.description.marketable ? '#4caf50' : '#f44336' }}>
+                                {selectedItem.description.marketable ? 'Sim' : 'Não'}
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        {selectedItem.description.commodity !== undefined && (
+                          <div style={{ 
+                            display: 'flex', alignItems: 'center', gap: '6px',
+                            padding: '8px', background: 'rgba(255, 255, 255, 0.05)', borderRadius: '4px'
+                          }}>
+                            <span>📦</span>
+                            <div>
+                              <div style={{ fontWeight: 'bold', color: '#2196F3' }}>Commodity</div>
+                              <div style={{ color: '#bbb' }}>
+                                {selectedItem.description.commodity ? 'Sim' : 'Não'}
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        {(selectedItem.description.market_tradable_restriction || selectedItem.description.market_marketable_restriction) && (
+                          <div style={{ 
+                            display: 'flex', alignItems: 'center', gap: '6px',
+                            padding: '8px', background: 'rgba(255, 152, 0, 0.1)', borderRadius: '4px'
+                          }}>
+                            <span>⏱️</span>
+                            <div>
+                              <div style={{ fontWeight: 'bold', color: '#ff9800' }}>Restrições</div>
+                              <div style={{ color: '#ff9800', fontSize: '0.7rem' }}>
+                                {selectedItem.description.market_tradable_restriction && `Trade: ${selectedItem.description.market_tradable_restriction}d`}
+                                {selectedItem.description.market_tradable_restriction && selectedItem.description.market_marketable_restriction && ' | '}
+                                {selectedItem.description.market_marketable_restriction && `Market: ${selectedItem.description.market_marketable_restriction}d`}
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Stickers - só se existirem */}
+                  {selectedItem.description.descriptions && 
+                   selectedItem.description.descriptions.some(desc => desc.name === 'sticker_info') && (
+                    <div style={{ 
+                      background: 'rgba(233, 30, 99, 0.1)', 
+                      padding: '15px', 
+                      borderRadius: '8px',
+                      marginBottom: '15px',
+                      border: '1px solid rgba(233, 30, 99, 0.3)'
+                    }}>
+                      <div style={{ color: '#E91E63', fontWeight: 'bold', marginBottom: '10px', fontSize: '0.9rem' }}>
+                        🎨 Stickers Aplicados
+                      </div>
+                      {selectedItem.description.descriptions
+                        .filter(desc => desc.name === 'sticker_info')
+                        .map((stickerDesc, index) => (
+                          <div 
+                            key={index}
+                            dangerouslySetInnerHTML={{ __html: stickerDesc.value }}
+                            style={{
+                              fontSize: '0.75rem',
+                              color: '#e0e0e0',
+                              lineHeight: '1.3',
+                              padding: '8px',
+                              background: 'rgba(255, 255, 255, 0.05)',
+                              borderRadius: '4px',
+                              border: '1px solid rgba(233, 30, 99, 0.2)'
+                            }}
+                          />
+                        ))}
+                    </div>
+                  )}
+
+                  {/* Tags e Categorias - só se existirem */}
+                  {selectedItem.description.tags && selectedItem.description.tags.length > 0 && (
+                    <div style={{ 
+                      background: 'rgba(255, 193, 7, 0.1)', 
+                      padding: '15px', 
+                      borderRadius: '8px',
+                      marginBottom: '15px',
+                      border: '1px solid rgba(255, 193, 7, 0.3)'
+                    }}>
+                      <div style={{ color: '#FFC107', fontWeight: 'bold', marginBottom: '10px', fontSize: '0.9rem' }}>
+                        🏷️ Tags e Categorias
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '6px' }}>
+                        {selectedItem.description.tags.map((tag, index) => (
+                          <div key={index} style={{ 
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                            padding: '6px 10px',
+                            background: 'rgba(255, 255, 255, 0.05)',
+                            borderRadius: '4px',
+                            fontSize: '0.75rem',
+                            border: '1px solid rgba(255, 193, 7, 0.2)'
+                          }}>
+                            <span style={{ color: '#FFC107', fontWeight: 'bold' }}>
+                              {tag.localized_category_name}:
+                            </span>
+                            <span style={{ 
+                              color: tag.color ? `#${tag.color}` : '#e0e0e0',
+                              fontWeight: tag.color ? 'bold' : 'normal'
+                            }}>
+                              {tag.localized_tag_name}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Ações do Item - só se existirem */}
+                  {selectedItem.description.actions && selectedItem.description.actions.length > 0 && (
+                    <div style={{ 
+                      background: 'rgba(255, 152, 0, 0.1)', 
+                      padding: '15px', 
+                      borderRadius: '8px',
+                      marginBottom: '15px',
+                      border: '1px solid rgba(255, 152, 0, 0.3)'
+                    }}>
+                      <div style={{ color: '#FF9800', fontWeight: 'bold', marginBottom: '10px', fontSize: '0.9rem' }}>
+                        ⚡ Ações do Item
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                        {selectedItem.description.actions.map((action, index) => (
+                          <a
+                            key={index}
+                            href={action.link}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '8px',
+                              padding: '8px',
+                              background: 'rgba(255, 255, 255, 0.05)',
+                              borderRadius: '4px',
+                              border: '1px solid rgba(255, 152, 0, 0.3)',
+                              textDecoration: 'none',
+                              color: '#FF9800',
+                              fontSize: '0.75rem',
+                              fontWeight: 'bold',
+                              transition: 'all 0.2s ease',
+                              cursor: 'pointer'
+                            }}
+                            onMouseEnter={(e) => {
+                              e.target.style.background = 'rgba(255, 152, 0, 0.2)';
+                            }}
+                            onMouseLeave={(e) => {
+                              e.target.style.background = 'rgba(255, 255, 255, 0.05)';
+                            }}
+                          >
+                            <span style={{ fontSize: '1em' }}>🎮</span>
+                            {action.name}
+                          </a>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Informações Técnicas - sempre exibe se há description */}
+                  <div style={{ 
+                    background: 'rgba(76, 175, 80, 0.1)', 
+                    padding: '15px', 
+                    borderRadius: '8px',
+                    border: '1px solid rgba(76, 175, 80, 0.3)'
+                  }}>
+                    <div style={{ color: '#4CAF50', fontWeight: 'bold', marginBottom: '10px', fontSize: '0.9rem' }}>
+                      🔧 Informações Técnicas
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: window.innerWidth <= 480 ? '1fr' : '1fr 1fr', gap: '6px', fontSize: '0.7rem' }}>
+                      {selectedItem.description.classid && (
+                        <div style={{ padding: '6px', background: 'rgba(255, 255, 255, 0.05)', borderRadius: '3px' }}>
+                          <strong>Class ID:</strong> {selectedItem.description.classid}
+                        </div>
+                      )}
+                      {selectedItem.description.instanceid && (
+                        <div style={{ padding: '6px', background: 'rgba(255, 255, 255, 0.05)', borderRadius: '3px' }}>
+                          <strong>Instance ID:</strong> {selectedItem.description.instanceid}
+                        </div>
+                      )}
+                      {selectedItem.id && (
+                        <div style={{ padding: '6px', background: 'rgba(255, 255, 255, 0.05)', borderRadius: '3px' }}>
+                          <strong>Asset ID:</strong> {selectedItem.id}
+                        </div>
+                      )}
+                      {selectedItem.description.commodity !== undefined && (
+                        <div style={{ padding: '6px', background: 'rgba(255, 255, 255, 0.05)', borderRadius: '3px' }}>
+                          <strong>Commodity:</strong> {selectedItem.description.commodity ? 'Sim' : 'Não'}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
