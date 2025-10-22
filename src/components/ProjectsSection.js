@@ -225,8 +225,11 @@ const ProjectsSection = ({ t }) => {
               <div className="project-tech">
                 <span className="tech-tag">React.js</span>
                 <span className="tech-tag">Steam API</span>
+                <span className="tech-tag">Real-time Data</span>
+                <span className="tech-tag">Currency API</span>
                 <span className="tech-tag">CSS3</span>
                 <span className="tech-tag">Audio System</span>
+                <span className="tech-tag">Responsive</span>
               </div>
               <p>{t('cs2-description')}</p>
               
@@ -236,6 +239,8 @@ const ProjectsSection = ({ t }) => {
                   <li>{t('cs2-feature-1')}</li>
                   <li>{t('cs2-feature-2')}</li>
                   <li>{t('cs2-feature-3')}</li>
+                  <li>{t('cs2-feature-4')}</li>
+                  <li>{t('cs2-feature-5')}</li>
                 </ul>
               </div>
               

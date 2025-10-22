@@ -535,6 +535,31 @@
   .player-nick {
     font-size: 1.3rem;
   }
+
+  .cs2-content {
+    padding-top: 160px; /* Aumentar margem para menu em tablets */
+  }
+
+  /* Reduzir altura do menu no tablet */
+  .cs2-top-menu {
+    padding: 12px 0;
+  }
+
+  /* Ajustes específicos para as seções principais no tablet */
+  .team-section {
+    padding-top: 55px; /* Mais espaço para Nossa Equipe no tablet */
+    margin-top: 40px;
+  }
+  
+  .inventory-section {
+    padding-top: 45px; /* Ajuste fino para Inventory no tablet */
+    margin-top: 28px;
+  }
+  
+  .market-section {
+    padding-top: 55px; /* Mais espaço para Busca no tablet */
+    margin-top: 30px;
+  }
 }
 
 @media (max-width: 480px) {
@@ -547,12 +572,28 @@
   }
 
   .cs2-content {
-    padding: 60px 15px;
+    padding: 200px 15px 60px 15px; /* Aumentar ainda mais a margem do topo para compensar menu em coluna */
   }
 
   .cs2-section, .team-section {
     padding: 25px 15px;
     margin-bottom: 30px;
+  }
+
+  /* Ajustes específicos para as seções principais */
+  .team-section {
+    padding-top: 30%; 
+    margin-top: 40px;
+  }
+  
+  .inventory-section {
+    padding-top: 25%; 
+    margin-top: 35px;
+  }
+  
+  .market-section {
+    padding-top: 40%; /* Mais espaço para Busca */
+    margin-top: 40px;
   }
 
   .player-image-container {
@@ -568,28 +609,29 @@
     font-size: 1rem;
   }
 
+  /* Reduzir altura do menu no mobile */
   .cs2-top-menu {
-    padding: 10px 15px;
+    padding: 8px 15px;
   }
 
   .menu-container {
     flex-direction: column;
-    gap: 15px;
+    gap: 10px;
   }
 
   .cs2-title {
-    font-size: 1.5rem;
+    font-size: 1.3rem; /* Diminuir título no mobile */
     margin: 0;
   }
 
   .menu-nav {
     flex-direction: column;
-    gap: 8px;
+    gap: 6px;
   }
 
   .menu-button {
-    padding: 8px 12px;
-    font-size: 0.9rem;
+    padding: 6px 10px; /* Diminuir padding dos botões */
+    font-size: 0.85rem; /* Diminuir fonte dos botões */
   }
 }
 
@@ -679,7 +721,7 @@
 
 /* Ajustar conteúdo para compensar o menu fixo */
 .cs2-content {
-  padding-top: 100px; /* Espaço para o menu fixo */
+  padding-top: 120px; /* Espaço para o menu fixo em desktop */
 }
 
 /* Animação de entrada das seções */
