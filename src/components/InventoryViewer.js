@@ -6,7 +6,7 @@ const InventoryViewer = ({ customUrl, steamId }) => {
   const [error, setError] = useState(null);
 
   // Steam Web API Key
-  const STEAM_API_KEY = '22E191F8EB4FED4A4B3F421212961ECC';
+  const STEAM_API_KEY = '56C14614F835D970E35560B61FCEA28D';
 
   // Função para converter URL customizada para Steam ID usando Steam Web API
   const getSteamId = async (customUrl) => {

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import PlayerInventorySelector from './PlayerInventorySelector';
+import SteamMarketSearch from './SteamMarketSearch';
 import './CS2.css';
 
 const CS2 = () => {
@@ -231,6 +232,17 @@ const CS2 = () => {
             {/* Seção de Inventário */}
             <div className="inventory-section">
               <PlayerInventorySelector />
+            </div>
+
+            {/* Seção de Mercado Steam */}
+            <div className="market-section" style={{ 
+              marginTop: '60px',
+              padding: '40px 20px',
+              background: 'rgba(0,0,0,0.2)',
+              borderRadius: '20px',
+              border: '1px solid rgba(222, 126, 33, 0.2)'
+            }}>
+              <SteamMarketSearch />
             </div>
           </div>
         </div>
