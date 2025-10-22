@@ -20,6 +20,11 @@ const SteamMarketSearch = () => {
   const [exchangeRate, setExchangeRate] = useState(5.5); // Taxa padrão USD -> BRL
   const [selectedItem, setSelectedItem] = useState(null); // Para o modal
   const [showModal, setShowModal] = useState(false);
+  
+  // Novos estados para paginação e filtros
+  const [itemsPerPage, setItemsPerPage] = useState(9); // Começar com 9 itens
+  const [sortOrder, setSortOrder] = useState('none'); // 'none', 'asc', 'desc'
+  const [filteredResults, setFilteredResults] = useState([]);
 
   // Controlar scroll da página quando o modal abrir/fechar
   useEffect(() => {
@@ -117,7 +122,7 @@ const SteamMarketSearch = () => {
       console.log(`🔍 Buscando "${searchTerm}" na Steam Community Market...`);
       
       // URL da busca do Steam Market
-      const searchUrl = `https://steamcommunity.com/market/search/render/?query=${encodeURIComponent(searchTerm)}&start=0&count=20&search_descriptions=0&sort_column=popular&sort_dir=desc&appid=730&norender=1`;
+      const searchUrl = `https://steamcommunity.com/market/search/render/?query=${encodeURIComponent(searchTerm)}&start=0&count=50&search_descriptions=0&sort_column=popular&sort_dir=desc&appid=730&norender=1`;
       console.log("📡 Steam Search URL:", searchUrl);
       
       // Sistema de proxies
@@ -176,7 +181,7 @@ const SteamMarketSearch = () => {
       // Extrair dados completos dos itens dos resultados
       const itemsData = searchData.results
         .filter(item => item.hash_name && item.hash_name.trim() !== '')
-        .slice(0, 9) // Aumentar para 9 resultados
+        .slice(0, 50) // Buscar até 50 resultados da API
         .map(item => ({
           hash_name: item.hash_name,
           name: item.name,
@@ -352,7 +357,7 @@ const SteamMarketSearch = () => {
       
       console.log(`📋 ${itemsData.length} itens encontrados, buscando preços atualizados...`);
       
-      const maxItems = 9; // Aumentar para 9 resultados
+      const maxItems = 36; // Buscar até 36 itens para permitir mais filtros
       
       // Buscar preços em paralelo para melhor performance
       const itemPromises = itemsData.slice(0, maxItems).map(async (itemData, index) => {
@@ -514,6 +519,44 @@ const SteamMarketSearch = () => {
     return new Date(timestamp).toLocaleString('pt-BR');
   };
 
+  // Função para obter o preço numérico para ordenação
+  const getNumericPrice = (item) => {
+    if (item.histogram?.lowest_sell_order) {
+      return parseFloat(item.histogram.lowest_sell_order);
+    }
+    if (item.sell_price) {
+      return parseFloat(item.sell_price);
+    }
+    if (item.sell_price_text) {
+      const match = item.sell_price_text.match(/\$?([\d,.]+)/);
+      return match ? parseFloat(match[1].replace(',', '')) : 0;
+    }
+    return 0;
+  };
+
+  // useEffect para aplicar filtros quando os dados mudam
+  useEffect(() => {
+    // Função para ordenar resultados
+    const sortResults = (results, order) => {
+      if (order === 'none') return results;
+      
+      return [...results].sort((a, b) => {
+        const priceA = getNumericPrice(a);
+        const priceB = getNumericPrice(b);
+        
+        if (order === 'asc') {
+          return priceA - priceB; // Menor para maior
+        } else if (order === 'desc') {
+          return priceB - priceA; // Maior para menor
+        }
+        return 0;
+      });
+    };
+
+    const sorted = sortResults(searchResults, sortOrder);
+    setFilteredResults(sorted);
+  }, [searchResults, sortOrder]);
+
   return (
     <>
       <div style={{
@@ -611,13 +654,92 @@ const SteamMarketSearch = () => {
           }}>
             📋 {searchResults.length} itens encontrados para "{searchQuery}" (Preços Atualizados)
           </h3>
+
+          {/* Controles de Filtro e Visualização */}
+          <div style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            marginBottom: '20px',
+            padding: '15px',
+            background: 'rgba(0, 0, 0, 0.3)',
+            borderRadius: '10px',
+            flexWrap: 'wrap',
+            gap: '15px'
+          }}>
+            {/* Filtro de Ordenação */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <label style={{ color: '#fff', fontWeight: 'bold' }}>🔄 Ordenar por preço:</label>
+              <select
+                value={sortOrder}
+                onChange={(e) => setSortOrder(e.target.value)}
+                style={{
+                  padding: '8px 12px',
+                  borderRadius: '6px',
+                  border: '1px solid #DE7E21',
+                  background: '#2d2d2d',
+                  color: '#fff',
+                  fontSize: '14px'
+                }}
+              >
+                <option value="none">Sem ordenação</option>
+                <option value="asc">Menor → Maior preço</option>
+                <option value="desc">Maior → Menor preço</option>
+              </select>
+            </div>
+
+            {/* Controle de Itens por Página */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <label style={{ color: '#fff', fontWeight: 'bold' }}>👀 Mostrar:</label>
+              <select
+                value={itemsPerPage}
+                onChange={(e) => setItemsPerPage(Number(e.target.value))}
+                style={{
+                  padding: '8px 12px',
+                  borderRadius: '6px',
+                  border: '1px solid #DE7E21',
+                  background: '#2d2d2d',
+                  color: '#fff',
+                  fontSize: '14px'
+                }}
+              >
+                <option value={9}>9 itens</option>
+                <option value={18}>18 itens</option>
+                <option value={36}>36 itens</option>
+                <option value={searchResults.length}>Todos ({searchResults.length})</option>
+              </select>
+            </div>
+
+            {/* Informações de Filtros Ativos */}
+            <div style={{ 
+              fontSize: '0.9rem', 
+              color: '#ccc',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '10px'
+            }}>
+              {sortOrder !== 'none' && (
+                <span style={{ 
+                  background: 'rgba(222, 126, 33, 0.2)', 
+                  padding: '4px 8px', 
+                  borderRadius: '4px',
+                  border: '1px solid rgba(222, 126, 33, 0.5)'
+                }}>
+                  {sortOrder === 'asc' ? '📈 Menor → Maior' : '📉 Maior → Menor'}
+                </span>
+              )}
+              <span style={{ color: '#DE7E21' }}>
+                Exibindo {Math.min(itemsPerPage, filteredResults.length)} de {filteredResults.length} itens
+              </span>
+            </div>
+          </div>
           
           <div style={{
             display: 'grid',
             gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
             gap: '20px'
           }}>
-            {searchResults.map((item, index) => (
+            {filteredResults.slice(0, itemsPerPage).map((item, index) => (
               <div key={index} style={{
                 background: 'rgba(222, 126, 33, 0.1)',
                 border: '1px solid #DE7E21',
@@ -704,6 +826,78 @@ const SteamMarketSearch = () => {
               </div>
             ))}
           </div>
+
+          {/* Botão Ver Mais - se houver mais itens */}
+          {itemsPerPage < filteredResults.length && (
+            <div style={{ 
+              textAlign: 'center', 
+              marginTop: '30px',
+              padding: '20px'
+            }}>
+              <button
+                onClick={() => setItemsPerPage(prev => Math.min(prev + 9, filteredResults.length))}
+                style={{
+                  padding: '15px 30px',
+                  borderRadius: '10px',
+                  border: '2px solid #DE7E21',
+                  background: 'linear-gradient(135deg, rgba(222, 126, 33, 0.1), rgba(222, 126, 33, 0.2))',
+                  color: '#DE7E21',
+                  fontSize: '16px',
+                  fontWeight: 'bold',
+                  cursor: 'pointer',
+                  transition: 'all 0.3s ease',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '10px',
+                  margin: '0 auto'
+                }}
+                onMouseEnter={(e) => {
+                  e.target.style.background = '#DE7E21';
+                  e.target.style.color = '#000';
+                  e.target.style.transform = 'translateY(-2px)';
+                }}
+                onMouseLeave={(e) => {
+                  e.target.style.background = 'linear-gradient(135deg, rgba(222, 126, 33, 0.1), rgba(222, 126, 33, 0.2))';
+                  e.target.style.color = '#DE7E21';
+                  e.target.style.transform = 'translateY(0)';
+                }}
+              >
+                📈 Ver Mais {Math.min(9, filteredResults.length - itemsPerPage)} Itens
+                <span style={{ 
+                  fontSize: '14px', 
+                  opacity: 0.8 
+                }}>
+                  ({filteredResults.length - itemsPerPage} restantes)
+                </span>
+              </button>
+              
+              {/* Mostrar Todos */}
+              {filteredResults.length - itemsPerPage > 9 && (
+                <button
+                  onClick={() => setItemsPerPage(filteredResults.length)}
+                  style={{
+                    padding: '12px 25px',
+                    borderRadius: '8px',
+                    border: '1px solid rgba(222, 126, 33, 0.5)',
+                    background: 'transparent',
+                    color: '#DE7E21',
+                    fontSize: '14px',
+                    cursor: 'pointer',
+                    marginLeft: '15px',
+                    transition: 'all 0.3s ease'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.target.style.background = 'rgba(222, 126, 33, 0.1)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.target.style.background = 'transparent';
+                  }}
+                >
+                  🚀 Mostrar Todos ({filteredResults.length})
+                </button>
+              )}
+            </div>
+          )}
         </div>
       )}
 
@@ -857,10 +1051,10 @@ const SteamMarketSearch = () => {
             height: '100vh',
             background: 'rgba(0, 0, 0, 0.8)',
             display: 'flex',
-            alignItems: 'flex-start', // Alinha no topo em vez do centro
-            justifyContent: 'center',
+            alignItems: 'center', // Centralizar verticalmente
+            justifyContent: 'center', // Centralizar horizontalmente
             zIndex: 999999,
-            padding: window.innerWidth <= 480 ? '80px 10px 20px 10px' : '50px 20px 20px 20px', // Mais margem no topo para mobile
+            padding: window.innerWidth <= 480 ? '20px 10px' : '20px', // Padding uniforme
             margin: '0px',
             overflow: 'auto', // Permite scroll se necessário
             boxSizing: 'border-box',
@@ -874,10 +1068,10 @@ const SteamMarketSearch = () => {
               border: '1px solid #DE7E21',
               borderRadius: window.innerWidth <= 480 ? '10px' : '15px',
               padding: '0px',
-              maxWidth: window.innerWidth <= 480 ? '95%' : '700px',
-              width: window.innerWidth <= 480 ? '95%' : '95%',
-              maxHeight: window.innerWidth <= 480 ? '75vh' : '80vh', // Menor altura no mobile
-              minHeight: window.innerWidth <= 480 ? '300px' : '400px', // Menor altura mínima no mobile
+              maxWidth: window.innerWidth <= 480 ? '95%' : window.innerWidth <= 768 ? '85%' : '700px',
+              width: '100%',
+              maxHeight: window.innerWidth <= 480 ? '85vh' : '90vh', // Mais altura disponível
+              minHeight: window.innerWidth <= 480 ? '300px' : '400px',
               position: 'relative',
               boxShadow: '0 0 30px rgba(222, 126, 33, 0.3)',
               display: 'flex',
