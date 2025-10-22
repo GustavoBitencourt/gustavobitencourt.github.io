@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import PlayerInventorySelector from './PlayerInventorySelector';
 import './CS2.css';
 
 const CS2 = () => {
@@ -22,6 +23,8 @@ const CS2 = () => {
       setTimeout(() => playSound(), i * 300); // 300ms de intervalo entre repetições
     }
   };
+
+
 
   // Função para iniciar o jogo
   const handleStartGame = () => {
@@ -131,7 +134,7 @@ const CS2 = () => {
             <div className="team-section">
               <h2>Nossa Equipe</h2>
               <p className="team-description">
-                Conheça os membros da nossa line de Counter-Strike 2, prontos para dominar os servidores!
+                Conheça os membros da nossa line de Counter-Strike 2!
               </p>
               
               <div className="team-grid">
@@ -223,6 +226,11 @@ const CS2 = () => {
                   </div>
                 </div>
               </div>
+            </div>
+
+            {/* Seção de Inventário */}
+            <div className="inventory-section">
+              <PlayerInventorySelector />
             </div>
           </div>
         </div>

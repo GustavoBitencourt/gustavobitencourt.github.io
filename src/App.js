@@ -8,6 +8,8 @@ import ProjectsSection from './components/ProjectsSection';
 import ContactSection from './components/ContactSection';
 import Player from './components/Player';
 import CS2 from './components/CS2';
+import TestInventory from './components/TestInventory';
+import SimpleInventoryTest from './components/SimpleInventoryTest';
 import { useLanguage } from './hooks/useLanguage';
 import './App.css';
 
@@ -35,6 +37,8 @@ function App() {
           } />
           <Route path="/player" element={<Player />} />
           <Route path="/cs2" element={<CS2 />} />
+          <Route path="/test-inventory" element={<TestInventory />} />
+          <Route path="/simple-test" element={<SimpleInventoryTest />} />
         </Routes>
       </div>
     </Router>
