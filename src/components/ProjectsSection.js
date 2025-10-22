@@ -19,6 +19,10 @@ const ProjectsSection = ({ t }) => {
     window.open('https://www.gustavobit.com/TraitusGamer/', '_blank');
   };
 
+  const handleCS2Redirect = () => {
+    window.location.hash = '#/cs2';
+  };
+
   const nextImage = () => {
     setCurrentImageIndex((prevIndex) => 
       prevIndex === projectImages.length - 1 ? 0 : prevIndex + 1
@@ -180,6 +184,64 @@ const ProjectsSection = ({ t }) => {
               <button 
                 className="project-btn"
                 onClick={handleTraitusRedirect}
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                  <path d="M18 13V19C18 19.5304 17.7893 20.0391 17.4142 20.4142C17.0391 20.7893 16.5304 21 16 21H5C4.46957 21 3.96086 20.7893 3.58579 20.4142C3.21071 20.0391 3 19.5304 3 19V8C3 7.46957 3.21071 6.96086 3.58579 6.58579C3.96086 6.21071 4.46957 6 5 6H11" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                  <path d="M15 3H21V9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                  <path d="M10 14L21 3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+                {t('view-project')}
+              </button>
+            </div>
+          </div>
+
+          {/* Terceiro Projeto - CS2 Team Portfolio */}
+          <div className="project-card">
+            <div className="project-image single-image">
+              <img 
+                src="/images/cs2.png" 
+                alt="CS2 Team Portfolio"
+                onError={(e) => {
+                  e.target.style.display = 'none';
+                  e.target.nextSibling.style.display = 'flex';
+                }}
+              />
+              <div className="image-placeholder" style={{display: 'none'}}>
+                <div className="placeholder-icon">
+                  <svg width="60" height="60" viewBox="0 0 24 24" fill="none">
+                    <path d="M14 2H6C4.9 2 4 2.9 4 4V20C4 21.1 4.89 22 5.99 22H18C19.1 22 20 21.1 20 20V8L14 2Z" stroke="#DE7E21" strokeWidth="2" fill="none"/>
+                    <path d="M14 2V8H20" stroke="#DE7E21" strokeWidth="2" fill="none"/>
+                    <path d="M16 13H8" stroke="#DE7E21" strokeWidth="2"/>
+                    <path d="M16 17H8" stroke="#DE7E21" strokeWidth="2"/>
+                    <path d="M10 9H9M9 9H8" stroke="#DE7E21" strokeWidth="2"/>
+                  </svg>
+                </div>
+                <p>{t('image-coming-soon')}</p>
+              </div>
+            </div>
+            
+            <div className="project-content">
+              <h3>{t('cs2-team-portfolio')}</h3>
+              <div className="project-tech">
+                <span className="tech-tag">React.js</span>
+                <span className="tech-tag">Steam API</span>
+                <span className="tech-tag">CSS3</span>
+                <span className="tech-tag">Audio System</span>
+              </div>
+              <p>{t('cs2-description')}</p>
+              
+              <div className="project-features">
+                <h4>{t('key-features')}</h4>
+                <ul>
+                  <li>{t('cs2-feature-1')}</li>
+                  <li>{t('cs2-feature-2')}</li>
+                  <li>{t('cs2-feature-3')}</li>
+                </ul>
+              </div>
+              
+              <button 
+                className="project-btn"
+                onClick={handleCS2Redirect}
               >
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
                   <path d="M18 13V19C18 19.5304 17.7893 20.0391 17.4142 20.4142C17.0391 20.7893 16.5304 21 16 21H5C4.46957 21 3.96086 20.7893 3.58579 20.4142C3.21071 20.0391 3 19.5304 3 19V8C3 7.46957 3.21071 6.96086 3.58579 6.58579C3.96086 6.21071 4.46957 6 5 6H11" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>

@@ -10,7 +10,7 @@ const CS2 = () => {
   const playPlayerSound = (soundFile, repeat = 1) => {
     const playSound = () => {
       const audio = new Audio(`/sounds/${soundFile}`);
-      audio.volume = 0.6;
+      audio.volume = 0.3;
       audio.play().then(() => {
         console.log(`🔊 Som ${soundFile} tocado com sucesso!`);
       }).catch(err => {
@@ -40,7 +40,7 @@ const CS2 = () => {
             clearInterval(timer);
             // Tocar som do beep para o número "1"
             const beepAudio = new Audio('/sounds/c4_beep2.wav');
-            beepAudio.volume = 0.6;
+            beepAudio.volume = 0.3;
             beepAudio.play().then(() => {
               console.log('🔊 Beep para número 1 tocado com sucesso!');
             }).catch(err => {
@@ -50,7 +50,7 @@ const CS2 = () => {
             // Tocar som após contagem terminar
             setTimeout(() => {
               const audio = new Audio('/sounds/pl_respawn.wav');
-              audio.volume = 0.5;
+              audio.volume = 0.25;
               audio.play().then(() => {
                 console.log('🔊 Som de respawn tocado com sucesso!');
               }).catch(err => {
@@ -66,7 +66,7 @@ const CS2 = () => {
           
           // Tocar som do beep para os números 3 e 2
           const beepAudio = new Audio('/sounds/c4_beep2.wav');
-          beepAudio.volume = 0.6;
+          beepAudio.volume = 0.3;
           beepAudio.play().then(() => {
             console.log(`🔊 Beep para número ${prev} tocado com sucesso!`);
           }).catch(err => {
