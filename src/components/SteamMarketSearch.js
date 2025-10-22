@@ -1,6 +1,17 @@
 import React, { useState, useEffect } from 'react';
 
 const SteamMarketSearch = () => {
+  
+  // Função para tocar sons dos botões de busca
+  const playSearchSound = (soundFile) => {
+    const audio = new Audio(`/sounds/${soundFile}`);
+    audio.volume = 0.3; // Mesmo volume dos demais sons
+    audio.play().then(() => {
+      console.log(`🔊 Som de busca ${soundFile} tocado com sucesso!`);
+    }).catch(err => {
+      console.log('Erro ao tocar áudio de busca:', err);
+    });
+  };
   const [searchQuery, setSearchQuery] = useState('');
   const [marketData, setMarketData] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -541,7 +552,11 @@ const SteamMarketSearch = () => {
             onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
           />
           <button
-            onClick={handleSearch}
+            onClick={() => {
+              playSearchSound('awp_01.wav');
+              handleSearch();
+            }}
+            onMouseEnter={() => playSearchSound('zoom.wav')}
             disabled={loading}
             style={{
               padding: '12px 24px',

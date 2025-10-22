@@ -26,6 +26,17 @@ const CS2 = () => {
     }
   };
 
+  // Funções para tocar sons dos botões do menu
+  const playMenuSound = (soundFile) => {
+    const audio = new Audio(`/sounds/${soundFile}`);
+    audio.volume = 0.3; // Mesmo volume dos demais sons
+    audio.play().then(() => {
+      console.log(`🔊 Som do menu ${soundFile} tocado com sucesso!`);
+    }).catch(err => {
+      console.log('Erro ao tocar áudio do menu:', err);
+    });
+  };
+
 
 
   // Função para iniciar o jogo
@@ -255,19 +266,31 @@ const CS2 = () => {
             <nav className="menu-nav">
               <button 
                 className={`menu-button ${activeSection === 'team' ? 'active' : ''}`}
-                onClick={() => setActiveSection('team')}
+                onClick={() => {
+                  playMenuSound('glock_01.wav');
+                  setActiveSection('team');
+                }}
+                onMouseEnter={() => playMenuSound('glock_clipin.wav')}
               >
                 🎯 Conheça Nossa Equipe
               </button>
               <button 
                 className={`menu-button ${activeSection === 'inventory' ? 'active' : ''}`}
-                onClick={() => setActiveSection('inventory')}
+                onClick={() => {
+                  playMenuSound('weapon_zoom_out_02.wav');
+                  setActiveSection('inventory');
+                }}
+                onMouseEnter={() => playMenuSound('glock_clipin.wav')}
               >
                 🎒 Ver Inventários
               </button>
               <button 
                 className={`menu-button ${activeSection === 'market' ? 'active' : ''}`}
-                onClick={() => setActiveSection('market')}
+                onClick={() => {
+                  playMenuSound('auto_semiauto_switch_02.wav');
+                  setActiveSection('market');
+                }}
+                onMouseEnter={() => playMenuSound('auto_semiauto_switch_01.wav')}
               >
                 💰 Mercado da Steam
               </button>
