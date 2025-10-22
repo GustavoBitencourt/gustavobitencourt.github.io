@@ -567,4 +567,135 @@
   .team-description {
     font-size: 1rem;
   }
+
+  .cs2-top-menu {
+    padding: 10px 15px;
+  }
+
+  .menu-container {
+    flex-direction: column;
+    gap: 15px;
+  }
+
+  .cs2-title {
+    font-size: 1.5rem;
+    margin: 0;
+  }
+
+  .menu-nav {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .menu-button {
+    padding: 8px 12px;
+    font-size: 0.9rem;
+  }
+}
+
+/* Menu Fixo no Topo */
+.cs2-top-menu {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 1000;
+  background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 50%, #1a1a1a 100%);
+  backdrop-filter: blur(10px);
+  border-bottom: 2px solid #DE7E21;
+  box-shadow: 0 2px 20px rgba(222, 126, 33, 0.3);
+  padding: 15px 0;
+}
+
+.menu-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 20px;
+}
+
+.cs2-title {
+  color: #DE7E21;
+  font-size: 1.8rem;
+  font-weight: bold;
+  margin: 0;
+  text-shadow: 0 0 10px rgba(222, 126, 33, 0.5);
+}
+
+.menu-nav {
+  display: flex;
+  gap: 15px;
+  align-items: center;
+}
+
+.menu-button {
+  background: linear-gradient(135deg, rgba(222, 126, 33, 0.1), rgba(222, 126, 33, 0.2));
+  border: 2px solid transparent;
+  color: #fff;
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-size: 1rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.menu-button::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(222, 126, 33, 0.2), transparent);
+  transition: left 0.5s;
+}
+
+.menu-button:hover {
+  border-color: #DE7E21;
+  box-shadow: 0 0 15px rgba(222, 126, 33, 0.4);
+  transform: translateY(-2px);
+}
+
+.menu-button:hover::before {
+  left: 100%;
+}
+
+.menu-button.active {
+  background: linear-gradient(135deg, #DE7E21, #ff8a00);
+  border-color: #DE7E21;
+  color: #000;
+  font-weight: bold;
+  box-shadow: 0 0 20px rgba(222, 126, 33, 0.6);
+}
+
+.menu-button.active::before {
+  display: none;
+}
+
+/* Ajustar conteúdo para compensar o menu fixo */
+.cs2-content {
+  padding-top: 100px; /* Espaço para o menu fixo */
+}
+
+/* Animação de entrada das seções */
+.team-section,
+.inventory-section,
+.market-section {
+  animation: fadeInUp 0.6s ease-out forwards;
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
