@@ -1047,7 +1047,6 @@ const SteamMarketSearch = () => {
             left: '0px',
             right: '0px',
             bottom: '0px',
-            width: '100vw',
             height: '100vh',
             background: 'rgba(0, 0, 0, 0.8)',
             display: 'flex',
