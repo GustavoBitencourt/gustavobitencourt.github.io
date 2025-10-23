@@ -562,7 +562,21 @@ const SteamMarketSearch = () => {
   };
 
   const formatPrice = (price, priceBrl = null, fallbackItem = null) => {
-    // Verificar se o preço principal é válido
+    // 🚀 PRIORIDADE 1: Preço do Steam Market API (mesmo que aparece no modal)
+    if (fallbackItem?.sell_price_text && fallbackItem.sell_price_text !== "N/A") {
+      const steamPrice = fallbackItem.sell_price_text;
+      const match = steamPrice.match(/\$?([\d,.]+)/);
+      if (match) {
+        const numericPrice = parseFloat(match[1].replace(',', ''));
+        if (!isNaN(numericPrice)) {
+          const convertedBRL = (numericPrice * exchangeRate).toFixed(2);
+          return `R$ ${convertedBRL} ($${numericPrice.toFixed(2)})`;
+        }
+      }
+      return steamPrice;
+    }
+    
+    // 🥈 PRIORIDADE 2: Preço do histogram (menor preço atual)
     if (price && price !== "N/A" && price !== "0.00" && !isNaN(parseFloat(price))) {
       const usdPrice = `$${parseFloat(price).toFixed(2)}`;
       if (priceBrl && !isNaN(parseFloat(priceBrl))) {
@@ -571,28 +585,11 @@ const SteamMarketSearch = () => {
       return usdPrice;
     }
     
-    // Se o preço principal não estiver disponível, usar preços alternativos
-    if (fallbackItem) {
-      // Tentar sell_price_text do Steam
-      if (fallbackItem.sell_price_text && fallbackItem.sell_price_text !== "N/A") {
-        const steamPrice = fallbackItem.sell_price_text;
-        const match = steamPrice.match(/\$?([\d,.]+)/);
-        if (match) {
-          const numericPrice = parseFloat(match[1].replace(',', ''));
-          if (!isNaN(numericPrice)) {
-            const convertedBRL = (numericPrice * exchangeRate).toFixed(2);
-            return `R$ ${convertedBRL} ($${numericPrice.toFixed(2)}) - Steam`;
-          }
-        }
-        return steamPrice + " - Steam";
-      }
-      
-      // Tentar sell_price
-      if (fallbackItem.sell_price && !isNaN(parseFloat(fallbackItem.sell_price))) {
-        const numericPrice = parseFloat(fallbackItem.sell_price);
-        const convertedBRL = (numericPrice * exchangeRate).toFixed(2);
-        return `R$ ${convertedBRL} ($${numericPrice.toFixed(2)}) - Steam`;
-      }
+    // 🥉 PRIORIDADE 3: Fallback para sell_price numérico
+    if (fallbackItem?.sell_price && !isNaN(parseFloat(fallbackItem.sell_price))) {
+      const numericPrice = parseFloat(fallbackItem.sell_price);
+      const convertedBRL = (numericPrice * exchangeRate).toFixed(2);
+      return `R$ ${convertedBRL} ($${numericPrice.toFixed(2)})`;
     }
     
     return "Preço não disponível";
