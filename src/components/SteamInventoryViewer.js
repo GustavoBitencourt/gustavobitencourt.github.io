@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 
 const SteamInventoryViewer = ({ steamId, vanityUrl }) => {
   const [items, setItems] = useState([]);
@@ -8,6 +8,13 @@ const SteamInventoryViewer = ({ steamId, vanityUrl }) => {
   const [selectedItem, setSelectedItem] = useState(null);
   const [showModal, setShowModal] = useState(false);
   const [displayedItems, setDisplayedItems] = useState(24); // Controla quantos itens mostrar
+  
+  // Estados para preços dos itens
+  const [itemPrices, setItemPrices] = useState({}); // {itemName: {usd, brl, original}}
+  const [exchangeRate, setExchangeRate] = useState(5.5);
+  const [fetchingItems, setFetchingItems] = useState(new Set());
+  const [attemptedItems, setAttemptedItems] = useState(new Set()); // Itens já tentados
+
 
   // Função para encontrar float real da API
   const getFloatFromAssetProperties = (assetId, assetProperties) => {
@@ -24,6 +31,12 @@ const SteamInventoryViewer = ({ steamId, vanityUrl }) => {
   const openModal = (item) => {
     setSelectedItem(item);
     setShowModal(true);
+    
+    // Buscar preço se item é marketável e ainda não foi tentado
+    if (item.marketable && item.name && !itemPrices[item.name] && !attemptedItems.has(item.name)) {
+      console.log(`🔍 Buscando preço para item clicado: ${item.name}`);
+      fetchItemPrice(item.name);
+    }
     
     // Impedir scroll do body quando modal está aberto
     document.body.style.overflow = 'hidden';
@@ -42,6 +55,105 @@ const SteamInventoryViewer = ({ steamId, vanityUrl }) => {
   const loadMoreItems = () => {
     setDisplayedItems(prev => Math.min(prev + 24, items.length));
   };
+
+  // Função para buscar preço individual no Steam Market
+  const fetchItemPrice = useCallback(async (itemName) => {
+    if (!itemName || itemPrices[itemName] || attemptedItems.has(itemName)) return; // Não buscar se já tem ou já tentou
+    
+    if (fetchingItems.has(itemName)) {
+      console.log(`⏳ Já buscando preço para: ${itemName}`);
+      return null;
+    }
+    
+    // Marcar como sendo buscado
+    setFetchingItems(prev => new Set(prev).add(itemName));
+    
+    try {
+      console.log(`🔍 Buscando preço para: "${itemName}"`);
+      
+      const marketUrl = `https://steamcommunity.com/market/priceoverview/?currency=1&appid=730&market_hash_name=${encodeURIComponent(itemName)}`;
+      
+      // Sistema de proxies (mesmo que funciona no SteamMarketSearch)
+      const proxies = [
+        `https://api.allorigins.win/get?url=${encodeURIComponent(marketUrl)}`,
+        `https://cors-anywhere.herokuapp.com/${marketUrl}`,
+        `https://corsproxy.io/?${encodeURIComponent(marketUrl)}`
+      ];
+      
+      let priceData = null;
+      
+      for (let i = 0; i < proxies.length; i++) {
+        try {
+          const response = await fetch(proxies[i], {
+            headers: {
+              'Accept': 'application/json',
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+            }
+          });
+          
+          if (!response.ok) continue;
+          
+          const data = await response.json();
+          
+          // AllOrigins wrapper
+          if (data.contents) {
+            priceData = JSON.parse(data.contents);
+          } else {
+            priceData = data;
+          }
+          
+          if (priceData && priceData.success) {
+            break;
+          }
+          
+        } catch (proxyError) {
+          console.warn(`⚠️ Proxy ${i + 1} falhou:`, proxyError.message);
+          continue;
+        }
+      }
+      
+      if (priceData && priceData.success) {
+        // Usar lowest_price como prioridade
+        const steamPrice = priceData.lowest_price || priceData.median_price || "N/A";
+        
+        if (steamPrice && steamPrice !== "N/A") {
+          const match = steamPrice.match(/\$?([\d,.]+)/);
+          if (match) {
+            const numericPrice = parseFloat(match[1].replace(',', ''));
+            if (!isNaN(numericPrice)) {
+              const convertedBRL = (numericPrice * exchangeRate).toFixed(2);
+              
+              // Atualizar estado com o preço encontrado
+              setItemPrices(prev => ({
+                ...prev,
+                [itemName]: {
+                  usd: numericPrice.toFixed(2),
+                  brl: convertedBRL,
+                  original: steamPrice
+                }
+              }));
+              
+              console.log(`✅ Preço encontrado para ${itemName}: $${numericPrice}`);
+              return;
+            }
+          }
+        }
+      }
+      
+      console.log(`❌ Preço não encontrado para: ${itemName}`);
+      
+    } catch (error) {
+      console.error(`❌ Erro ao buscar preço para ${itemName}:`, error.message);
+    } finally {
+      // Marcar como tentado e remover do conjunto de busca
+      setAttemptedItems(prev => new Set(prev).add(itemName));
+      setFetchingItems(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(itemName);
+        return newSet;
+      });
+    }
+  }, [itemPrices, exchangeRate, fetchingItems, attemptedItems]);
 
   // Adicionar estilos de animação do modal
   useEffect(() => {
@@ -65,6 +177,26 @@ const SteamInventoryViewer = ({ steamId, vanityUrl }) => {
         document.head.removeChild(style);
       }
     };
+  }, []);
+
+  // Buscar taxa de câmbio USD -> BRL
+  useEffect(() => {
+    const fetchExchangeRate = async () => {
+      try {
+        console.log('💱 Buscando taxa de câmbio USD -> BRL...');
+        const response = await fetch('https://api.exchangerate-api.com/v4/latest/USD');
+        const data = await response.json();
+        if (data.rates && data.rates.BRL) {
+          setExchangeRate(data.rates.BRL);
+          console.log(`✅ Taxa USD -> BRL: ${data.rates.BRL}`);
+        }
+      } catch (error) {
+        console.warn('⚠️ Erro ao buscar taxa de câmbio, usando padrão 5.5:', error.message);
+        setExchangeRate(5.5);
+      }
+    };
+    
+    fetchExchangeRate();
   }, []);
 
   useEffect(() => {
@@ -237,6 +369,9 @@ const SteamInventoryViewer = ({ steamId, vanityUrl }) => {
         console.log("✅ Items processados:", mappedItems.slice(0, 3));
         setItems(mappedItems);
         
+        // Iniciar busca de preços em background para itens marketáveis
+        console.log(`✅ Inventário carregado com ${mappedItems.length} itens!`);
+        
       } catch (err) {
         console.error("❌ Erro ao buscar inventário:", err);
         setError(err.message);
@@ -248,7 +383,7 @@ const SteamInventoryViewer = ({ steamId, vanityUrl }) => {
     if (steamId || vanityUrl) {
       fetchInventory();
     }
-  }, [steamId, vanityUrl]);
+  }, [steamId, vanityUrl, fetchItemPrice]);
 
   if (loading) {
     return (
@@ -443,6 +578,30 @@ const SteamInventoryViewer = ({ steamId, vanityUrl }) => {
                   marginBottom: '8px'
                 }}>
                   Float: {item.float}
+                </div>
+              )}
+
+              {/* Preço do Steam Market */}
+              {item.marketable && (
+                <div style={{ 
+                  background: itemPrices[item.name] ? 'rgba(76, 175, 80, 0.1)' : 'rgba(136, 136, 136, 0.1)',
+                  border: `1px solid ${itemPrices[item.name] ? 'rgba(76, 175, 80, 0.3)' : 'rgba(136, 136, 136, 0.2)'}`,
+                  borderRadius: '6px',
+                  padding: '6px 8px',
+                  marginBottom: '8px',
+                  minHeight: '16px',
+                  fontSize: '0.72rem',
+                  fontWeight: 'bold'
+                }}>
+                  {itemPrices[item.name] ? (
+                    <span style={{ color: '#4caf50' }}>💰 R$ {itemPrices[item.name].brl}</span>
+                  ) : fetchingItems.has(item.name) ? (
+                    <span style={{ color: '#ff9800' }}>⏳ Buscando...</span>
+                  ) : attemptedItems.has(item.name) ? (
+                    <span style={{ color: '#666' }}>💰 Sem preço</span>
+                  ) : (
+                    <span style={{ color: '#2196f3' }}>💰 Clique para preço</span>
+                  )}
                 </div>
               )}
 
@@ -733,6 +892,42 @@ const SteamInventoryViewer = ({ steamId, vanityUrl }) => {
                   {selectedItem.weaponType || selectedItem.type}
                 </span>
               </div>
+
+              {/* Preço Steam Market */}
+              {selectedItem.marketable && (
+                <div style={{
+                  background: 'rgba(76, 175, 80, 0.1)',
+                  border: '1px solid rgba(76, 175, 80, 0.3)',
+                  borderRadius: '10px',
+                  padding: '15px',
+                  marginTop: '20px',
+                  textAlign: 'center'
+                }}>
+                  <div style={{
+                    color: '#4caf50',
+                    fontSize: '0.9rem',
+                    marginBottom: '5px',
+                    fontWeight: 'bold'
+                  }}>
+                    💰 Preço Steam Market
+                  </div>
+                  <div style={{
+                    color: '#4caf50',
+                    fontSize: '1.2rem',
+                    fontWeight: 'bold'
+                  }}>
+                    {itemPrices[selectedItem.name] ? (
+                      `R$ ${itemPrices[selectedItem.name].brl}`
+                    ) : fetchingItems.has(selectedItem.name) ? (
+                      <span style={{ color: '#ff9800', fontSize: '0.9rem' }}>⏳ Buscando preço...</span>
+                    ) : attemptedItems.has(selectedItem.name) ? (
+                      <span style={{ color: '#888', fontSize: '0.9rem' }}>Preço não encontrado</span>
+                    ) : (
+                      <span style={{ color: '#2196f3', fontSize: '0.9rem' }}>Preço será buscado automaticamente</span>
+                    )}
+                  </div>
+                </div>
+              )}
 
               {/* Debug Info Compacta - só exibe se há dados extras */}
               {selectedItem.description && (
