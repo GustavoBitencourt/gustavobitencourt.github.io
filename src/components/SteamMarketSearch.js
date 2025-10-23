@@ -22,9 +22,12 @@ const SteamMarketSearch = () => {
   const [showModal, setShowModal] = useState(false);
   
   // Novos estados para paginação e filtros
-  const [itemsPerPage, setItemsPerPage] = useState(9); // Começar com 9 itens
   const [sortOrder, setSortOrder] = useState('none'); // 'none', 'asc', 'desc'
   const [filteredResults, setFilteredResults] = useState([]);
+  
+  // Estados para navegação lateral
+  const [currentPage, setCurrentPage] = useState(0); // Página atual (grupos de 9)
+  const [isAnimating, setIsAnimating] = useState(false); // Para animação
 
   // Controlar scroll da página quando o modal abrir/fechar
   useEffect(() => {
@@ -119,64 +122,108 @@ const SteamMarketSearch = () => {
   // Função para buscar itens dinamicamente na Steam Community Market
   const searchSteamMarket = async (searchTerm) => {
     try {
-      console.log(`🔍 Buscando "${searchTerm}" na Steam Community Market...`);
+      console.log(`🔍 Buscando "${searchTerm}" na Steam Community Market com paginação...`);
       
-      // URL da busca do Steam Market
-      const searchUrl = `https://steamcommunity.com/market/search/render/?query=${encodeURIComponent(searchTerm)}&start=0&count=50&search_descriptions=0&sort_column=popular&sort_dir=desc&appid=730&norender=1`;
-      console.log("📡 Steam Search URL:", searchUrl);
+      // Função para fazer uma busca paginada
+      const fetchPage = async (startIndex) => {
+        const searchUrl = `https://steamcommunity.com/market/search/render/?query=${encodeURIComponent(searchTerm)}&start=${startIndex}&count=9&search_descriptions=0&sort_column=popular&sort_dir=desc&appid=730&norender=1`;
+        
+        // Sistema de proxies
+        const proxies = [
+          `https://api.allorigins.win/get?url=${encodeURIComponent(searchUrl)}`,
+          `https://cors-anywhere.herokuapp.com/${searchUrl}`,
+          `https://corsproxy.io/?${encodeURIComponent(searchUrl)}`
+        ];
+        
+        for (let i = 0; i < proxies.length; i++) {
+          try {
+            console.log(`🔄 Buscando página start=${startIndex} via proxy ${i + 1}...`);
+            
+            const response = await fetch(proxies[i], {
+              headers: {
+                'Accept': 'application/json',
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+              }
+            });
+            
+            if (!response.ok) {
+              throw new Error(`Proxy ${i + 1} retornou: ${response.status}`);
+            }
+            
+            const data = await response.json();
+            
+            // AllOrigins wrapper
+            if (data.contents) {
+              return JSON.parse(data.contents);
+            } else {
+              // Direct proxy response
+              return data;
+            }
+            
+          } catch (proxyError) {
+            console.warn(`⚠️ Proxy ${i + 1} falhou para página ${startIndex}:`, proxyError.message);
+            if (i === proxies.length - 1) {
+              throw proxyError;
+            }
+            continue;
+          }
+        }
+      };
+
+      // Buscar 4 páginas para obter 36 resultados (9 x 4) - otimizado para performance
+      console.log('📄 Iniciando busca paginada: 4 páginas de 9 itens cada...');
       
-      // Sistema de proxies
-      const proxies = [
-        `https://api.allorigins.win/get?url=${encodeURIComponent(searchUrl)}`,
-        `https://cors-anywhere.herokuapp.com/${searchUrl}`,
-        `https://corsproxy.io/?${encodeURIComponent(searchUrl)}`
+      const pagePromises = [
+        fetchPage(0),   // Página 1 (0-8)
+        fetchPage(9),   // Página 2 (9-17)
+        fetchPage(18),  // Página 3 (18-26)
+        fetchPage(27)   // Página 4 (27-35)
       ];
       
-      let searchData = null;
-      let lastError = null;
+      let allResults = [];
+      let totalCount = 0;
+      let searchMetadata = null;
       
-      for (let i = 0; i < proxies.length; i++) {
-        try {
-          console.log(`🔄 Tentando proxy ${i + 1} para busca:`, proxies[i].split('?')[0]);
+      try {
+        const pages = await Promise.all(pagePromises);
+        
+        for (let i = 0; i < pages.length; i++) {
+          const pageData = pages[i];
           
-          const response = await fetch(proxies[i], {
-            headers: {
-              'Accept': 'application/json',
-              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+          if (pageData && pageData.success && pageData.results) {
+            console.log(`✅ Página ${i + 1} obtida: ${pageData.results.length} itens`);
+            allResults = allResults.concat(pageData.results);
+            
+            // Usar metadados da primeira página
+            if (i === 0) {
+              totalCount = pageData.total_count || 0;
+              searchMetadata = pageData.searchdata || {};
             }
-          });
-          
-          if (!response.ok) {
-            throw new Error(`Proxy ${i + 1} retornou: ${response.status} ${response.statusText}`);
-          }
-          
-          const data = await response.json();
-          
-          // AllOrigins wrapper
-          if (data.contents) {
-            searchData = JSON.parse(data.contents);
           } else {
-            // Direct proxy response
-            searchData = data;
+            console.warn(`⚠️ Página ${i + 1} sem resultados válidos`);
           }
-          
-          console.log(`✅ Proxy ${i + 1} funcionou! Dados de busca recebidos:`, searchData);
-          break;
-          
-        } catch (proxyError) {
-          console.warn(`⚠️ Proxy ${i + 1} falhou para busca:`, proxyError.message);
-          lastError = proxyError;
-          continue;
         }
+        
+      } catch (paginationError) {
+        console.error('❌ Erro na busca paginada:', paginationError);
+        throw new Error(`Falha na busca paginada: ${paginationError.message}`);
       }
       
-      if (!searchData) {
-        throw new Error(`Todos os proxies falharam na busca. Último erro: ${lastError?.message}`);
-      }
-      
-      if (!searchData.success || !searchData.results || searchData.results.length === 0) {
+      if (allResults.length === 0) {
         throw new Error(`Nenhum item encontrado para "${searchTerm}"`);
       }
+      
+      console.log(`🎉 Busca paginada concluída: ${allResults.length} itens de ${totalCount} total disponível`);
+      
+      // Criar objeto de dados combinado
+      const searchData = {
+        success: true,
+        start: 0,
+        pagesize: allResults.length,
+        total_count: totalCount,
+        searchdata: searchMetadata,
+        results: allResults
+      };
       
       // Extrair dados completos dos itens dos resultados
       const itemsData = searchData.results
@@ -422,7 +469,15 @@ const SteamMarketSearch = () => {
               lowest_sell_order: itemData.sell_price_text || "N/A",
               lowest_sell_order_brl: "N/A"
             },
-            source: 'steam_search_only'
+            source: 'steam_search_only',
+            extracted_data: {
+              found_image: !!itemData.icon_url,
+              found_price: !!itemData.sell_price_text,
+              found_volume: !!itemData.sell_listings,
+              realName: true,
+              api_success: false,
+              search_timestamp: Date.now()
+            }
           };
         }
       });
@@ -506,13 +561,41 @@ const SteamMarketSearch = () => {
     }
   };
 
-  const formatPrice = (price, priceBrl = null) => {
-    if (!price || price === "N/A" || price === "0.00") return "N/A";
-    const usdPrice = `$${parseFloat(price).toFixed(2)}`;
-    if (priceBrl) {
-      return `R$ ${parseFloat(priceBrl).toFixed(2)} (${usdPrice})`;
+  const formatPrice = (price, priceBrl = null, fallbackItem = null) => {
+    // Verificar se o preço principal é válido
+    if (price && price !== "N/A" && price !== "0.00" && !isNaN(parseFloat(price))) {
+      const usdPrice = `$${parseFloat(price).toFixed(2)}`;
+      if (priceBrl && !isNaN(parseFloat(priceBrl))) {
+        return `R$ ${parseFloat(priceBrl).toFixed(2)} (${usdPrice})`;
+      }
+      return usdPrice;
     }
-    return usdPrice;
+    
+    // Se o preço principal não estiver disponível, usar preços alternativos
+    if (fallbackItem) {
+      // Tentar sell_price_text do Steam
+      if (fallbackItem.sell_price_text && fallbackItem.sell_price_text !== "N/A") {
+        const steamPrice = fallbackItem.sell_price_text;
+        const match = steamPrice.match(/\$?([\d,.]+)/);
+        if (match) {
+          const numericPrice = parseFloat(match[1].replace(',', ''));
+          if (!isNaN(numericPrice)) {
+            const convertedBRL = (numericPrice * exchangeRate).toFixed(2);
+            return `R$ ${convertedBRL} ($${numericPrice.toFixed(2)}) - Steam`;
+          }
+        }
+        return steamPrice + " - Steam";
+      }
+      
+      // Tentar sell_price
+      if (fallbackItem.sell_price && !isNaN(parseFloat(fallbackItem.sell_price))) {
+        const numericPrice = parseFloat(fallbackItem.sell_price);
+        const convertedBRL = (numericPrice * exchangeRate).toFixed(2);
+        return `R$ ${convertedBRL} ($${numericPrice.toFixed(2)}) - Steam`;
+      }
+    }
+    
+    return "Preço não disponível";
   };
 
   const formatDate = (timestamp) => {
@@ -688,27 +771,7 @@ const SteamMarketSearch = () => {
               </select>
             </div>
 
-            {/* Controle de Itens por Página */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <label style={{ color: '#fff', fontWeight: 'bold' }}>👀 Mostrar:</label>
-              <select
-                value={itemsPerPage}
-                onChange={(e) => setItemsPerPage(Number(e.target.value))}
-                style={{
-                  padding: '8px 12px',
-                  borderRadius: '6px',
-                  border: '1px solid #DE7E21',
-                  background: '#2d2d2d',
-                  color: '#fff',
-                  fontSize: '14px'
-                }}
-              >
-                <option value={9}>9 itens</option>
-                <option value={18}>18 itens</option>
-                <option value={36}>36 itens</option>
-                <option value={searchResults.length}>Todos ({searchResults.length})</option>
-              </select>
-            </div>
+
 
             {/* Informações de Filtros Ativos */}
             <div style={{ 
@@ -729,17 +792,126 @@ const SteamMarketSearch = () => {
                 </span>
               )}
               <span style={{ color: '#DE7E21' }}>
-                Exibindo {Math.min(itemsPerPage, filteredResults.length)} de {filteredResults.length} itens
+                {filteredResults.length} itens encontrados • Navegar com as setas
               </span>
             </div>
           </div>
           
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
-            gap: '20px'
-          }}>
-            {filteredResults.slice(0, itemsPerPage).map((item, index) => (
+          {/* Sistema de Navegação Lateral */}
+          <div style={{ position: 'relative', padding: '0 80px' }}>
+            {/* Setas de Navegação */}
+            {filteredResults.length > 9 && (
+              <>
+                <button
+                  onClick={() => {
+                    if (currentPage > 0 && !isAnimating) {
+                      setIsAnimating(true);
+                      setCurrentPage(prev => prev - 1);
+                      setTimeout(() => setIsAnimating(false), 300);
+                    }
+                  }}
+                  disabled={currentPage === 0}
+                  style={{
+                    position: 'absolute',
+                    left: '10px',
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    zIndex: 1000,
+                    width: '65px',
+                    height: '65px',
+                    borderRadius: '15px',
+                    border: '4px solid #DE7E21',
+                    background: currentPage === 0 ? 'rgba(222, 126, 33, 0.4)' : 'rgba(222, 126, 33, 0.95)',
+                    color: '#fff',
+                    cursor: currentPage === 0 ? 'not-allowed' : 'pointer',
+                    fontSize: '24px',
+                    fontWeight: 'bold',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    transition: 'all 0.3s ease',
+                    opacity: currentPage === 0 ? 0.6 : 1,
+                    boxShadow: '0 6px 20px rgba(0, 0, 0, 0.5), inset 0 1px 3px rgba(255, 255, 255, 0.2)',
+                    backdropFilter: 'blur(2px)'
+                  }}
+                  onMouseEnter={(e) => {
+                    if (currentPage > 0) {
+                      e.target.style.background = '#DE7E21';
+                      e.target.style.transform = 'translateY(-50%) scale(1.1)';
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (currentPage > 0) {
+                      e.target.style.background = 'rgba(222, 126, 33, 0.9)';
+                      e.target.style.transform = 'translateY(-50%) scale(1)';
+                    }
+                  }}
+                >
+                  ◀
+                </button>
+                
+                <button
+                  onClick={() => {
+                    const maxPage = Math.ceil(filteredResults.length / 9) - 1;
+                    if (currentPage < maxPage && !isAnimating) {
+                      setIsAnimating(true);
+                      setCurrentPage(prev => prev + 1);
+                      setTimeout(() => setIsAnimating(false), 300);
+                    }
+                  }}
+                  disabled={currentPage >= Math.ceil(filteredResults.length / 9) - 1}
+                  style={{
+                    position: 'absolute',
+                    right: '10px',
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    zIndex: 1000,
+                    width: '65px',
+                    height: '65px',
+                    borderRadius: '15px',
+                    border: '4px solid #DE7E21',
+                    background: currentPage >= Math.ceil(filteredResults.length / 9) - 1 ? 'rgba(222, 126, 33, 0.4)' : 'rgba(222, 126, 33, 0.95)',
+                    color: '#fff',
+                    cursor: currentPage >= Math.ceil(filteredResults.length / 9) - 1 ? 'not-allowed' : 'pointer',
+                    fontSize: '24px',
+                    fontWeight: 'bold',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    transition: 'all 0.3s ease',
+                    opacity: currentPage >= Math.ceil(filteredResults.length / 9) - 1 ? 0.6 : 1,
+                    boxShadow: '0 6px 20px rgba(0, 0, 0, 0.5), inset 0 1px 3px rgba(255, 255, 255, 0.2)',
+                    backdropFilter: 'blur(2px)'
+                  }}
+                  onMouseEnter={(e) => {
+                    const maxPage = Math.ceil(filteredResults.length / 9) - 1;
+                    if (currentPage < maxPage) {
+                      e.target.style.background = '#DE7E21';
+                      e.target.style.transform = 'translateY(-50%) scale(1.1)';
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    const maxPage = Math.ceil(filteredResults.length / 9) - 1;
+                    if (currentPage < maxPage) {
+                      e.target.style.background = 'rgba(222, 126, 33, 0.9)';
+                      e.target.style.transform = 'translateY(-50%) scale(1)';
+                    }
+                  }}
+                >
+                  ▶
+                </button>
+              </>
+            )}
+            
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(3, 1fr)',
+              gap: '20px',
+              transition: 'opacity 0.3s ease, transform 0.3s ease',
+              opacity: isAnimating ? 0.7 : 1,
+              transform: isAnimating ? 'scale(0.98)' : 'scale(1)'
+            }}>
+            {filteredResults.slice(currentPage * 9, (currentPage + 1) * 9).map((item, index) => (
               <div key={index} style={{
                 background: 'rgba(222, 126, 33, 0.1)',
                 border: '1px solid #DE7E21',
@@ -749,10 +921,20 @@ const SteamMarketSearch = () => {
                 cursor: 'pointer'
               }}
               onClick={() => {
+                // Som de clique para abrir modal
+                const clickAudio = new Audio('/sounds/ak47_01.wav');
+                clickAudio.volume = 0.3;
+                clickAudio.play().catch(e => console.log('Som não pôde ser reproduzido:', e));
+                
                 setSelectedItem(item);
                 setShowModal(true);
               }}
               onMouseEnter={(e) => {
+                // Som de hover
+                const hoverAudio = new Audio('/sounds/decoy_draw.wav');
+                hoverAudio.volume = 0.2;
+                hoverAudio.play().catch(e => console.log('Som não pôde ser reproduzido:', e));
+                
                 e.currentTarget.style.background = 'rgba(222, 126, 33, 0.2)';
                 e.currentTarget.style.transform = 'translateY(-3px)';
               }}
@@ -797,14 +979,14 @@ const SteamMarketSearch = () => {
                     <div style={{ fontSize: '0.9rem', lineHeight: '1.4' }}>
                       <div style={{ marginBottom: '5px' }}>
                         <strong>💰 Preço:</strong> <span style={{ color: '#4caf50' }}>
-                          {formatPrice(item.histogram.lowest_sell_order, item.histogram.lowest_sell_order_brl)}
+                          {formatPrice(item.histogram.lowest_sell_order, item.histogram.lowest_sell_order_brl, item)}
                         </span>
                       </div>
                       <div style={{ marginBottom: '5px' }}>
                         <strong>📊 Volume:</strong> {item.histogram.sell_order_summary.quantity || 0}
                       </div>
                       <div style={{ marginBottom: '8px', fontSize: '0.8rem', color: '#888' }}>
-                        ⏱️ <strong>Atualizado:</strong> {formatDate(item.extracted_data.search_timestamp)}
+                        ⏱️ <strong>Atualizado:</strong> {formatDate(item.extracted_data?.search_timestamp || Date.now())}
                       </div>
                       <div>
                         <a
@@ -825,79 +1007,25 @@ const SteamMarketSearch = () => {
                 </div>
               </div>
             ))}
+            </div>
           </div>
-
-          {/* Botão Ver Mais - se houver mais itens */}
-          {itemsPerPage < filteredResults.length && (
-            <div style={{ 
-              textAlign: 'center', 
-              marginTop: '30px',
-              padding: '20px'
+          
+          {/* Indicador de Página */}
+          {filteredResults.length > 9 && (
+            <div style={{
+              textAlign: 'center',
+              marginTop: '20px',
+              fontSize: '14px',
+              color: '#ccc'
             }}>
-              <button
-                onClick={() => setItemsPerPage(prev => Math.min(prev + 9, filteredResults.length))}
-                style={{
-                  padding: '15px 30px',
-                  borderRadius: '10px',
-                  border: '2px solid #DE7E21',
-                  background: 'linear-gradient(135deg, rgba(222, 126, 33, 0.1), rgba(222, 126, 33, 0.2))',
-                  color: '#DE7E21',
-                  fontSize: '16px',
-                  fontWeight: 'bold',
-                  cursor: 'pointer',
-                  transition: 'all 0.3s ease',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '10px',
-                  margin: '0 auto'
-                }}
-                onMouseEnter={(e) => {
-                  e.target.style.background = '#DE7E21';
-                  e.target.style.color = '#000';
-                  e.target.style.transform = 'translateY(-2px)';
-                }}
-                onMouseLeave={(e) => {
-                  e.target.style.background = 'linear-gradient(135deg, rgba(222, 126, 33, 0.1), rgba(222, 126, 33, 0.2))';
-                  e.target.style.color = '#DE7E21';
-                  e.target.style.transform = 'translateY(0)';
-                }}
-              >
-                📈 Ver Mais {Math.min(9, filteredResults.length - itemsPerPage)} Itens
-                <span style={{ 
-                  fontSize: '14px', 
-                  opacity: 0.8 
-                }}>
-                  ({filteredResults.length - itemsPerPage} restantes)
-                </span>
-              </button>
-              
-              {/* Mostrar Todos */}
-              {filteredResults.length - itemsPerPage > 9 && (
-                <button
-                  onClick={() => setItemsPerPage(filteredResults.length)}
-                  style={{
-                    padding: '12px 25px',
-                    borderRadius: '8px',
-                    border: '1px solid rgba(222, 126, 33, 0.5)',
-                    background: 'transparent',
-                    color: '#DE7E21',
-                    fontSize: '14px',
-                    cursor: 'pointer',
-                    marginLeft: '15px',
-                    transition: 'all 0.3s ease'
-                  }}
-                  onMouseEnter={(e) => {
-                    e.target.style.background = 'rgba(222, 126, 33, 0.1)';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.target.style.background = 'transparent';
-                  }}
-                >
-                  🚀 Mostrar Todos ({filteredResults.length})
-                </button>
-              )}
+              Página {currentPage + 1} de {Math.ceil(filteredResults.length / 9)} 
+              <span style={{ marginLeft: '15px', color: '#DE7E21' }}>
+                ({(currentPage * 9) + 1}-{Math.min((currentPage + 1) * 9, filteredResults.length)} de {filteredResults.length} itens)
+              </span>
             </div>
           )}
+
+
         </div>
       )}
 
@@ -994,7 +1122,7 @@ const SteamMarketSearch = () => {
                   
                   <div style={{ marginTop: '8px', fontSize: '0.8rem', color: '#ccc' }}>
                     <strong>Fonte:</strong> Steam Community Market (Tempo Real)<br/>
-                    <strong>Atualizado:</strong> {formatDate(marketData.extracted_data.search_timestamp)}
+                    <strong>Atualizado:</strong> {formatDate(marketData.extracted_data?.search_timestamp || Date.now())}
                   </div>
                 </div>
               )}
