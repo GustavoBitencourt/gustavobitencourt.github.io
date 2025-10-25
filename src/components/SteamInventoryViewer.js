@@ -909,7 +909,7 @@ const SteamInventoryViewer = ({ steamId, vanityUrl }) => {
                     marginBottom: '5px',
                     fontWeight: 'bold'
                   }}>
-                    💰 Preço Steam Market
+                    💰 Preço Mercado da Steam
                   </div>
                   <div style={{
                     color: '#4caf50',
