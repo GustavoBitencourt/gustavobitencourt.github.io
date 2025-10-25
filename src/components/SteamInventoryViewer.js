@@ -581,7 +581,8 @@ const SteamInventoryViewer = ({ steamId, vanityUrl }) => {
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
-          justifyContent: 'center',
+          justifyContent: 'flex-start',
+          paddingTop: '150px',
           zIndex: 9999,
           backdropFilter: 'blur(5px)'
         }}>
@@ -964,15 +965,19 @@ const SteamInventoryViewer = ({ steamId, vanityUrl }) => {
             top: 0,
             left: 0,
             width: '100%',
-            height: '100%',
+            // height: '100%',
             backgroundColor: 'rgba(0, 0, 0, 0.8)',
             display: 'flex',
             justifyContent: 'center',
-            alignItems: 'center',
+            alignItems: 'flex-start',
+            paddingTop: '5%',
+            paddingLeft: '20px',
+            paddingRight: '20px',
+            paddingBottom: '20px',
             zIndex: 1000,
             backdropFilter: 'blur(5px)',
-            padding: '20px',
-            boxSizing: 'border-box'
+            boxSizing: 'border-box',
+            overflowY: 'auto'
           }}
           onClick={closeModal}
         >
@@ -1211,88 +1216,6 @@ const SteamInventoryViewer = ({ steamId, vanityUrl }) => {
               {selectedItem.description && (
                 <div style={{ marginTop: '20px', textAlign: 'left' }}>
                   
-                  {/* Status de Negociação Detalhado - só se há informações extras */}
-                  {(selectedItem.description.tradable !== undefined || 
-                    selectedItem.description.marketable !== undefined || 
-                    selectedItem.description.commodity !== undefined ||
-                    selectedItem.description.market_tradable_restriction || 
-                    selectedItem.description.market_marketable_restriction) && (
-                    <div style={{ 
-                      background: 'rgba(33, 150, 243, 0.1)', 
-                      padding: '15px', 
-                      borderRadius: '8px',
-                      marginBottom: '15px',
-                      border: '1px solid rgba(33, 150, 243, 0.3)'
-                    }}>
-                      <div style={{ color: '#2196F3', fontWeight: 'bold', marginBottom: '10px', fontSize: '0.9rem' }}>
-                        🔄 Status Detalhado
-                      </div>
-                      <div style={{ display: 'grid', gridTemplateColumns: window.innerWidth <= 480 ? '1fr' : '1fr 1fr', gap: '8px', fontSize: '0.75rem' }}>
-                        {selectedItem.description.tradable !== undefined && (
-                          <div style={{ 
-                            display: 'flex', alignItems: 'center', gap: '6px',
-                            padding: '8px', background: 'rgba(255, 255, 255, 0.05)', borderRadius: '4px'
-                          }}>
-                            <span>{selectedItem.description.tradable ? '✅' : '❌'}</span>
-                            <div>
-                              <div style={{ fontWeight: 'bold', color: '#2196F3' }}>Negociável</div>
-                              <div style={{ color: selectedItem.description.tradable ? '#4caf50' : '#f44336' }}>
-                                {selectedItem.description.tradable ? 'Sim' : 'Não'}
-                              </div>
-                            </div>
-                          </div>
-                        )}
-                        
-                        {selectedItem.description.marketable !== undefined && (
-                          <div style={{ 
-                            display: 'flex', alignItems: 'center', gap: '6px',
-                            padding: '8px', background: 'rgba(255, 255, 255, 0.05)', borderRadius: '4px'
-                          }}>
-                            <span>{selectedItem.description.marketable ? '🏪' : '🚫'}</span>
-                            <div>
-                              <div style={{ fontWeight: 'bold', color: '#2196F3' }}>Vendível</div>
-                              <div style={{ color: selectedItem.description.marketable ? '#4caf50' : '#f44336' }}>
-                                {selectedItem.description.marketable ? 'Sim' : 'Não'}
-                              </div>
-                            </div>
-                          </div>
-                        )}
-
-                        {selectedItem.description.commodity !== undefined && (
-                          <div style={{ 
-                            display: 'flex', alignItems: 'center', gap: '6px',
-                            padding: '8px', background: 'rgba(255, 255, 255, 0.05)', borderRadius: '4px'
-                          }}>
-                            <span>📦</span>
-                            <div>
-                              <div style={{ fontWeight: 'bold', color: '#2196F3' }}>Commodity</div>
-                              <div style={{ color: '#bbb' }}>
-                                {selectedItem.description.commodity ? 'Sim' : 'Não'}
-                              </div>
-                            </div>
-                          </div>
-                        )}
-
-                        {(selectedItem.description.market_tradable_restriction || selectedItem.description.market_marketable_restriction) && (
-                          <div style={{ 
-                            display: 'flex', alignItems: 'center', gap: '6px',
-                            padding: '8px', background: 'rgba(255, 152, 0, 0.1)', borderRadius: '4px'
-                          }}>
-                            <span>⏱️</span>
-                            <div>
-                              <div style={{ fontWeight: 'bold', color: '#ff9800' }}>Restrições</div>
-                              <div style={{ color: '#ff9800', fontSize: '0.7rem' }}>
-                                {selectedItem.description.market_tradable_restriction && `Trade: ${selectedItem.description.market_tradable_restriction}d`}
-                                {selectedItem.description.market_tradable_restriction && selectedItem.description.market_marketable_restriction && ' | '}
-                                {selectedItem.description.market_marketable_restriction && `Market: ${selectedItem.description.market_marketable_restriction}d`}
-                              </div>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )}
-
                   {/* Stickers - só se existirem */}
                   {selectedItem.description.descriptions && 
                    selectedItem.description.descriptions.some(desc => desc.name === 'sticker_info') && (
