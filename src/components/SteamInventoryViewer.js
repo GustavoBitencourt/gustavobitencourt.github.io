@@ -14,6 +14,8 @@ const SteamInventoryViewer = ({ steamId, vanityUrl }) => {
   const [exchangeRate, setExchangeRate] = useState(5.5);
   const [fetchingItems, setFetchingItems] = useState(new Set());
   const [attemptedItems, setAttemptedItems] = useState(new Set()); // Itens já tentados
+  const [loadingAllPrices, setLoadingAllPrices] = useState(false); // Loading para busca de todos os preços
+  const [inventoryTotalValue, setInventoryTotalValue] = useState(0); // Valor total do inventário
 
   // Estado para controle de debounce do som de hover
   const [lastHoverTime, setLastHoverTime] = useState(0);
@@ -54,6 +56,76 @@ const SteamInventoryViewer = ({ steamId, vanityUrl }) => {
     const wearRating = assetData.asset_properties.find(prop => prop.name === 'Wear Rating');
     return wearRating ? parseFloat(wearRating.float_value).toFixed(4) : null;
   };
+
+  // Função para buscar todos os preços do inventário
+  const fetchAllPrices = async () => {
+    if (loadingAllPrices) return; // Evitar múltiplas execuções
+    
+    setLoadingAllPrices(true);
+    
+    // Filtrar itens marketáveis que ainda não têm preço
+    const marketableItems = items.filter(item => 
+      item.marketable && 
+      item.name && 
+      !item.name.toLowerCase().includes('sticker') && 
+      !item.name.toLowerCase().includes('case') &&
+      !itemPrices[item.name] // Não buscar se já tem preço
+    );
+    
+    console.log(`💰 Iniciando busca de preços para ${marketableItems.length} itens marketáveis...`);
+    
+    // Se não há itens para buscar, calcular total com os preços existentes e sair
+    if (marketableItems.length === 0) {
+      calculateTotalValue();
+      setLoadingAllPrices(false);
+      console.log('✅ Todos os itens já possuem preços!');
+      return;
+    }
+    
+    // Criar array de promises para aguardar todas as buscas
+    const pricePromises = marketableItems.map((item, index) => {
+      return new Promise((resolve) => {
+        setTimeout(async () => {
+          try {
+            await fetchItemPrice(item.name);
+            resolve();
+          } catch (error) {
+            console.error(`Erro ao buscar preço para ${item.name}:`, error);
+            resolve();
+          }
+        }, index * 500); // 500ms de delay entre cada busca
+      });
+    });
+    
+    // Aguardar todas as buscas terminarem
+    await Promise.all(pricePromises);
+    
+    // Calcular valor total após todas as buscas
+    setTimeout(() => {
+      calculateTotalValue();
+      setLoadingAllPrices(false);
+      console.log('✅ Busca de todos os preços concluída!');
+    }, 1000); // Pequeno delay para garantir que todos os estados foram atualizados
+  };
+
+  // Função para calcular valor total do inventário
+  const calculateTotalValue = useCallback(() => {
+    let total = 0;
+    let itemsWithPrice = 0;
+    
+    items.forEach(item => {
+      if (item.marketable && itemPrices[item.name]) {
+        const price = parseFloat(itemPrices[item.name].brl);
+        if (!isNaN(price)) {
+          total += price;
+          itemsWithPrice++;
+        }
+      }
+    });
+    
+    console.log(`💰 Calculando valor total: ${itemsWithPrice} itens com preço, total: R$ ${total.toFixed(2)}`);
+    setInventoryTotalValue(total);
+  }, [items, itemPrices]);
 
   // Função para abrir modal
   const openModal = (item) => {
@@ -198,6 +270,15 @@ const SteamInventoryViewer = ({ steamId, vanityUrl }) => {
         to {
           opacity: 1;
           transform: scale(1) translateY(0);
+        }
+      }
+      
+      @keyframes spin {
+        from {
+          transform: rotate(0deg);
+        }
+        to {
+          transform: rotate(360deg);
         }
       }
     `;
@@ -416,6 +497,13 @@ const SteamInventoryViewer = ({ steamId, vanityUrl }) => {
     }
   }, [steamId, vanityUrl, fetchItemPrice]);
 
+  // useEffect para recalcular valor total sempre que itemPrices mudar
+  useEffect(() => {
+    if (Object.keys(itemPrices).length > 0) {
+      calculateTotalValue();
+    }
+  }, [itemPrices, calculateTotalValue]);
+
   if (loading) {
     return (
       <div style={{ 
@@ -481,6 +569,51 @@ const SteamInventoryViewer = ({ steamId, vanityUrl }) => {
 
   return (
     <div>
+      {/* Overlay de loading para busca de preços */}
+      {loadingAllPrices && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          width: '100%',
+          height: '100%',
+          background: 'rgba(0, 0, 0, 0.8)',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 9999,
+          backdropFilter: 'blur(5px)'
+        }}>
+          <div style={{
+            width: '60px',
+            height: '60px',
+            border: '4px solid rgba(76, 175, 80, 0.3)',
+            borderTop: '4px solid #4caf50',
+            borderRadius: '50%',
+            animation: 'spin 1s linear infinite',
+            marginBottom: '20px'
+          }}></div>
+          <div style={{
+            color: '#4caf50',
+            fontSize: '1.2rem',
+            fontWeight: 'bold',
+            marginBottom: '10px'
+          }}>
+            Buscando preços de todos os itens...
+          </div>
+          <div style={{
+            color: '#aaa',
+            fontSize: '0.9rem',
+            textAlign: 'center',
+            maxWidth: '400px'
+          }}>
+            Aguarde enquanto buscamos os preços atualizados do Mercado da Steam.
+            Este processo pode levar alguns minutos.
+          </div>
+        </div>
+      )}
+
       {/* Player Info */}
       {playerInfo && (
         <div style={{ 
@@ -508,6 +641,97 @@ const SteamInventoryViewer = ({ steamId, vanityUrl }) => {
           </div>
           <div style={{ color: '#ccc', fontSize: '0.9rem' }}>
             Steam ID: {playerInfo.steamid}
+          </div>
+        </div>
+      )}
+
+      {/* Controles de preços no topo */}
+      {items.length > 0 && (
+        <div style={{ 
+          textAlign: 'center',
+          marginBottom: '30px',
+          padding: '20px',
+          background: 'rgba(76, 175, 80, 0.05)',
+          borderRadius: '15px',
+          border: '1px solid rgba(76, 175, 80, 0.2)'
+        }}>
+          <div style={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            justifyContent: 'center', 
+            gap: '20px',
+            flexWrap: 'wrap'
+          }}>
+            {/* Botão para buscar todos os preços */}
+            <button
+              onClick={fetchAllPrices}
+              disabled={loadingAllPrices}
+              style={{
+                background: loadingAllPrices 
+                  ? 'linear-gradient(135deg, #666 0%, #888 100%)' 
+                  : 'linear-gradient(135deg, #4caf50 0%, #66bb6a 100%)',
+                border: 'none',
+                color: '#fff',
+                padding: '12px 25px',
+                borderRadius: '25px',
+                fontSize: '0.95rem',
+                fontWeight: 'bold',
+                cursor: loadingAllPrices ? 'not-allowed' : 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '10px',
+                transition: 'all 0.3s ease',
+                opacity: loadingAllPrices ? 0.7 : 1,
+                minWidth: '200px'
+              }}
+            >
+              {loadingAllPrices ? (
+                <>
+                  <div style={{
+                    width: '16px',
+                    height: '16px',
+                    border: '2px solid #fff',
+                    borderTop: '2px solid transparent',
+                    borderRadius: '50%',
+                    animation: 'spin 1s linear infinite'
+                  }}></div>
+                  Buscando preços...
+                </>
+              ) : (
+                <>💰 Buscar Todos os Preços</>
+              )}
+            </button>
+
+            {/* Valor total do inventário ao lado */}
+            {(inventoryTotalValue > 0 || Object.keys(itemPrices).length > 0) && (
+              <div style={{
+                background: 'rgba(76, 175, 80, 0.1)',
+                border: '2px solid rgba(76, 175, 80, 0.3)',
+                borderRadius: '15px',
+                padding: '12px 20px',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                minWidth: '200px'
+              }}>
+                <div style={{
+                  color: '#4caf50',
+                  fontSize: '0.85rem',
+                  fontWeight: 'bold',
+                  marginBottom: '5px'
+                }}>
+                  💎 Valor Total
+                </div>
+                <div style={{
+                  color: '#4caf50',
+                  fontSize: '1.4rem',
+                  fontWeight: 'bold'
+                }}>
+                  R$ {inventoryTotalValue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
