@@ -15,6 +15,34 @@ const SteamInventoryViewer = ({ steamId, vanityUrl }) => {
   const [fetchingItems, setFetchingItems] = useState(new Set());
   const [attemptedItems, setAttemptedItems] = useState(new Set()); // Itens já tentados
 
+  // Estado para controle de debounce do som de hover
+  const [lastHoverTime, setLastHoverTime] = useState(0);
+
+  // Funções de áudio para interações
+  const playHoverSound = () => {
+    const now = Date.now();
+    // Debounce de 200ms para evitar spam de sons
+    if (now - lastHoverTime < 200) return;
+    
+    setLastHoverTime(now);
+    try {
+      const audio = new Audio('/sounds/glock_sliderelease.wav');
+      audio.volume = 0.255; // Volume reduzido (15% mais baixo)
+      audio.play().catch(e => console.log('Erro ao tocar som de hover:', e));
+    } catch (error) {
+      console.log('Erro ao criar áudio de hover:', error);
+    }
+  };
+
+  const playClickSound = () => {
+    try {
+      const audio = new Audio('/sounds/m4a1_silencer_01.wav');
+      audio.volume = 0.255; // Volume reduzido (15% mais baixo)
+      audio.play().catch(e => console.log('Erro ao tocar som de clique:', e));
+    } catch (error) {
+      console.log('Erro ao criar áudio de clique:', error);
+    }
+  };
 
   // Função para encontrar float real da API
   const getFloatFromAssetProperties = (assetId, assetProperties) => {
@@ -29,6 +57,9 @@ const SteamInventoryViewer = ({ steamId, vanityUrl }) => {
 
   // Função para abrir modal
   const openModal = (item) => {
+    // Tocar som de clique
+    playClickSound();
+    
     setSelectedItem(item);
     setShowModal(true);
     
@@ -513,6 +544,9 @@ const SteamInventoryViewer = ({ steamId, vanityUrl }) => {
             }}
             onClick={() => openModal(item)}
             onMouseEnter={(e) => {
+              // Tocar som de hover
+              playHoverSound();
+              
               e.currentTarget.style.transform = 'translateY(-5px) scale(1.02)';
               e.currentTarget.style.boxShadow = `0 10px 25px ${item.rarityColor}40`;
             }}

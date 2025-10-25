@@ -20,6 +20,16 @@ const ProjectsSection = ({ t }) => {
   };
 
   const handleCS2Redirect = () => {
+    // Tocar som do glock ao clicar no Counter-Strike 2
+    try {
+      const audio = new Audio('/sounds/glock_01.wav');
+      audio.volume = 0.255; // Mesmo volume dos outros áudios (15% reduzido)
+      audio.play().catch(e => console.log('Erro ao tocar som CS2:', e));
+    } catch (error) {
+      console.log('Erro ao criar áudio CS2:', error);
+    }
+    
+    // Redirecionar para a página CS2
     window.location.hash = '#/cs2';
   };
 

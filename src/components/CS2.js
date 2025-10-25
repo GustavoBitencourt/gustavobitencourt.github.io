@@ -12,7 +12,7 @@ const CS2 = () => {
   const playPlayerSound = (soundFile, repeat = 1) => {
     const playSound = () => {
       const audio = new Audio(`/sounds/${soundFile}`);
-      audio.volume = 0.3;
+      audio.volume = 0.255; // Volume reduzido (15% mais baixo)
       audio.play().then(() => {
         console.log(`🔊 Som ${soundFile} tocado com sucesso!`);
       }).catch(err => {
@@ -28,8 +28,9 @@ const CS2 = () => {
 
   // Funções para tocar sons dos botões do menu
   const playMenuSound = (soundFile) => {
+    console.log(`🎵 Iniciando reprodução do som: ${soundFile}`);
     const audio = new Audio(`/sounds/${soundFile}`);
-    audio.volume = 0.3; // Mesmo volume dos demais sons
+    audio.volume = 0.255; // Volume reduzido (15% mais baixo)
     audio.play().then(() => {
       console.log(`🔊 Som do menu ${soundFile} tocado com sucesso!`);
     }).catch(err => {
@@ -262,7 +263,16 @@ const CS2 = () => {
         {/* Menu Fixo no Topo */}
         <div className="cs2-top-menu">
           <div className="menu-container">
-            <h1 className="cs2-title">Counter-Strike 2</h1>
+            <h1 
+              className="cs2-title" 
+              onClick={() => {
+                playMenuSound('glock_01.wav');
+                setActiveSection('team');
+              }}
+              style={{ cursor: 'pointer' }}
+            >
+              Counter-Strike 2
+            </h1>
             <nav className="menu-nav">
               <button 
                 className={`menu-button ${activeSection === 'team' ? 'active' : ''}`}
@@ -277,7 +287,8 @@ const CS2 = () => {
               <button 
                 className={`menu-button ${activeSection === 'inventory' ? 'active' : ''}`}
                 onClick={() => {
-                  playMenuSound('weapon_zoom_out_02.wav');
+                  console.log('🔫 Tentando tocar som AK47...');
+                  playMenuSound('ak47_01.wav');
                   setActiveSection('inventory');
                 }}
                 onMouseEnter={() => playMenuSound('glock_clipin.wav')}
