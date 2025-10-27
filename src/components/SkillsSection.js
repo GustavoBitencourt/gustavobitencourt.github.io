@@ -14,7 +14,7 @@ const SkillsSection = ({ t }) => {
   };
 
   const generateWords = useCallback(() => {
-    console.log("🔄 GenerateWords executado - versão com ajustes!");
+
     const words = [
       "Commerce Cloud",    // índice 0
       "Salesforce",        // índice 1
@@ -110,7 +110,7 @@ const SkillsSection = ({ t }) => {
       const placedElements = [];
       
       // Algoritmo de colocação diferente para mobile e desktop
-      console.log(`📱 Usando algoritmo: ${isMobileDevice ? 'MOBILE' : 'DESKTOP'} (width: ${window.innerWidth}px)`);
+
       
       // FORÇA USAR POSIÇÕES FIXAS TANTO NO MOBILE QUANTO NO DESKTOP
       if (true) { // Mudança temporária: sempre usar posições fixas
@@ -171,7 +171,7 @@ const SkillsSection = ({ t }) => {
           y = Math.max(15, Math.min(y, containerRect.height - wordObj.height - 15));
           
           // Log para debug - posições aplicadas
-          console.log(`📍 ${index}: ${wordObj.word} -> x: ${x}px, y: ${y}px (original: ${position.x}, ${position.y})`);
+
           
           wordObj.element.style.left = `${x}px`;
           wordObj.element.style.top = `${y}px`;

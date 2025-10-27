@@ -24,9 +24,9 @@ const ProjectsSection = ({ t }) => {
     try {
       const audio = new Audio('/sounds/glock_01.wav');
       audio.volume = 0.128; // Volume reduzido pela metade (0.255 -> 0.128)
-      audio.play().catch(e => console.log('Erro ao tocar som CS2:', e));
+      audio.play().catch(e => {});
     } catch (error) {
-      console.log('Erro ao criar áudio CS2:', error);
+
     }
     
     // Redirecionar para a página CS2

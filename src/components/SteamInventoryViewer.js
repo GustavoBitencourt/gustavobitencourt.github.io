@@ -30,9 +30,9 @@ const SteamInventoryViewer = ({ steamId, vanityUrl }) => {
     try {
       const audio = new Audio('/sounds/glock_sliderelease.wav');
       audio.volume = 0.128; // Volume reduzido pela metade (0.255 -> 0.128)
-      audio.play().catch(e => console.log('Erro ao tocar som de hover:', e));
+      audio.play().catch(e => {});
     } catch (error) {
-      console.log('Erro ao criar áudio de hover:', error);
+      // Silenciosamente ignorar erros de áudio
     }
   };
 
@@ -40,9 +40,9 @@ const SteamInventoryViewer = ({ steamId, vanityUrl }) => {
     try {
       const audio = new Audio('/sounds/m4a1_silencer_01.wav');
       audio.volume = 0.128; // Volume reduzido pela metade (0.255 -> 0.128)
-      audio.play().catch(e => console.log('Erro ao tocar som de clique:', e));
+      audio.play().catch(e => {});
     } catch (error) {
-      console.log('Erro ao criar áudio de clique:', error);
+      // Silenciosamente ignorar erros de áudio
     }
   };
 
@@ -72,13 +72,10 @@ const SteamInventoryViewer = ({ steamId, vanityUrl }) => {
       !itemPrices[item.name] // Não buscar se já tem preço
     );
     
-    console.log(`💰 Iniciando busca de preços para ${marketableItems.length} itens marketáveis...`);
-    
     // Se não há itens para buscar, calcular total com os preços existentes e sair
     if (marketableItems.length === 0) {
       calculateTotalValue();
       setLoadingAllPrices(false);
-      console.log('✅ Todos os itens já possuem preços!');
       return;
     }
     
@@ -90,7 +87,6 @@ const SteamInventoryViewer = ({ steamId, vanityUrl }) => {
             await fetchItemPrice(item.name);
             resolve();
           } catch (error) {
-            console.error(`Erro ao buscar preço para ${item.name}:`, error);
             resolve();
           }
         }, index * 500); // 500ms de delay entre cada busca
@@ -104,26 +100,22 @@ const SteamInventoryViewer = ({ steamId, vanityUrl }) => {
     setTimeout(() => {
       calculateTotalValue();
       setLoadingAllPrices(false);
-      console.log('✅ Busca de todos os preços concluída!');
     }, 1000); // Pequeno delay para garantir que todos os estados foram atualizados
   };
 
   // Função para calcular valor total do inventário
   const calculateTotalValue = useCallback(() => {
     let total = 0;
-    let itemsWithPrice = 0;
     
     items.forEach(item => {
       if (item.marketable && itemPrices[item.name]) {
         const price = parseFloat(itemPrices[item.name].brl);
         if (!isNaN(price)) {
           total += price;
-          itemsWithPrice++;
         }
       }
     });
     
-    console.log(`💰 Calculando valor total: ${itemsWithPrice} itens com preço, total: R$ ${total.toFixed(2)}`);
     setInventoryTotalValue(total);
   }, [items, itemPrices]);
 
@@ -137,7 +129,6 @@ const SteamInventoryViewer = ({ steamId, vanityUrl }) => {
     
     // Buscar preço se item é marketável e ainda não foi tentado
     if (item.marketable && item.name && !itemPrices[item.name] && !attemptedItems.has(item.name)) {
-      console.log(`🔍 Buscando preço para item clicado: ${item.name}`);
       fetchItemPrice(item.name);
     }
     
@@ -164,7 +155,6 @@ const SteamInventoryViewer = ({ steamId, vanityUrl }) => {
     if (!itemName || itemPrices[itemName] || attemptedItems.has(itemName)) return; // Não buscar se já tem ou já tentou
     
     if (fetchingItems.has(itemName)) {
-      console.log(`⏳ Já buscando preço para: ${itemName}`);
       return null;
     }
     
@@ -172,7 +162,6 @@ const SteamInventoryViewer = ({ steamId, vanityUrl }) => {
     setFetchingItems(prev => new Set(prev).add(itemName));
     
     try {
-      console.log(`🔍 Buscando preço para: "${itemName}"`);
       
       const marketUrl = `https://steamcommunity.com/market/priceoverview/?currency=1&appid=730&market_hash_name=${encodeURIComponent(itemName)}`;
       
@@ -210,7 +199,6 @@ const SteamInventoryViewer = ({ steamId, vanityUrl }) => {
           }
           
         } catch (proxyError) {
-          console.warn(`⚠️ Proxy ${i + 1} falhou:`, proxyError.message);
           continue;
         }
       }
@@ -236,17 +224,14 @@ const SteamInventoryViewer = ({ steamId, vanityUrl }) => {
                 }
               }));
               
-              console.log(`✅ Preço encontrado para ${itemName}: $${numericPrice}`);
               return;
             }
           }
         }
       }
       
-      console.log(`❌ Preço não encontrado para: ${itemName}`);
-      
     } catch (error) {
-      console.error(`❌ Erro ao buscar preço para ${itemName}:`, error.message);
+      // Silenciosamente ignorar erros
     } finally {
       // Marcar como tentado e remover do conjunto de busca
       setAttemptedItems(prev => new Set(prev).add(itemName));
@@ -295,15 +280,12 @@ const SteamInventoryViewer = ({ steamId, vanityUrl }) => {
   useEffect(() => {
     const fetchExchangeRate = async () => {
       try {
-        console.log('💱 Buscando taxa de câmbio USD -> BRL...');
         const response = await fetch('https://api.exchangerate-api.com/v4/latest/USD');
         const data = await response.json();
         if (data.rates && data.rates.BRL) {
           setExchangeRate(data.rates.BRL);
-          console.log(`✅ Taxa USD -> BRL: ${data.rates.BRL}`);
         }
       } catch (error) {
-        console.warn('⚠️ Erro ao buscar taxa de câmbio, usando padrão 5.5:', error.message);
         setExchangeRate(5.5);
       }
     };
@@ -321,7 +303,7 @@ const SteamInventoryViewer = ({ steamId, vanityUrl }) => {
         
         // Se não temos Steam ID, resolver a partir da vanity URL usando método XML
         if (!steamId && vanityUrl) {
-          console.log("🔍 Resolvendo Steam ID para:", vanityUrl);
+
           
           try {
             // Método direto via XML (mais confiável)
@@ -350,23 +332,22 @@ const SteamInventoryViewer = ({ steamId, vanityUrl }) => {
                 avatar: avatarElement ? avatarElement.textContent : null
               });
               
-              console.log("✅ Steam ID encontrado via XML:", resolvedSteamId);
+
             } else {
               throw new Error("Steam ID não encontrado no XML");
             }
           } catch (xmlError) {
-            console.warn("⚠️ Método XML falhou:", xmlError.message);
+
             throw new Error(`Não foi possível resolver Steam ID para '${vanityUrl}'`);
           }
         }
         
         // Buscar inventário CS2 usando múltiplos métodos
-        console.log("🎒 Buscando inventário CS2 para Steam ID:", resolvedSteamId);
+
         const inventoryUrl = `https://steamcommunity.com/inventory/${resolvedSteamId}/730/2?l=english&count=100`;
-        console.log("📡 URL do inventário:", inventoryUrl);
+
         
         let inventoryData;
-        let proxyUsed = "unknown";
         
         // Tentar múltiplos proxies
         const proxies = [
@@ -379,7 +360,7 @@ const SteamInventoryViewer = ({ steamId, vanityUrl }) => {
         
         for (let i = 0; i < proxies.length; i++) {
           try {
-            console.log(`🔄 Tentando proxy ${i + 1}:`, proxies[i].split('?')[0]);
+
             
             const inventoryResponse = await fetch(proxies[i]);
             
@@ -392,20 +373,18 @@ const SteamInventoryViewer = ({ steamId, vanityUrl }) => {
             // AllOrigins wrapper
             if (data.contents) {
               inventoryData = JSON.parse(data.contents);
-              proxyUsed = `allorigins`;
             } else if (data.success !== undefined) {
               // Resposta direta da Steam
               inventoryData = data;
-              proxyUsed = `proxy-${i + 1}`;
             } else {
               throw new Error(`Formato de resposta desconhecido do proxy ${i + 1}`);
             }
             
-            console.log(`✅ Sucesso com proxy: ${proxyUsed}`);
+
             break;
             
           } catch (proxyError) {
-            console.warn(`⚠️ Proxy ${i + 1} falhou:`, proxyError.message);
+
             lastError = proxyError;
             continue;
           }
@@ -415,7 +394,7 @@ const SteamInventoryViewer = ({ steamId, vanityUrl }) => {
           throw new Error(`Todos os proxies falharam. Último erro: ${lastError?.message}`);
         }
         
-        console.log("📦 Dados do inventário parseados:", inventoryData);
+
         
         if (!inventoryData.success) {
           if (inventoryData.Error) {
@@ -474,18 +453,18 @@ const SteamInventoryViewer = ({ steamId, vanityUrl }) => {
           )
         );
         
-        console.log(`🔫 ${weapons.length} armas encontradas de ${allItems.length} items totais`);
+
         
         const mappedItems = weapons;
         
-        console.log("✅ Items processados:", mappedItems.slice(0, 3));
+
         setItems(mappedItems);
         
         // Iniciar busca de preços em background para itens marketáveis
-        console.log(`✅ Inventário carregado com ${mappedItems.length} itens!`);
+
         
       } catch (err) {
-        console.error("❌ Erro ao buscar inventário:", err);
+
         setError(err.message);
       } finally {
         setLoading(false);

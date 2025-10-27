@@ -6,81 +6,63 @@ const SteamMarketSearch = () => {
   const playSearchSound = (soundFile) => {
     const audio = new Audio(`/sounds/${soundFile}`);
     audio.volume = 0.15; // Volume reduzido pela metade (0.3 -> 0.15)
-    audio.play().then(() => {
-      console.log(`🔊 Som de busca ${soundFile} tocado com sucesso!`);
-    }).catch(err => {
-      console.log('Erro ao tocar áudio de busca:', err);
+    audio.play().catch(err => {
+      // Silenciosamente ignorar erros de áudio
     });
   };
   
   // Função para mapear cores de raridade do CS2
   const getRarityColor = (itemType, nameColor, backgroundColor) => {
-    console.log(`🎨 getRarityColor chamado:`, { itemType, nameColor, backgroundColor });
-    
     // Mapeamento baseado no tipo/raridade do CS2 (PRIORIDADE MÁXIMA)
     if (itemType && itemType.trim() !== '') {
       // Extrair apenas a primeira palavra do tipo (ex: "Covert SMG" -> "Covert")
       const rarityType = itemType.split(' ')[0].toLowerCase();
       
-      console.log(`🔍 Processando raridade: "${itemType}" -> primeira palavra: "${rarityType}"`);
-      
       // Covert (Vermelho) - Raridade mais alta
       if (rarityType === 'covert') {
-        console.log(`✅ Raridade Covert detectada -> Cor: d2020c (vermelho)`);
         return 'd2020c';
       }
       
       // Classified (Rosa/Magenta) 
       if (rarityType === 'classified') {
-        console.log(`✅ Raridade Classified detectada -> Cor: d32ce6 (rosa)`);
         return 'd32ce6';
       }
       
       // Restricted (Roxo)
       if (rarityType === 'restricted') {
-        console.log(`✅ Raridade Restricted detectada -> Cor: 8847ff (roxo)`);
         return '8847ff';
       }
       
       // Mil-Spec (Azul) - pode vir como "mil-spec" ou "milspec"
       if (rarityType === 'mil-spec' || rarityType === 'milspec') {
-        console.log(`✅ Raridade Mil-Spec detectada -> Cor: 4b69ff (azul)`);
         return '4b69ff';
       }
       
       // Industrial Grade (Azul claro)
       if (rarityType === 'industrial') {
-        console.log(`✅ Raridade Industrial detectada -> Cor: 5e98d9 (azul claro)`);
         return '5e98d9';
       }
       
       // Consumer Grade (Cinza/Branco)
       if (rarityType === 'consumer' || rarityType === 'base') {
-        console.log(`✅ Raridade Consumer detectada -> Cor: b0c3d9 (cinza)`);
         return 'b0c3d9';
       }
       
       // Especiais (Dourado) - Facas, luvas, etc.
       if (itemType.includes('★') || rarityType === 'knife' || rarityType === 'gloves') {
-        console.log(`✅ Item especial detectado -> Cor: ffd700 (dourado)`);
         return 'ffd700';
       }
-      
-      console.log(`⚠️ Tipo de raridade não reconhecido: "${rarityType}"`);
     }
     
     // Se não conseguiu mapear pelo tipo, tentar cores existentes
     if (nameColor && nameColor !== '000000') {
-      console.log(`📝 Usando nameColor: ${nameColor}`);
       return nameColor;
     }
     if (backgroundColor && backgroundColor !== '000000') {
-      console.log(`📝 Usando backgroundColor: ${backgroundColor}`);
       return backgroundColor;
     }
     
     // Fallback para cor padrão
-    console.log(`🔄 Usando cor padrão: b0c3d9`);
     return 'b0c3d9'; // Cinza claro padrão
   };
   const [searchQuery, setSearchQuery] = useState('');
@@ -130,8 +112,6 @@ const SteamMarketSearch = () => {
   // Função para buscar taxa de câmbio USD -> BRL
   const getExchangeRate = async () => {
     try {
-      console.log('💱 Buscando taxa de câmbio USD -> BRL...');
-      
       // Usando API gratuita de câmbio
       const exchangeUrl = 'https://api.exchangerate-api.com/v4/latest/USD';
       
@@ -154,20 +134,17 @@ const SteamMarketSearch = () => {
           
           if (rates && rates.BRL) {
             const rate = rates.BRL;
-            console.log(`✅ Taxa de câmbio obtida: 1 USD = ${rate} BRL`);
             setExchangeRate(rate);
             return rate;
           }
         } catch (err) {
-          console.warn(`⚠️ Tentativa ${i + 1} de câmbio falhou:`, err.message);
+          // Silenciosamente tentar próximo proxy
         }
       }
       
-      console.warn('⚠️ Usando taxa padrão: 1 USD = 5.5 BRL');
       return 5.5;
       
     } catch (error) {
-      console.warn('⚠️ Erro ao buscar câmbio:', error.message);
       return 5.5; // Taxa padrão
     }
   };
@@ -193,8 +170,6 @@ const SteamMarketSearch = () => {
   // Função para buscar itens dinamicamente na Steam Community Market
   const searchSteamMarket = async (searchTerm) => {
     try {
-      console.log(`🔍 Buscando "${searchTerm}" na Steam Community Market com paginação...`);
-      
       // Função para fazer uma busca paginada
       const fetchPage = async (startIndex) => {
         const searchUrl = `https://steamcommunity.com/market/search/render/?query=${encodeURIComponent(searchTerm)}&start=${startIndex}&count=9&search_descriptions=0&sort_column=popular&sort_dir=desc&appid=730&norender=1`;
@@ -208,7 +183,6 @@ const SteamMarketSearch = () => {
         
         for (let i = 0; i < proxies.length; i++) {
           try {
-            console.log(`🔄 Buscando página start=${startIndex} via proxy ${i + 1}...`);
             
             const response = await fetch(proxies[i], {
               headers: {
@@ -232,7 +206,6 @@ const SteamMarketSearch = () => {
             }
             
           } catch (proxyError) {
-            console.warn(`⚠️ Proxy ${i + 1} falhou para página ${startIndex}:`, proxyError.message);
             if (i === proxies.length - 1) {
               throw proxyError;
             }
@@ -242,7 +215,6 @@ const SteamMarketSearch = () => {
       };
 
       // Buscar 4 páginas para obter 36 resultados (9 x 4) - otimizado para performance
-      console.log('📄 Iniciando busca paginada: 4 páginas de 9 itens cada...');
       
       const pagePromises = [
         fetchPage(0),   // Página 1 (0-8)
@@ -262,7 +234,6 @@ const SteamMarketSearch = () => {
           const pageData = pages[i];
           
           if (pageData && pageData.success && pageData.results) {
-            console.log(`✅ Página ${i + 1} obtida: ${pageData.results.length} itens`);
             allResults = allResults.concat(pageData.results);
             
             // Usar metadados da primeira página
@@ -270,21 +241,16 @@ const SteamMarketSearch = () => {
               totalCount = pageData.total_count || 0;
               searchMetadata = pageData.searchdata || {};
             }
-          } else {
-            console.warn(`⚠️ Página ${i + 1} sem resultados válidos`);
           }
         }
         
       } catch (paginationError) {
-        console.error('❌ Erro na busca paginada:', paginationError);
         throw new Error(`Falha na busca paginada: ${paginationError.message}`);
       }
       
       if (allResults.length === 0) {
         throw new Error(`Nenhum item encontrado para "${searchTerm}"`);
       }
-      
-      console.log(`🎉 Busca paginada concluída: ${allResults.length} itens de ${totalCount} total disponível`);
       
       // Criar objeto de dados combinado
       const searchData = {
@@ -329,26 +295,9 @@ const SteamMarketSearch = () => {
           )
         }));
       
-      console.log(`📋 ${itemsData.length} itens encontrados na busca:`, itemsData);
-      
-      // Debug: Log de cores de raridade
-      itemsData.forEach((item, index) => {
-        if (index < 3) { // Log apenas os primeiros 3 itens
-          console.log(`🎨 Debug Raridade ${index + 1}:`, {
-            name: item.market_name,
-            type_full: item.type,
-            type_first_word: item.type ? item.type.split(' ')[0] : 'N/A',
-            name_color: item.name_color,
-            background_color: item.background_color,
-            rarity_color: item.rarity_color
-          });
-        }
-      });
-      
       return itemsData;
       
     } catch (error) {
-      console.error("❌ Erro na busca dinâmica:", error.message);
       throw error;
     }
   };
@@ -356,11 +305,8 @@ const SteamMarketSearch = () => {
   // Função para buscar dados diretamente da Steam Community Market
   const searchViaSteamMarket = async (itemName) => {
     try {
-      console.log(`🔄 Buscando "${itemName}" via Steam Community Market...`);
-      
       // Buscar diretamente da Steam Community Market
       const marketUrl = `https://steamcommunity.com/market/priceoverview/?currency=1&appid=730&market_hash_name=${encodeURIComponent(itemName)}`;
-      console.log("📡 Steam Market URL:", marketUrl);
       
       // Sistema de proxies (mesmo que funciona no inventário)
       const proxies = [
@@ -374,8 +320,6 @@ const SteamMarketSearch = () => {
       
       for (let i = 0; i < proxies.length; i++) {
         try {
-          console.log(`🔄 Tentando proxy ${i + 1}:`, proxies[i].split('?')[0]);
-          
           const response = await fetch(proxies[i], {
             headers: {
               'Accept': 'application/json',
@@ -397,11 +341,9 @@ const SteamMarketSearch = () => {
             priceData = data;
           }
           
-          console.log(`✅ Proxy ${i + 1} funcionou! Dados recebidos:`, priceData);
           break;
           
         } catch (proxyError) {
-          console.warn(`⚠️ Proxy ${i + 1} falhou:`, proxyError.message);
           lastError = proxyError;
           continue;
         }
@@ -425,9 +367,6 @@ const SteamMarketSearch = () => {
       
       // Traduzir nome da skin
       const translatedName = translateSkinName(itemName);
-      
-      console.log(`✅ Item encontrado! Preço: $${lowestPrice} (R$ ${lowestPriceBRL}), Volume: ${volume}`);
-      console.log(`🌍 Nome traduzido: "${itemName}" -> "${translatedName}"`);
       
       return {
         nameID: `steam_market_${Date.now()}_${Math.random()}`,
@@ -476,14 +415,12 @@ const SteamMarketSearch = () => {
       };
       
     } catch (err) {
-      console.warn("⚠️ Steam Market falhou:", err.message);
       throw err;
     }
   };
 
   // Função para buscar múltiplos itens em tempo real
   const searchItemsByTerm = async (searchTerm) => {
-    console.log(`🔍 Buscando itens em tempo real para: "${searchTerm}"`);
     
     try {
       // Buscar itens dinamicamente na Steam Market Search
@@ -493,15 +430,11 @@ const SteamMarketSearch = () => {
         throw new Error(`Nenhum item encontrado para "${searchTerm}"`);
       }
       
-      console.log(`📋 ${itemsData.length} itens encontrados, buscando preços atualizados...`);
-      
       const maxItems = 36; // Buscar até 36 itens para permitir mais filtros
       
       // Buscar preços em paralelo para melhor performance
       const itemPromises = itemsData.slice(0, maxItems).map(async (itemData, index) => {
         try {
-          console.log(`🔄 Buscando preços ${index + 1}/${Math.min(itemsData.length, maxItems)}: ${itemData.hash_name}`);
-          
           const enhancedItemData = await searchViaSteamMarket(itemData.hash_name);
           
           // Combinar dados da busca Steam com dados do priceoverview
@@ -510,14 +443,6 @@ const SteamMarketSearch = () => {
             itemData.name_color,
             itemData.background_color
           );
-          
-          console.log(`🎨 Cor Final Aplicada - ${itemData.hash_name}:`, {
-            type: itemData.type,
-            type_first_word: itemData.type ? itemData.type.split(' ')[0] : 'N/A',
-            name_color: itemData.name_color,
-            background_color: itemData.background_color,
-            calculated_rarity_color: finalRarityColor
-          });
           
           return {
             ...enhancedItemData,
@@ -542,8 +467,6 @@ const SteamMarketSearch = () => {
           };
           
         } catch (itemError) {
-          console.warn(`⚠️ Falha ao buscar preços para ${itemData.hash_name}:`, itemError.message);
-          
           // Retornar dados básicos mesmo se o priceoverview falhar
           const translatedName = translateSkinName(itemData.hash_name);
           const fallbackRarityColor = getRarityColor(
@@ -551,14 +474,6 @@ const SteamMarketSearch = () => {
             itemData.name_color,
             itemData.background_color
           );
-          
-          console.log(`🎨 Cor Fallback Aplicada - ${itemData.hash_name}:`, {
-            type: itemData.type,
-            type_first_word: itemData.type ? itemData.type.split(' ')[0] : 'N/A',
-            name_color: itemData.name_color,
-            background_color: itemData.background_color,
-            calculated_rarity_color: fallbackRarityColor
-          });
           
           return {
             nameID: `steam_search_${Date.now()}_${Math.random()}`,
@@ -615,29 +530,24 @@ const SteamMarketSearch = () => {
         throw new Error(`Não foi possível obter preços atualizados para nenhum item de "${searchTerm}"`);
       }
       
-      console.log(`✅ ${validResults.length} itens com preços atualizados encontrados!`);
       return validResults;
       
     } catch (error) {
-      console.error("❌ Erro na busca dinâmica múltipla:", error.message);
       throw error;
     }
   };
 
   // Função para buscar item único (mantida para compatibilidade)
   const searchSingleItem = async (itemName) => {
-    console.log(`🔍 Buscando item único: ${itemName}`);
     
     try {
       // Buscar via Steam Community Market
       const apiData = await searchViaSteamMarket(itemName);
       
-      console.log("✅ Dados reais obtidos com sucesso!");
       return apiData;
       
     } catch (error) {
       // Se falhou, lançar erro (sem fallbacks)
-      console.error("❌ Falha ao buscar dados reais:", error.message);
       throw new Error(`Não foi possível encontrar dados reais para "${itemName}". ${error.message}`);
     }
   };
@@ -654,8 +564,6 @@ const SteamMarketSearch = () => {
     setSearchResults([]);
 
     try {
-      console.log("🚀 Iniciando busca em tempo real...");
-      
       // Buscar taxa de câmbio atualizada primeiro
       await getExchangeRate();
       
@@ -664,20 +572,16 @@ const SteamMarketSearch = () => {
       
       if (isSpecificItem) {
         // Busca item específico
-        console.log("🎯 Busca de item específico");
         const data = await searchSingleItem(searchQuery);
         setMarketData(data);
       } else {
         // Busca múltiplos itens por categoria
-        console.log("📋 Busca múltipla em tempo real");
         const results = await searchItemsByTerm(searchQuery);
         setSearchResults(results);
         setMarketData(null); // Limpar dados de item único
       }
       
-      console.log("🎉 Busca em tempo real concluída com sucesso!");
     } catch (err) {
-      console.error("💥 Erro na busca:", err);
       setError(err.message);
     } finally {
       setLoading(false);
@@ -1071,7 +975,7 @@ const SteamMarketSearch = () => {
                 // Som de clique para abrir modal
                 const clickAudio = new Audio('/sounds/ak47_01.wav');
                 clickAudio.volume = 0.15;
-                clickAudio.play().catch(e => console.log('Som não pôde ser reproduzido:', e));
+                clickAudio.play().catch(e => {});
                 
                 setSelectedItem(item);
                 setShowModal(true);
@@ -1080,7 +984,7 @@ const SteamMarketSearch = () => {
                 // Som de hover
                 const hoverAudio = new Audio('/sounds/decoy_draw.wav');
                 hoverAudio.volume = 0.1;
-                hoverAudio.play().catch(e => console.log('Som não pôde ser reproduzido:', e));
+                hoverAudio.play().catch(e => {});
                 
                 e.currentTarget.style.background = 'rgba(222, 126, 33, 0.2)';
                 e.currentTarget.style.transform = 'translateY(-3px)';
