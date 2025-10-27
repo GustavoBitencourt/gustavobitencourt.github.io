@@ -12,7 +12,7 @@ const CS2 = () => {
   const playPlayerSound = (soundFile, repeat = 1) => {
     const playSound = () => {
       const audio = new Audio(`/sounds/${soundFile}`);
-      audio.volume = 0.255; // Volume reduzido (15% mais baixo)
+      audio.volume = 0.128; // Volume reduzido pela metade (0.255 -> 0.128)
       audio.play().then(() => {
         console.log(`🔊 Som ${soundFile} tocado com sucesso!`);
       }).catch(err => {
@@ -30,7 +30,7 @@ const CS2 = () => {
   const playMenuSound = (soundFile) => {
     console.log(`🎵 Iniciando reprodução do som: ${soundFile}`);
     const audio = new Audio(`/sounds/${soundFile}`);
-    audio.volume = 0.255; // Volume reduzido (15% mais baixo)
+    audio.volume = 0.128; // Volume reduzido pela metade (0.255 -> 0.128)
     audio.play().then(() => {
       console.log(`🔊 Som do menu ${soundFile} tocado com sucesso!`);
     }).catch(err => {
@@ -54,7 +54,7 @@ const CS2 = () => {
             clearInterval(timer);
             // Tocar som do beep para o número "1"
             const beepAudio = new Audio('/sounds/c4_beep2.wav');
-            beepAudio.volume = 0.3;
+            beepAudio.volume = 0.15;
             beepAudio.play().then(() => {
               console.log('🔊 Beep para número 1 tocado com sucesso!');
             }).catch(err => {
@@ -64,7 +64,7 @@ const CS2 = () => {
             // Tocar som após contagem terminar
             setTimeout(() => {
               const audio = new Audio('/sounds/pl_respawn.wav');
-              audio.volume = 0.25;
+              audio.volume = 0.125;
               audio.play().then(() => {
                 console.log('🔊 Som de respawn tocado com sucesso!');
               }).catch(err => {
@@ -80,7 +80,7 @@ const CS2 = () => {
           
           // Tocar som do beep para os números 3 e 2
           const beepAudio = new Audio('/sounds/c4_beep2.wav');
-          beepAudio.volume = 0.3;
+          beepAudio.volume = 0.15;
           beepAudio.play().then(() => {
             console.log(`🔊 Beep para número ${prev} tocado com sucesso!`);
           }).catch(err => {

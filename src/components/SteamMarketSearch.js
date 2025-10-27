@@ -5,12 +5,83 @@ const SteamMarketSearch = () => {
   // Função para tocar sons dos botões de busca
   const playSearchSound = (soundFile) => {
     const audio = new Audio(`/sounds/${soundFile}`);
-    audio.volume = 0.3; // Mesmo volume dos demais sons
+    audio.volume = 0.15; // Volume reduzido pela metade (0.3 -> 0.15)
     audio.play().then(() => {
       console.log(`🔊 Som de busca ${soundFile} tocado com sucesso!`);
     }).catch(err => {
       console.log('Erro ao tocar áudio de busca:', err);
     });
+  };
+  
+  // Função para mapear cores de raridade do CS2
+  const getRarityColor = (itemType, nameColor, backgroundColor) => {
+    console.log(`🎨 getRarityColor chamado:`, { itemType, nameColor, backgroundColor });
+    
+    // Mapeamento baseado no tipo/raridade do CS2 (PRIORIDADE MÁXIMA)
+    if (itemType && itemType.trim() !== '') {
+      // Extrair apenas a primeira palavra do tipo (ex: "Covert SMG" -> "Covert")
+      const rarityType = itemType.split(' ')[0].toLowerCase();
+      
+      console.log(`🔍 Processando raridade: "${itemType}" -> primeira palavra: "${rarityType}"`);
+      
+      // Covert (Vermelho) - Raridade mais alta
+      if (rarityType === 'covert') {
+        console.log(`✅ Raridade Covert detectada -> Cor: d2020c (vermelho)`);
+        return 'd2020c';
+      }
+      
+      // Classified (Rosa/Magenta) 
+      if (rarityType === 'classified') {
+        console.log(`✅ Raridade Classified detectada -> Cor: d32ce6 (rosa)`);
+        return 'd32ce6';
+      }
+      
+      // Restricted (Roxo)
+      if (rarityType === 'restricted') {
+        console.log(`✅ Raridade Restricted detectada -> Cor: 8847ff (roxo)`);
+        return '8847ff';
+      }
+      
+      // Mil-Spec (Azul) - pode vir como "mil-spec" ou "milspec"
+      if (rarityType === 'mil-spec' || rarityType === 'milspec') {
+        console.log(`✅ Raridade Mil-Spec detectada -> Cor: 4b69ff (azul)`);
+        return '4b69ff';
+      }
+      
+      // Industrial Grade (Azul claro)
+      if (rarityType === 'industrial') {
+        console.log(`✅ Raridade Industrial detectada -> Cor: 5e98d9 (azul claro)`);
+        return '5e98d9';
+      }
+      
+      // Consumer Grade (Cinza/Branco)
+      if (rarityType === 'consumer' || rarityType === 'base') {
+        console.log(`✅ Raridade Consumer detectada -> Cor: b0c3d9 (cinza)`);
+        return 'b0c3d9';
+      }
+      
+      // Especiais (Dourado) - Facas, luvas, etc.
+      if (itemType.includes('★') || rarityType === 'knife' || rarityType === 'gloves') {
+        console.log(`✅ Item especial detectado -> Cor: ffd700 (dourado)`);
+        return 'ffd700';
+      }
+      
+      console.log(`⚠️ Tipo de raridade não reconhecido: "${rarityType}"`);
+    }
+    
+    // Se não conseguiu mapear pelo tipo, tentar cores existentes
+    if (nameColor && nameColor !== '000000') {
+      console.log(`📝 Usando nameColor: ${nameColor}`);
+      return nameColor;
+    }
+    if (backgroundColor && backgroundColor !== '000000') {
+      console.log(`📝 Usando backgroundColor: ${backgroundColor}`);
+      return backgroundColor;
+    }
+    
+    // Fallback para cor padrão
+    console.log(`🔄 Usando cor padrão: b0c3d9`);
+    return 'b0c3d9'; // Cinza claro padrão
   };
   const [searchQuery, setSearchQuery] = useState('');
   const [marketData, setMarketData] = useState(null);
@@ -249,10 +320,30 @@ const SteamMarketSearch = () => {
           type: item.asset_description?.type,
           market_name: item.asset_description?.market_name || item.name,
           market_hash_name: item.asset_description?.market_hash_name || item.hash_name,
-          commodity: item.asset_description?.commodity
+          commodity: item.asset_description?.commodity,
+          // Aplicar mapeamento de cor de raridade
+          rarity_color: getRarityColor(
+            item.asset_description?.type,
+            item.asset_description?.name_color,
+            item.asset_description?.background_color
+          )
         }));
       
       console.log(`📋 ${itemsData.length} itens encontrados na busca:`, itemsData);
+      
+      // Debug: Log de cores de raridade
+      itemsData.forEach((item, index) => {
+        if (index < 3) { // Log apenas os primeiros 3 itens
+          console.log(`🎨 Debug Raridade ${index + 1}:`, {
+            name: item.market_name,
+            type_full: item.type,
+            type_first_word: item.type ? item.type.split(' ')[0] : 'N/A',
+            name_color: item.name_color,
+            background_color: item.background_color,
+            rarity_color: item.rarity_color
+          });
+        }
+      });
       
       return itemsData;
       
@@ -414,6 +505,20 @@ const SteamMarketSearch = () => {
           const enhancedItemData = await searchViaSteamMarket(itemData.hash_name);
           
           // Combinar dados da busca Steam com dados do priceoverview
+          const finalRarityColor = getRarityColor(
+            itemData.type,
+            itemData.name_color,
+            itemData.background_color
+          );
+          
+          console.log(`🎨 Cor Final Aplicada - ${itemData.hash_name}:`, {
+            type: itemData.type,
+            type_first_word: itemData.type ? itemData.type.split(' ')[0] : 'N/A',
+            name_color: itemData.name_color,
+            background_color: itemData.background_color,
+            calculated_rarity_color: finalRarityColor
+          });
+          
           return {
             ...enhancedItemData,
             // Adicionar dados completos do Steam Search API
@@ -430,6 +535,8 @@ const SteamMarketSearch = () => {
             name_color: itemData.name_color,
             type: itemData.type,
             commodity: itemData.commodity,
+            // Aplicar mapeamento de cor de raridade (CORRIGIDO)
+            rarity_color: finalRarityColor,
             // Usar imagem do Steam se disponível
             image: itemData.icon_url ? `https://community.steamstatic.com/economy/image/${itemData.icon_url}` : enhancedItemData.image
           };
@@ -439,6 +546,20 @@ const SteamMarketSearch = () => {
           
           // Retornar dados básicos mesmo se o priceoverview falhar
           const translatedName = translateSkinName(itemData.hash_name);
+          const fallbackRarityColor = getRarityColor(
+            itemData.type,
+            itemData.name_color,
+            itemData.background_color
+          );
+          
+          console.log(`🎨 Cor Fallback Aplicada - ${itemData.hash_name}:`, {
+            type: itemData.type,
+            type_first_word: itemData.type ? itemData.type.split(' ')[0] : 'N/A',
+            name_color: itemData.name_color,
+            background_color: itemData.background_color,
+            calculated_rarity_color: fallbackRarityColor
+          });
+          
           return {
             nameID: `steam_search_${Date.now()}_${Math.random()}`,
             appID: 730,
@@ -461,6 +582,8 @@ const SteamMarketSearch = () => {
             name_color: itemData.name_color,
             type: itemData.type,
             commodity: itemData.commodity,
+            // Aplicar cor de raridade calculada (CORRIGIDO)
+            rarity_color: fallbackRarityColor,
             histogram: {
               sell_order_summary: { price: "N/A", price_brl: "N/A", quantity: itemData.sell_listings || 0 },
               buy_order_summary: { price: "N/A", price_brl: "N/A", quantity: 0 },
@@ -738,28 +861,40 @@ const SteamMarketSearch = () => {
           {/* Controles de Filtro e Visualização */}
           <div style={{
             display: 'flex',
-            justifyContent: 'space-between',
+            justifyContent: window.innerWidth <= 768 ? 'center' : 'space-between',
             alignItems: 'center',
             marginBottom: '20px',
-            padding: '15px',
+            padding: window.innerWidth <= 768 ? '12px' : '15px',
             background: 'rgba(0, 0, 0, 0.3)',
             borderRadius: '10px',
             flexWrap: 'wrap',
-            gap: '15px'
+            gap: window.innerWidth <= 768 ? '10px' : '15px',
+            flexDirection: window.innerWidth <= 768 ? 'column' : 'row'
           }}>
             {/* Filtro de Ordenação */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <label style={{ color: '#fff', fontWeight: 'bold' }}>🔄 Ordenar por preço:</label>
+            <div style={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              gap: '10px',
+              flexDirection: window.innerWidth <= 480 ? 'column' : 'row',
+              textAlign: window.innerWidth <= 480 ? 'center' : 'left'
+            }}>
+              <label style={{ 
+                color: '#fff', 
+                fontWeight: 'bold',
+                fontSize: window.innerWidth <= 768 ? '0.9rem' : '1rem'
+              }}>🔄 Ordenar por preço:</label>
               <select
                 value={sortOrder}
                 onChange={(e) => setSortOrder(e.target.value)}
                 style={{
-                  padding: '8px 12px',
+                  padding: window.innerWidth <= 768 ? '6px 10px' : '8px 12px',
                   borderRadius: '6px',
                   border: '1px solid #DE7E21',
                   background: '#2d2d2d',
                   color: '#fff',
-                  fontSize: '14px'
+                  fontSize: window.innerWidth <= 768 ? '13px' : '14px',
+                  minWidth: window.innerWidth <= 480 ? '200px' : 'auto'
                 }}
               >
                 <option value="none">Sem ordenação</option>
@@ -772,32 +907,42 @@ const SteamMarketSearch = () => {
 
             {/* Informações de Filtros Ativos */}
             <div style={{ 
-              fontSize: '0.9rem', 
+              fontSize: window.innerWidth <= 768 ? '0.8rem' : '0.9rem', 
               color: '#ccc',
               display: 'flex',
               alignItems: 'center',
-              gap: '10px'
+              gap: window.innerWidth <= 768 ? '5px' : '10px',
+              flexDirection: window.innerWidth <= 480 ? 'column' : 'row',
+              textAlign: 'center'
             }}>
               {sortOrder !== 'none' && (
                 <span style={{ 
                   background: 'rgba(222, 126, 33, 0.2)', 
-                  padding: '4px 8px', 
+                  padding: window.innerWidth <= 768 ? '3px 6px' : '4px 8px', 
                   borderRadius: '4px',
-                  border: '1px solid rgba(222, 126, 33, 0.5)'
+                  border: '1px solid rgba(222, 126, 33, 0.5)',
+                  fontSize: window.innerWidth <= 768 ? '0.75rem' : '0.8rem'
                 }}>
                   {sortOrder === 'asc' ? '📈 Menor → Maior' : '📉 Maior → Menor'}
                 </span>
               )}
-              <span style={{ color: '#DE7E21' }}>
-                {filteredResults.length} itens encontrados • Navegar com as setas
+              <span style={{ 
+                color: '#DE7E21',
+                fontSize: window.innerWidth <= 768 ? '0.8rem' : '0.9rem'
+              }}>
+                {filteredResults.length} itens encontrados
+                {window.innerWidth > 768 && ' • Navegar com as setas'}
               </span>
             </div>
           </div>
           
-          {/* Sistema de Navegação Lateral */}
-          <div style={{ position: 'relative', padding: '0 80px' }}>
-            {/* Setas de Navegação */}
-            {filteredResults.length > 9 && (
+          {/* Sistema de Navegação - Desktop e Mobile */}
+          <div style={{ 
+            position: 'relative', 
+            padding: window.innerWidth <= 768 ? '0' : '0 80px' // Remove padding lateral no mobile
+          }}>
+            {/* Setas de Navegação - Apenas Desktop */}
+            {filteredResults.length > 9 && window.innerWidth > 768 && (
               <>
                 <button
                   onClick={() => {
@@ -902,25 +1047,30 @@ const SteamMarketSearch = () => {
             
             <div style={{
               display: 'grid',
-              gridTemplateColumns: 'repeat(3, 1fr)',
-              gap: '20px',
+              // Desktop: 3 colunas com paginação | Mobile: 1 coluna sem paginação
+              gridTemplateColumns: window.innerWidth <= 768 ? '1fr' : 'repeat(3, 1fr)',
+              gap: window.innerWidth <= 768 ? '15px' : '20px',
               transition: 'opacity 0.3s ease, transform 0.3s ease',
               opacity: isAnimating ? 0.7 : 1,
               transform: isAnimating ? 'scale(0.98)' : 'scale(1)'
             }}>
-            {filteredResults.slice(currentPage * 9, (currentPage + 1) * 9).map((item, index) => (
+            {/* Desktop: Paginação | Mobile: Todos os itens */}
+            {(window.innerWidth <= 768 ? 
+              filteredResults : 
+              filteredResults.slice(currentPage * 9, (currentPage + 1) * 9)
+            ).map((item, index) => (
               <div key={index} style={{
                 background: 'rgba(222, 126, 33, 0.1)',
                 border: '1px solid #DE7E21',
-                borderRadius: '12px',
-                padding: '20px',
+                borderRadius: window.innerWidth <= 768 ? '8px' : '12px',
+                padding: window.innerWidth <= 768 ? '15px' : '20px',
                 transition: 'all 0.3s ease',
                 cursor: 'pointer'
               }}
               onClick={() => {
                 // Som de clique para abrir modal
                 const clickAudio = new Audio('/sounds/ak47_01.wav');
-                clickAudio.volume = 0.3;
+                clickAudio.volume = 0.15;
                 clickAudio.play().catch(e => console.log('Som não pôde ser reproduzido:', e));
                 
                 setSelectedItem(item);
@@ -929,7 +1079,7 @@ const SteamMarketSearch = () => {
               onMouseEnter={(e) => {
                 // Som de hover
                 const hoverAudio = new Audio('/sounds/decoy_draw.wav');
-                hoverAudio.volume = 0.2;
+                hoverAudio.volume = 0.1;
                 hoverAudio.play().catch(e => console.log('Som não pôde ser reproduzido:', e));
                 
                 e.currentTarget.style.background = 'rgba(222, 126, 33, 0.2)';
@@ -940,14 +1090,22 @@ const SteamMarketSearch = () => {
                 e.currentTarget.style.transform = 'translateY(0)';
               }}
               >
-                <div style={{ display: 'flex', gap: '15px', alignItems: 'flex-start' }}>
-                  <div>
+                <div style={{ 
+                  display: 'flex', 
+                  gap: window.innerWidth <= 768 ? '12px' : '15px', 
+                  alignItems: 'flex-start',
+                  flexDirection: window.innerWidth <= 480 ? 'column' : 'row' // Coluna em telas muito pequenas
+                }}>
+                  <div style={{ 
+                    position: 'relative',
+                    alignSelf: window.innerWidth <= 480 ? 'center' : 'flex-start'
+                  }}>
                     <img
                       src={item.image}
                       alt={item.market_name}
                       style={{
-                        width: '100px',
-                        height: '100px',
+                        width: window.innerWidth <= 768 ? '80px' : '100px',
+                        height: window.innerWidth <= 768 ? '80px' : '100px',
                         objectFit: 'contain',
                         borderRadius: '8px',
                         background: 'rgba(0,0,0,0.3)'
@@ -956,24 +1114,50 @@ const SteamMarketSearch = () => {
                         e.target.src = "https://steamuserimages-a.akamaihd.net/ugc/87094793200602665/47310654230B596C62658A147113B24845B9E156/";
                       }}
                     />
+                    {/* Indicador de Raridade */}
+                    {(item.rarity_color || item.name_color || item.background_color) && (
+                      <div style={{
+                        position: 'absolute',
+                        bottom: '2px',
+                        left: '50%',
+                        transform: 'translateX(-50%)',
+                        width: '0',
+                        height: '0',
+                        borderLeft: window.innerWidth <= 768 ? '10px solid transparent' : '12px solid transparent',
+                        borderRight: window.innerWidth <= 768 ? '10px solid transparent' : '12px solid transparent',
+                        borderBottom: `${window.innerWidth <= 768 ? '8px' : '10px'} solid #${item.rarity_color || item.name_color || item.background_color}`,
+                        filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.3))'
+                      }}></div>
+                    )}
                   </div>
                   
-                  <div style={{ flex: 1 }}>
+                  <div style={{ 
+                    flex: 1,
+                    textAlign: window.innerWidth <= 480 ? 'center' : 'left'
+                  }}>
                     <h4 style={{ 
                       color: '#DE7E21', 
-                      marginBottom: '10px',
-                      fontSize: '1rem',
+                      marginBottom: window.innerWidth <= 768 ? '8px' : '10px',
+                      fontSize: window.innerWidth <= 768 ? '0.9rem' : '1rem',
                       lineHeight: '1.2'
                     }}>
                       {item.market_name_pt || item.market_name}
                     </h4>
                     {item.market_name_pt && (
-                      <div style={{ fontSize: '0.8rem', color: '#999', marginBottom: '8px', fontStyle: 'italic' }}>
+                      <div style={{ 
+                        fontSize: window.innerWidth <= 768 ? '0.75rem' : '0.8rem', 
+                        color: '#999', 
+                        marginBottom: window.innerWidth <= 768 ? '6px' : '8px', 
+                        fontStyle: 'italic' 
+                      }}>
                         {item.market_name}
                       </div>
                     )}
                     
-                    <div style={{ fontSize: '0.9rem', lineHeight: '1.4' }}>
+                    <div style={{ 
+                      fontSize: window.innerWidth <= 768 ? '0.8rem' : '0.9rem', 
+                      lineHeight: '1.4' 
+                    }}>
                       <div style={{ marginBottom: '5px' }}>
                         <strong>💰 Preço:</strong> <span style={{ color: '#4caf50' }}>
                           {formatPrice(item.histogram.lowest_sell_order, item.histogram.lowest_sell_order_brl, item)}
@@ -1007,8 +1191,8 @@ const SteamMarketSearch = () => {
             </div>
           </div>
           
-          {/* Indicador de Página */}
-          {filteredResults.length > 9 && (
+          {/* Indicador de Página - Apenas Desktop */}
+          {filteredResults.length > 9 && window.innerWidth > 768 && (
             <div style={{
               textAlign: 'center',
               marginTop: '20px',
@@ -1019,6 +1203,22 @@ const SteamMarketSearch = () => {
               <span style={{ marginLeft: '15px', color: '#DE7E21' }}>
                 ({(currentPage * 9) + 1}-{Math.min((currentPage + 1) * 9, filteredResults.length)} de {filteredResults.length} itens)
               </span>
+            </div>
+          )}
+          
+          {/* Indicador Simples - Mobile */}
+          {window.innerWidth <= 768 && filteredResults.length > 0 && (
+            <div style={{
+              textAlign: 'center',
+              marginTop: '20px',
+              fontSize: '14px',
+              color: '#DE7E21',
+              background: 'rgba(222, 126, 33, 0.1)',
+              padding: '10px',
+              borderRadius: '8px',
+              border: '1px solid rgba(222, 126, 33, 0.3)'
+            }}>
+              📋 {filteredResults.length} {filteredResults.length === 1 ? 'item encontrado' : 'itens encontrados'}
             </div>
           )}
 
@@ -1036,7 +1236,7 @@ const SteamMarketSearch = () => {
           marginTop: '20px'
         }}>
           <div style={{ display: 'flex', gap: '25px', alignItems: 'flex-start' }}>
-            <div style={{ minWidth: '150px' }}>
+            <div style={{ minWidth: '150px', position: 'relative' }}>
               <img
                 src={marketData.image}
                 alt={marketData.market_name}
@@ -1051,6 +1251,21 @@ const SteamMarketSearch = () => {
                   e.target.src = "https://steamuserimages-a.akamaihd.net/ugc/87094793200602665/47310654230B596C62658A147113B24845B9E156/";
                 }}
               />
+              {/* Indicador de Raridade */}
+              {(marketData.rarity_color || marketData.name_color || marketData.background_color) && (
+                <div style={{
+                  position: 'absolute',
+                  bottom: '5px',
+                  left: '50%',
+                  transform: 'translateX(-50%)',
+                  width: '0',
+                  height: '0',
+                  borderLeft: '18px solid transparent',
+                  borderRight: '18px solid transparent',
+                  borderBottom: `15px solid #${marketData.rarity_color || marketData.name_color || marketData.background_color}`,
+                  filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.3))'
+                }}></div>
+              )}
             </div>
             
             <div style={{ flex: 1 }}>
@@ -1278,7 +1493,8 @@ const SteamMarketSearch = () => {
                 {/* Imagem Grande */}
                 <div style={{ 
                   minWidth: window.innerWidth <= 480 ? '150px' : '200px',
-                  alignSelf: window.innerWidth <= 480 ? 'center' : 'flex-start' // Centralizar no mobile
+                  alignSelf: window.innerWidth <= 480 ? 'center' : 'flex-start', // Centralizar no mobile
+                  position: 'relative'
                 }}>
                   <img
                     src={selectedItem.image}
@@ -1295,6 +1511,21 @@ const SteamMarketSearch = () => {
                       e.target.src = "https://steamuserimages-a.akamaihd.net/ugc/87094793200602665/47310654230B596C62658A147113B24845B9E156/";
                     }}
                   />
+                  {/* Indicador de Raridade */}
+                  {(selectedItem.rarity_color || selectedItem.name_color || selectedItem.background_color) && (
+                    <div style={{
+                      position: 'absolute',
+                      bottom: window.innerWidth <= 480 ? '5px' : '8px',
+                      left: '50%',
+                      transform: 'translateX(-50%)',
+                      width: '0',
+                      height: '0',
+                      borderLeft: window.innerWidth <= 480 ? '15px solid transparent' : '20px solid transparent',
+                      borderRight: window.innerWidth <= 480 ? '15px solid transparent' : '20px solid transparent',
+                      borderBottom: `${window.innerWidth <= 480 ? '12px' : '16px'} solid #${selectedItem.rarity_color || selectedItem.name_color || selectedItem.background_color}`,
+                      filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.3))'
+                    }}></div>
+                  )}
                   
                   {/* Informações técnicas */}
                   <div style={{

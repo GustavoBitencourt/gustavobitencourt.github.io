@@ -29,7 +29,7 @@ const SteamInventoryViewer = ({ steamId, vanityUrl }) => {
     setLastHoverTime(now);
     try {
       const audio = new Audio('/sounds/glock_sliderelease.wav');
-      audio.volume = 0.255; // Volume reduzido (15% mais baixo)
+      audio.volume = 0.128; // Volume reduzido pela metade (0.255 -> 0.128)
       audio.play().catch(e => console.log('Erro ao tocar som de hover:', e));
     } catch (error) {
       console.log('Erro ao criar áudio de hover:', error);
@@ -39,7 +39,7 @@ const SteamInventoryViewer = ({ steamId, vanityUrl }) => {
   const playClickSound = () => {
     try {
       const audio = new Audio('/sounds/m4a1_silencer_01.wav');
-      audio.volume = 0.255; // Volume reduzido (15% mais baixo)
+      audio.volume = 0.128; // Volume reduzido pela metade (0.255 -> 0.128)
       audio.play().catch(e => console.log('Erro ao tocar som de clique:', e));
     } catch (error) {
       console.log('Erro ao criar áudio de clique:', error);
@@ -781,7 +781,7 @@ const SteamInventoryViewer = ({ steamId, vanityUrl }) => {
             }}
           >
             {/* Item Image */}
-            <div style={{ marginBottom: '12px' }}>
+            <div style={{ marginBottom: '12px', position: 'relative' }}>
               <img 
                 src={item.image} 
                 alt={item.name} 
@@ -792,6 +792,19 @@ const SteamInventoryViewer = ({ steamId, vanityUrl }) => {
                   filter: 'drop-shadow(0 2px 8px rgba(0,0,0,0.5))'
                 }} 
               />
+              {/* Indicador de Raridade */}
+              <div style={{
+                position: 'absolute',
+                bottom: '-2px',
+                left: '50%',
+                transform: 'translateX(-50%)',
+                width: '0',
+                height: '0',
+                borderLeft: '15px solid transparent',
+                borderRight: '15px solid transparent',
+                borderBottom: `12px solid #${item.rarityColor}`,
+                filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.3))'
+              }}></div>
             </div>
 
             {/* Item Name */}

@@ -23,7 +23,7 @@ const ProjectsSection = ({ t }) => {
     // Tocar som do glock ao clicar no Counter-Strike 2
     try {
       const audio = new Audio('/sounds/glock_01.wav');
-      audio.volume = 0.255; // Mesmo volume dos outros áudios (15% reduzido)
+      audio.volume = 0.128; // Volume reduzido pela metade (0.255 -> 0.128)
       audio.play().catch(e => console.log('Erro ao tocar som CS2:', e));
     } catch (error) {
       console.log('Erro ao criar áudio CS2:', error);
