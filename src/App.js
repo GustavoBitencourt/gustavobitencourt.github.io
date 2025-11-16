@@ -10,6 +10,7 @@ import Player from './components/Player';
 import CS2 from './components/CS2';
 import TestInventory from './components/TestInventory';
 import SimpleInventoryTest from './components/SimpleInventoryTest';
+import Weather from './components/weather/Weather';
 import { useLanguage } from './hooks/useLanguage';
 import './App.css';
 
@@ -39,6 +40,7 @@ function App() {
           <Route path="/cs2" element={<CS2 />} />
           <Route path="/test-inventory" element={<TestInventory />} />
           <Route path="/simple-test" element={<SimpleInventoryTest />} />
+          <Route path="/weather" element={<Weather />} />
         </Routes>
       </div>
     </Router>
