@@ -68,15 +68,36 @@ const WeatherForecast = ({ data }) => {
     });
   };
 
+  // Filtrar para pegar apenas do dia de hoje em diante
+  const getTodayIndex = () => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    for (let i = 0; i < data.time.length; i++) {
+      const forecastDate = new Date(data.time[i]);
+      forecastDate.setHours(0, 0, 0, 0);
+      
+      if (forecastDate >= today) {
+        return i;
+      }
+    }
+    return 0;
+  };
+
+  const todayIndex = getTodayIndex();
+  const forecastData = data.time.slice(todayIndex, todayIndex + 14);
+
   return (
     <div className="weather-forecast">
-      <h3>📅 Previsão para 16 dias</h3>
+      <h3>📅 Previsão para 14 dias</h3>
       <div className="forecast-grid">
-        {data.time.slice(0, 16).map((date, index) => (
-          <div key={date} className={`forecast-item ${isToday(date) ? 'today' : ''}`}>
-            <div className="forecast-date">
-              {isToday(date) ? 'Hoje' : formatDate(date)}
-            </div>
+        {forecastData.map((date, i) => {
+          const index = todayIndex !== -1 ? todayIndex + i : i;
+          return (
+            <div key={date} className={`forecast-item ${isToday(date) ? 'today' : ''}`}>
+              <div className="forecast-date">
+                {isToday(date) ? 'Hoje' : formatDate(date)}
+              </div>
             <div className="forecast-icon">
               {getWeatherIcon(data.weather_code[index])}
             </div>
@@ -106,7 +127,8 @@ const WeatherForecast = ({ data }) => {
               )}
             </div>
           </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

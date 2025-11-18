@@ -70,16 +70,34 @@ const CurrentWeather = ({ data }) => {
   };
 
   const getTodayMinMax = () => {
-    if (!daily || !daily.time) return { min: null, max: null };
+    if (!daily || !daily.time) return { 
+      min: null, 
+      max: null, 
+      precipitation_probability: null,
+      sunrise: null,
+      sunset: null,
+      uv_index: null
+    };
     
     const today = new Date().toISOString().split('T')[0];
     const todayIndex = daily.time.findIndex(date => date === today);
     
-    if (todayIndex === -1) return { min: null, max: null };
+    if (todayIndex === -1) return { 
+      min: null, 
+      max: null, 
+      precipitation_probability: null,
+      sunrise: null,
+      sunset: null,
+      uv_index: null
+    };
     
     return {
       min: daily.temperature_2m_min?.[todayIndex],
-      max: daily.temperature_2m_max?.[todayIndex]
+      max: daily.temperature_2m_max?.[todayIndex],
+      precipitation_probability: daily.precipitation_probability_max?.[todayIndex],
+      sunrise: daily.sunrise?.[todayIndex],
+      sunset: daily.sunset?.[todayIndex],
+      uv_index: daily.uv_index_max?.[todayIndex]
     };
   };
 
@@ -107,72 +125,133 @@ const CurrentWeather = ({ data }) => {
 
   return (
     <div className="current-weather">
-      <div className="current-header">
-        <h2>📍 {location.name}</h2>
-        <p className="current-time">{formatTime(current.time)}</p>
-        <p className="weather-description">{getWeatherDescription(current.weather_code)}</p>
-      </div>
-
-      <div className="current-main">
-        <div className="weather-icon">
-          {getWeatherIcon(current.weather_code, current.is_day)}
+      {/* Banner Principal - Layout Horizontal */}
+      <div className="weather-banner">
+        <div className="banner-left">
+          <div className="location-info">
+            <h2>📍 {location.name}</h2>
+            <p className="current-time">{formatTime(current.time)}</p>
+          </div>
+          <div className="weather-status">
+            <div className="weather-icon">
+              {getWeatherIcon(current.weather_code, current.is_day)}
+            </div>
+            <div className="weather-description">
+              {getWeatherDescription(current.weather_code)}
+            </div>
+          </div>
         </div>
         
-        <div className="temperature-info">
-          <div className="main-temp">
-            {Math.round(current.temperature_2m)}°C
+        <div className="banner-center">
+          <div className="temp-display">
+            <div className="main-temp">
+              {Math.round(current.temperature_2m)}°C
+            </div>
+            <div className="temp-minmax">
+              <div className="temp-max">🔼 {todayMinMax.max !== null ? `${Math.round(todayMinMax.max)}°` : 'N/A'}</div>
+              <div className="temp-min">🔽 {todayMinMax.min !== null ? `${Math.round(todayMinMax.min)}°` : 'N/A'}</div>
+            </div>
           </div>
           <div className="feels-like">
             Sensação: {Math.round(current.apparent_temperature)}°C
           </div>
         </div>
+        
+        <div className="banner-right">
+          <div className="quick-stats">
+            <div className="stat-item">
+              <span className="stat-icon">💧</span>
+              <span className="stat-value">{current.relative_humidity_2m}%</span>
+              <span className="stat-label">Umidade</span>
+            </div>
+            <div className="stat-item">
+              <span className="stat-icon">🌬️</span>
+              <span className="stat-value">{current.wind_speed_10m} km/h</span>
+              <span className="stat-label">Vento {getWindDirection(current.wind_direction_10m)}</span>
+            </div>
+            <div className="stat-item">
+              <span className="stat-icon">🌧️</span>
+              <span className="stat-value">{todayMinMax.precipitation_probability || 0}%</span>
+              <span className="stat-label">% Chuva</span>
+            </div>
+          </div>
+        </div>
       </div>
 
+      
+
+   {/* Detalhes Expandidos */}
       <div className="current-details">
         <div className="detail-item">
-          <span className="detail-icon">💧</span>
-          <span className="detail-label">Umidade</span>
-          <span className="detail-value">{current.relative_humidity_2m}%</span>
-        </div>
-        
-        <div className="detail-item">
-          <span className="detail-icon">🌬️</span>
-          <span className="detail-label">Vento</span>
-          <span className="detail-value">{current.wind_speed_10m} km/h {getWindDirection(current.wind_direction_10m)}</span>
-        </div>
-        
-        <div className="detail-item">
           <span className="detail-icon">📊</span>
-          <span className="detail-label">Pressão</span>
-          <span className="detail-value">{current.pressure_msl} hPa</span>
+          <span className="detail-label">Pressão Atmosférica</span>
+          <span className="detail-value">
+            Nível do mar: {current.pressure_msl} hPa<br />
+            Superfície: {current.surface_pressure || 'N/A'} hPa
+          </span>
         </div>
         
         <div className="detail-item">
           <span className="detail-icon">☁️</span>
-          <span className="detail-label">Nuvens</span>
-          <span className="detail-value">{current.cloud_cover}%</span>
+          <span className="detail-label">Cobertura de Nuvens</span>
+          <span className="detail-value">
+            Total: {current.cloud_cover}%<br />
+            Estado: {current.is_day ? '🌞 Dia' : '🌙 Noite'}
+          </span>
+        </div>
+
+        <div className="detail-item">
+          <span className="detail-icon">🌅</span>
+          <span className="detail-label">Nascer/Pôr do Sol</span>
+          <span className="detail-value">
+            {todayMinMax.sunrise ? new Date(todayMinMax.sunrise).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : 'N/A'} - {todayMinMax.sunset ? new Date(todayMinMax.sunset).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : 'N/A'}
+          </span>
+        </div>
+
+        <div className="detail-item">
+          <span className="detail-icon">☀️</span>
+          <span className="detail-label">Índice UV</span>
+          <span className="detail-value">
+            Máximo: {todayMinMax.uv_index || 'N/A'}<br />
+            Status: {todayMinMax.uv_index > 7 ? '🔴 Alto' : todayMinMax.uv_index > 5 ? '🟡 Moderado' : '🟢 Baixo'}
+          </span>
+        </div>
+
+        <div className="detail-item">
+          <span className="detail-icon">📈</span>
+          <span className="detail-label">Temp Próximas 24h</span>
+          <span className="detail-value">
+            Max: {Math.max(...hourly.temperature_2m.slice(0, 24))}°<br />
+            Min: {Math.min(...hourly.temperature_2m.slice(0, 24))}°
+          </span>
+        </div>
+
+        <div className="detail-item">
+          <span className="detail-icon">🌧️</span>
+          <span className="detail-label">Probabilidade de Chuva</span>
+          <span className="detail-value">
+            Chuva: {Math.max(...(hourly.precipitation_probability?.slice(0, 24) || [0]))}%<br />
+            Status: {Math.max(...(hourly.precipitation_probability?.slice(0, 24) || [0])) > 70 ? '🔴 Alta' : Math.max(...(hourly.precipitation_probability?.slice(0, 24) || [0])) > 30 ? '🟡 Média' : '🟢 Baixa'}
+          </span>
+        </div>
+
+        <div className="detail-item">
+          <span className="detail-icon">🌬️</span>
+          <span className="detail-label">Vento</span>
+          <span className="detail-value">
+            Velocidade: {current.wind_speed_10m} km/h {getWindDirection(current.wind_direction_10m)}<br />
+            Rajadas: {current.wind_gusts_10m || 'N/A'} km/h
+          </span>
+        </div>
+
+        <div className="detail-item">
+          <span className="detail-icon">💧</span>
+          <span className="detail-label">Umidade e Precipitação</span>
+          <span className="detail-value">{current.relative_humidity_2m}% / {current.precipitation || 0}mm</span>
         </div>
       </div>
 
-      {/* Temperaturas Min/Max do Dia */}
-      <div className="today-minmax">
-        <div className="minmax-item">
-          <span className="minmax-icon">🔽</span>
-          <span className="minmax-label">Mín. hoje</span>
-          <span className="minmax-value">
-            {todayMinMax.min !== null ? `${Math.round(todayMinMax.min)}°C` : 'N/A'}
-          </span>
-        </div>
-        <div className="minmax-item">
-          <span className="minmax-icon">🔼</span>
-          <span className="minmax-label">Máx. hoje</span>
-          <span className="minmax-value">
-            {todayMinMax.max !== null ? `${Math.round(todayMinMax.max)}°C` : 'N/A'}
-          </span>
-        </div>
-      </div>
-
-      {/* Gráfico de Temperatura Horária */}
+      {/* Gráfico de Temperatura Horária - Aparece logo após Min/Max */}
       {hourlyData.length > 0 && (
         <div className="hourly-chart-container">
           <h4>📈 Temperatura de Hoje por Hora</h4>

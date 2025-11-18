@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import LocationSearch from './LocationSearch';
 import CurrentWeather from './CurrentWeather';
 import WeatherForecast from './WeatherForecast';
-import WeatherDetails from './WeatherDetails';
+import WeatherMap from './WeatherMap';
 import './Weather.css';
 
 const Weather = () => {
@@ -124,11 +124,21 @@ const Weather = () => {
       )}
 
       {weatherData && !loading && (
-        <div className="weather-content">
-          <CurrentWeather data={weatherData} />
-          <WeatherDetails data={weatherData} />
-          <WeatherForecast data={forecastData} />
-        </div>
+        <>
+          <div className="weather-content">
+            <div className="weather-left">
+              <CurrentWeather data={weatherData} />
+            </div>
+            <div className="weather-right">
+              <WeatherMap 
+                latitude={weatherData.location.latitude}
+                longitude={weatherData.location.longitude}
+                locationName={weatherData.location.name}
+              />
+              <WeatherForecast data={forecastData} />
+            </div>
+          </div>
+        </>
       )}
     </div>
   );

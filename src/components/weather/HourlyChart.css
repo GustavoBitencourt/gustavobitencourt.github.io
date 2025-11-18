@@ -1,16 +1,19 @@
 .hourly-chart {
   width: 100%;
+  position: relative;
+  min-height: 250px;
   display: flex;
   flex-direction: column;
-  align-items: center;
 }
 
 .chart-canvas {
-  max-width: 100%;
-  height: auto;
-  background: rgba(255, 255, 255, 0.8);
+  width: 100% !important;
+  height: 200px !important;
+  background: transparent;
   border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  display: block;
+  margin: 0;
+  padding: 0;
 }
 
 .chart-legend {
@@ -18,6 +21,8 @@
   gap: 20px;
   margin-top: 12px;
   justify-content: center;
+  position: relative;
+  z-index: 1;
 }
 
 .legend-item {
@@ -46,6 +51,7 @@
   .chart-canvas {
     width: 100%;
     height: 150px;
+    display: block;
   }
   
   .chart-legend {

@@ -1,7 +1,10 @@
+@import url('https://fonts.googleapis.com/css2?family=Open+Sans+Condensed:wght@300;700&display=swap');
+
 .weather-container {
   min-height: 100vh;
   background: linear-gradient(135deg, #74b9ff 0%, #0984e3 100%);
   padding: 20px;
+  font-family: 'Roboto Condensed', sans-serif;
 }
 
 .weather-header {
@@ -17,11 +20,30 @@
 }
 
 .weather-content {
-  max-width: 1200px;
+  max-width: 1800px;
   margin: 0 auto;
   display: grid;
+  grid-template-columns: 1fr 1fr;
   gap: 20px;
-  grid-template-columns: 1fr;
+  align-items: start;
+}
+
+.weather-left {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.weather-right {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+@media (max-width: 1024px) {
+  .weather-content {
+    grid-template-columns: 1fr;
+  }
 }
 
 .weather-loading {
@@ -69,16 +91,4 @@
 
 .retry-button:hover {
   background: #d63031;
-}
-
-@media (min-width: 768px) {
-  .weather-content {
-    grid-template-columns: 1fr 1fr;
-  }
-}
-
-@media (min-width: 1024px) {
-  .weather-content {
-    grid-template-columns: repeat(3, 1fr);
-  }
 }
