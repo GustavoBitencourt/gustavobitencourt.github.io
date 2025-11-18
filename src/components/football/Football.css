@@ -113,11 +113,11 @@
   touch-action: none;
 }
 
-canvas:hover {
+.football-game canvas:hover {
   transform: none;
 }
 
-canvas.charging {
+.football-game canvas.charging {
   cursor: grabbing;
 }
 
