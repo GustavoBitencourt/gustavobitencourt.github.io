@@ -1,0 +1,368 @@
+.pong-container {
+  min-height: 100vh;
+  background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 20px;
+  font-family: "Fira Code", monospace;
+  color: #fff;
+}
+
+.pong-header {
+  text-align: center;
+  margin-bottom: 20px;
+  width: 100%;
+}
+
+.pong-header h1 {
+  font-size: 2.5rem;
+  color: #ffd700;
+  text-shadow: 0 0 20px rgba(255, 215, 0, 0.5);
+  margin: 0 0 20px 0;
+}
+
+.pong-score {
+  display: flex;
+  gap: 40px;
+  justify-content: center;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.player-score {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: rgba(255, 215, 0, 0.1);
+  border: 2px solid #ffd700;
+  padding: 15px 30px;
+  border-radius: 8px;
+  min-width: 150px;
+}
+
+.player-score span {
+  font-size: 0.9rem;
+  color: #ccc;
+  margin-bottom: 5px;
+}
+
+.player-score strong {
+  font-size: 2rem;
+  color: #ffd700;
+}
+
+.player1-score {
+  border-color: #00ffcc;
+  background: rgba(0, 255, 204, 0.1);
+}
+
+.player1-score strong {
+  color: #00ffcc;
+}
+
+.player2-score {
+  border-color: #ff6b9d;
+  background: rgba(255, 107, 157, 0.1);
+}
+
+.player2-score strong {
+  color: #ff6b9d;
+}
+
+.separator {
+  font-size: 1.5rem;
+  color: #ffd700;
+  font-weight: bold;
+}
+
+.pong-game-wrapper {
+  position: relative;
+  margin-bottom: 30px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+}
+
+.pong-canvas {
+  border: 3px solid #ffd700;
+  background: #1a1a1a;
+  display: block;
+  box-shadow: 0 0 30px rgba(255, 215, 0, 0.3);
+  max-width: 100%;
+  width: 800px;
+  height: 400px;
+}
+
+.game-overlay {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 100%;
+  max-width: 800px;
+  height: 400px;
+  background: rgba(0, 0, 0, 0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 3px;
+  z-index: 100;
+}
+
+.start-screen,
+.game-over-screen {
+  text-align: center;
+  animation: fadeIn 0.3s ease-in;
+  padding: 20px;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.start-screen h2,
+.game-over-screen h2 {
+  font-size: 2rem;
+  color: #ffd700;
+  margin: 0 0 15px 0;
+  text-shadow: 0 0 10px rgba(255, 215, 0, 0.5);
+}
+
+.start-screen p,
+.game-over-screen p {
+  font-size: 0.95rem;
+  color: #ccc;
+  margin: 8px 0;
+}
+
+.start-button,
+.restart-button {
+  background: linear-gradient(135deg, #ffd700 0%, #ffed4e 100%);
+  color: #000;
+  border: none;
+  padding: 12px 30px;
+  font-size: 1rem;
+  font-weight: bold;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  margin-top: 15px;
+  font-family: "Fira Code", monospace;
+}
+
+.start-button:hover,
+.restart-button:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 20px rgba(255, 215, 0, 0.4);
+}
+
+.start-button:active,
+.restart-button:active {
+  transform: translateY(-1px);
+}
+
+.pong-instructions {
+  display: flex;
+  gap: 30px;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+  width: 100%;
+}
+
+.instruction-column {
+  background: rgba(255, 215, 0, 0.1);
+  border: 2px solid;
+  padding: 20px;
+  border-radius: 8px;
+  min-width: 250px;
+  max-width: 300px;
+}
+
+.player1-instructions {
+  border-color: #00ffcc;
+}
+
+.player1-instructions h3 {
+  color: #00ffcc;
+}
+
+.player2-instructions {
+  border-color: #ff6b9d;
+}
+
+.player2-instructions h3 {
+  color: #ff6b9d;
+}
+
+.instruction-column h3 {
+  margin-top: 0;
+  margin-bottom: 15px;
+  font-size: 1.1rem;
+}
+
+.instruction-column ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.instruction-column li {
+  color: #ccc;
+  margin-bottom: 10px;
+  padding-left: 20px;
+  position: relative;
+  font-size: 0.9rem;
+}
+
+.instruction-column li:before {
+  content: "▸";
+  position: absolute;
+  left: 0;
+}
+
+.player1-instructions li:before {
+  color: #00ffcc;
+}
+
+.player2-instructions li:before {
+  color: #ff6b9d;
+}
+
+.pong-rules {
+  background: rgba(255, 215, 0, 0.1);
+  border: 2px solid #ffd700;
+  padding: 20px;
+  border-radius: 8px;
+  max-width: 600px;
+  width: 100%;
+}
+
+.pong-rules h3 {
+  color: #ffd700;
+  margin-top: 0;
+  margin-bottom: 15px;
+  font-size: 1.1rem;
+}
+
+.pong-rules ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.pong-rules li {
+  color: #ccc;
+  margin-bottom: 8px;
+  padding-left: 20px;
+  position: relative;
+  font-size: 0.9rem;
+}
+
+.pong-rules li:before {
+  content: "▸";
+  position: absolute;
+  left: 0;
+  color: #ffd700;
+}
+
+@media (max-width: 1024px) {
+  .pong-canvas {
+    width: 600px;
+    height: 300px;
+  }
+
+  .game-overlay {
+    max-width: 600px;
+    height: 300px;
+  }
+}
+
+@media (max-width: 768px) {
+  .pong-container {
+    padding: 15px;
+  }
+
+  .pong-header h1 {
+    font-size: 1.8rem;
+    margin-bottom: 15px;
+  }
+
+  .pong-score {
+    gap: 20px;
+  }
+
+  .player-score {
+    padding: 10px 20px;
+    min-width: 120px;
+  }
+
+  .player-score span {
+    font-size: 0.8rem;
+  }
+
+  .player-score strong {
+    font-size: 1.5rem;
+  }
+
+  .pong-canvas {
+    width: 400px;
+    height: 200px;
+  }
+
+  .game-overlay {
+    max-width: 400px;
+    height: 200px;
+  }
+
+  .start-screen h2,
+  .game-over-screen h2 {
+    font-size: 1.5rem;
+  }
+
+  .start-button,
+  .restart-button {
+    padding: 10px 25px;
+    font-size: 0.9rem;
+  }
+
+  .pong-instructions {
+    gap: 15px;
+  }
+
+  .instruction-column {
+    padding: 15px;
+    min-width: 200px;
+    max-width: 250px;
+  }
+
+  .instruction-column li {
+    font-size: 0.8rem;
+    margin-bottom: 8px;
+  }
+
+  .pong-rules {
+    padding: 15px;
+    font-size: 0.85rem;
+  }
+
+  .pong-rules h3 {
+    margin-bottom: 12px;
+    font-size: 1rem;
+  }
+
+  .pong-rules li {
+    font-size: 0.8rem;
+    margin-bottom: 6px;
+  }
+}
