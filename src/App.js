@@ -13,6 +13,7 @@ import SimpleInventoryTest from './components/SimpleInventoryTest';
 import Weather from './components/weather/Weather';
 import Snake from './components/snake/Snake';
 import Pong from './components/pong/Pong';
+import Football from './components/football/Football';
 import { useLanguage } from './hooks/useLanguage';
 import './App.css';
 
@@ -45,6 +46,7 @@ function App() {
           <Route path="/weather" element={<Weather />} />
           <Route path="/snake" element={<Snake />} />
           <Route path="/pong" element={<Pong />} />
+          <Route path="/football" element={<Football />} />
         </Routes>
       </div>
     </Router>
