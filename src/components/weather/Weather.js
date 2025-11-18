@@ -74,9 +74,29 @@ const Weather = () => {
     if (navigator.geolocation) {
       setLoading(true);
       navigator.geolocation.getCurrentPosition(
-        (position) => {
+        async (position) => {
           const { latitude, longitude } = position.coords;
-          fetchWeatherData(latitude, longitude, 'Localização Atual');
+          
+          // Buscar nome da cidade usando reverse geocoding
+          try {
+            const response = await fetch(
+              `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json&accept-language=pt-BR`
+            );
+            const data = await response.json();
+            
+            // Extrair nome da cidade
+            const cityName = data.address?.city || 
+                           data.address?.town || 
+                           data.address?.village || 
+                           data.address?.municipality || 
+                           data.address?.state || 
+                           'Localização Atual';
+            
+            fetchWeatherData(latitude, longitude, cityName);
+          } catch (error) {
+            console.error('Erro ao buscar nome da cidade:', error);
+            fetchWeatherData(latitude, longitude, 'Localização Atual');
+          }
         },
         (error) => {
           console.error('Erro ao obter localização:', error);
