@@ -53,6 +53,8 @@ export class GameEngine {
     this.lastEnemySpawn = 0;
     this.enemySpawnInterval = 1500;
     this.kills = 0;
+    this.lastWave = 1;
+    this.waveChangeTime = 0; // Para efeito visual
 
     // Input
     this.keys = {};
@@ -228,10 +230,12 @@ export class GameEngine {
       return enemy.x > -ENEMY_WIDTH && enemy.x < GAME_WIDTH + ENEMY_WIDTH;
     });
 
-    // Update waves
-    if (this.kills > 0 && this.kills % 15 === 0 && this.wave < 5) {
-      this.wave += 1;
-      this.enemySpawnInterval = Math.max(800, this.enemySpawnInterval - 200);
+    // Update waves - a cada 10 kills
+    const newWave = Math.min(Math.floor(this.kills / 10) + 1, 5);
+    if (newWave !== this.wave) {
+      this.wave = newWave;
+      this.waveChangeTime = Date.now(); // Marcar tempo da mudança de wave
+      this.enemySpawnInterval = Math.max(800, 1500 - (this.wave - 1) * 200);
     }
 
     // Atualizar partículas
@@ -317,19 +321,51 @@ export class GameEngine {
 
     // Desenhar inimigos
     this.enemies.forEach(enemy => {
+      // Efeito de piscar quando muda de wave (2 segundos)
+      const timeSinceWaveChange = Date.now() - this.waveChangeTime;
+      const showFlashEffect = timeSinceWaveChange < 2000; // 2 segundos de efeito
+      
       if (this.images && this.images.enemy && this.images.enemy.complete && this.images.enemy.naturalHeight > 0) {
-        this.ctx.drawImage(
-          this.images.enemy,
-          enemy.x,
-          enemy.y,
-          enemy.width,
-          enemy.height
-        );
+        // Se está no efeito de mudança de wave, piscar cores
+        if (showFlashEffect) {
+          const flashSpeed = 8; // Velocidade do piscar
+          const colors = ['#ff0000', '#ff6600', '#ffff00', '#00ff00', '#0088ff', '#ff00ff'];
+          const colorIndex = Math.floor((timeSinceWaveChange / 50) % colors.length);
+          
+          this.ctx.globalAlpha = 0.5 + (Math.sin(timeSinceWaveChange / 100) * 0.5);
+          this.ctx.drawImage(
+            this.images.enemy,
+            enemy.x,
+            enemy.y,
+            enemy.width,
+            enemy.height
+          );
+          this.ctx.globalAlpha = 1.0;
+          
+          // Desenhar borda colorida
+          this.ctx.strokeStyle = colors[colorIndex];
+          this.ctx.lineWidth = 3;
+          this.ctx.strokeRect(enemy.x, enemy.y, enemy.width, enemy.height);
+        } else {
+          this.ctx.drawImage(
+            this.images.enemy,
+            enemy.x,
+            enemy.y,
+            enemy.width,
+            enemy.height
+          );
+        }
       } else {
-        // Fallback: desenhar retângulo vermelho
-        this.ctx.fillStyle = '#ff0000';
+        // Fallback: desenhar retângulo
+        if (showFlashEffect) {
+          const colors = ['#ff0000', '#ff6600', '#ffff00', '#00ff00', '#0088ff', '#ff00ff'];
+          const colorIndex = Math.floor((timeSinceWaveChange / 50) % colors.length);
+          this.ctx.fillStyle = colors[colorIndex];
+        } else {
+          this.ctx.fillStyle = '#ff0000';
+        }
         this.ctx.fillRect(enemy.x, enemy.y, enemy.width, enemy.height);
-        this.ctx.strokeStyle = '#ff0000';
+        this.ctx.strokeStyle = this.ctx.fillStyle;
         this.ctx.lineWidth = 2;
         this.ctx.strokeRect(enemy.x, enemy.y, enemy.width, enemy.height);
       }
