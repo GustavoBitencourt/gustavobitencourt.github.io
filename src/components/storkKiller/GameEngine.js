@@ -55,6 +55,7 @@ export class GameEngine {
     this.kills = 0;
     this.lastWave = 1;
     this.waveChangeTime = 0; // Para efeito visual
+    this.enemiesCreatedInWave = 0; // Contador de inimigos criados após mudança de wave
 
     // Input
     this.keys = {};
@@ -112,7 +113,7 @@ export class GameEngine {
     const { x: dirX, y: dirY } = normalizeVector(dx, dy);
 
     // Usar velocidade baseada na wave atual
-    const waveIndex = Math.min(this.wave - 1, 4); // Máximo 5 waves
+    const waveIndex = Math.min(this.wave - 1, WAVES.length - 1);
     const currentWave = WAVES[waveIndex];
     const enemySpeed = currentWave ? currentWave.enemySpeed : ENEMY_SPEED * Math.pow(2, this.wave - 1);
 
@@ -124,8 +125,11 @@ export class GameEngine {
       vx: dirX * enemySpeed,
       vy: dirY * enemySpeed,
       health: 1,
+      isFlashing: this.enemiesCreatedInWave < 5, // Apenas os primeiros 5 inimigos piscam
+      createdAtWaveChange: this.waveChangeTime,
     };
 
+    this.enemiesCreatedInWave += 1;
     this.enemies.push(enemy);
   }
 
@@ -231,11 +235,16 @@ export class GameEngine {
     });
 
     // Update waves - a cada 10 kills
-    const newWave = Math.min(Math.floor(this.kills / 10) + 1, 5);
+    const newWave = Math.floor(this.kills / 10) + 1; // Sem limite, até 20 ou mais
     if (newWave !== this.wave) {
       this.wave = newWave;
       this.waveChangeTime = Date.now(); // Marcar tempo da mudança de wave
-      this.enemySpawnInterval = Math.max(800, 1500 - (this.wave - 1) * 200);
+      this.enemiesCreatedInWave = 0; // Resetar contador de inimigos
+      
+      // Atualizar spawn interval baseado na wave
+      const waveIndex = Math.min(this.wave - 1, WAVES.length - 1);
+      const currentWave = WAVES[waveIndex];
+      this.enemySpawnInterval = currentWave ? currentWave.spawnInterval : Math.max(50, 1500 - (this.wave - 1) * 200);
     }
 
     // Atualizar partículas
@@ -321,14 +330,13 @@ export class GameEngine {
 
     // Desenhar inimigos
     this.enemies.forEach(enemy => {
-      // Efeito de piscar quando muda de wave (2 segundos)
-      const timeSinceWaveChange = Date.now() - this.waveChangeTime;
-      const showFlashEffect = timeSinceWaveChange < 2000; // 2 segundos de efeito
+      // Efeito de piscar apenas para os primeiros 5 inimigos após mudança de wave
+      const timeSinceWaveChange = Date.now() - enemy.createdAtWaveChange;
+      const showFlashEffect = enemy.isFlashing && timeSinceWaveChange < 2000; // 2 segundos de efeito
       
       if (this.images && this.images.enemy && this.images.enemy.complete && this.images.enemy.naturalHeight > 0) {
         // Se está no efeito de mudança de wave, piscar cores
         if (showFlashEffect) {
-          const flashSpeed = 8; // Velocidade do piscar
           const colors = ['#ff0000', '#ff6600', '#ffff00', '#00ff00', '#0088ff', '#ff00ff'];
           const colorIndex = Math.floor((timeSinceWaveChange / 50) % colors.length);
           
