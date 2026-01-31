@@ -5,7 +5,7 @@ export const GAME_HEIGHT = 600;
 // Velocidades
 export const STORK_SPEED = 5;
 export const ENEMY_SPEED = 5;
-export const BULLET_SPEED = 8;
+export const BULLET_SPEED = 16;
 
 // Tamanhos
 export const STORK_WIDTH = 80;

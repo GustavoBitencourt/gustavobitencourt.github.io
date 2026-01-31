@@ -187,6 +187,9 @@ const StorkKiller = () => {
     const engine = new GameEngine(canvas, imagesRef.current);
     gameEngineRef.current = engine;
 
+    // Tocar som de welcome quando o jogo inicia
+    engine.startGame();
+
     // Event listeners para desktop
     const handleKeyDown = (e) => engine.handleKeyDown(e.key);
     const handleKeyUp = (e) => engine.handleKeyUp(e.key);
@@ -268,11 +271,6 @@ const StorkKiller = () => {
     setHealth(3);
     setJoystickAngle(null);
     lastUpdateRef.current = Date.now();
-    
-    // Tocar som de welcome
-    if (gameEngineRef.current) {
-      gameEngineRef.current.startGame();
-    }
   };
 
   const restartGame = () => {

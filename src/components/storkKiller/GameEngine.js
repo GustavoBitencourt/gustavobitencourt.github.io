@@ -33,7 +33,7 @@ export class GameEngine {
     };
     
     // Configurar volume e preload
-    this.sounds.welcome.volume = 0.3;
+    this.sounds.welcome.volume = 1.0; // Volume máximo
     this.sounds.shoot.volume = 0.3;
     this.sounds.hit.volume = 0.3;
     this.sounds.welcome.preload = 'auto';
@@ -161,6 +161,9 @@ export class GameEngine {
     const currentWave = WAVES[waveIndex];
     const enemySpeed = currentWave ? currentWave.enemySpeed : ENEMY_SPEED * Math.pow(2, this.wave - 1);
 
+    // Verificar se este inimigo deve piscar (primeiros 5 após mudança de wave)
+    const isFlashing = this.enemiesCreatedInWave < 5;
+
     const enemy = {
       x: pos.x,
       y: pos.y,
@@ -169,7 +172,7 @@ export class GameEngine {
       vx: dirX * enemySpeed,
       vy: dirY * enemySpeed,
       health: 1,
-      isFlashing: this.enemiesCreatedInWave < 5, // Apenas os primeiros 5 inimigos piscam
+      isFlashing: isFlashing,
       createdAtWaveChange: this.waveChangeTime,
     };
 
