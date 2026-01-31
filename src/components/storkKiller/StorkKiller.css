@@ -1,0 +1,468 @@
+.stork-killer-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+  color: #ffffff;
+  padding: 20px;
+  font-family: 'Arial', sans-serif;
+}
+
+.stork-killer-container.mobile-fullscreen {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100vw;
+  height: 100vh;
+  padding: 0;
+  min-height: unset;
+  z-index: 1000;
+}
+
+.stork-killer-header {
+  text-align: center;
+  margin-bottom: 20px;
+}
+
+.stork-killer-header h1 {
+  font-size: 3rem;
+  margin: 0 0 10px 0;
+  text-shadow: 0 0 20px rgba(255, 255, 0, 0.5);
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+.stork-killer-header p {
+  font-size: 1.2rem;
+  color: #aaa;
+  margin: 0;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    text-shadow: 0 0 20px rgba(255, 255, 0, 0.5);
+  }
+  50% {
+    text-shadow: 0 0 40px rgba(255, 255, 0, 0.8);
+  }
+}
+
+.game-info {
+  display: flex;
+  gap: 40px;
+  margin-bottom: 20px;
+  background: rgba(0, 0, 0, 0.5);
+  padding: 15px 30px;
+  border-radius: 10px;
+  border: 2px solid #00ff00;
+}
+
+.info-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+}
+
+.info-item .label {
+  font-size: 0.9rem;
+  color: #aaa;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+}
+
+.info-item .value {
+  font-size: 1.8rem;
+  font-weight: bold;
+  color: #00ff00;
+  text-shadow: 0 0 10px rgba(0, 255, 0, 0.5);
+}
+
+.info-item .value.health-color {
+  color: #ff4444;
+  text-shadow: 0 0 10px rgba(255, 68, 68, 0.5);
+}
+
+.game-canvas-wrapper {
+  position: relative;
+  margin-bottom: 20px;
+  border: 3px solid #00ff00;
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 0 30px rgba(0, 255, 0, 0.3);
+  background: #0a0a0a;
+  width: 100%;
+  max-width: 1200px;
+  aspect-ratio: 2 / 1;
+}
+
+.game-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  cursor: crosshair;
+  background: #1a1a2e;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+
+.controls-info {
+  display: flex;
+  gap: 40px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+  justify-content: center;
+  width: 100%;
+}
+
+.controls-section {
+  background: rgba(0, 255, 0, 0.1);
+  padding: 20px;
+  border-radius: 10px;
+  border: 2px solid #00ff00;
+  min-width: 250px;
+}
+
+.controls-section h3 {
+  margin-top: 0;
+  color: #00ff00;
+  text-shadow: 0 0 10px rgba(0, 255, 0, 0.5);
+}
+
+.controls-section ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.controls-section li {
+  padding: 8px 0;
+  border-bottom: 1px solid rgba(0, 255, 0, 0.2);
+  font-size: 0.95rem;
+}
+
+.controls-section li:last-child {
+  border-bottom: none;
+}
+
+.controls-section strong {
+  color: #ffff00;
+}
+
+.game-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  align-items: center;
+}
+
+.btn {
+  padding: 15px 40px;
+  font-size: 1.1rem;
+  font-weight: bold;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  box-shadow: 0 0 20px rgba(0, 255, 0, 0.3);
+}
+
+.btn-start {
+  background: linear-gradient(135deg, #00ff00, #00cc00);
+  color: #000;
+}
+
+.btn-start:hover {
+  transform: scale(1.05);
+  box-shadow: 0 0 30px rgba(0, 255, 0, 0.6);
+}
+
+.btn-start:active {
+  transform: scale(0.95);
+}
+
+.btn-restart {
+  background: linear-gradient(135deg, #ff9900, #ff6600);
+  color: #fff;
+}
+
+.btn-restart:hover {
+  transform: scale(1.05);
+  box-shadow: 0 0 30px rgba(255, 153, 0, 0.6);
+}
+
+.btn-restart:active {
+  transform: scale(0.95);
+}
+
+.game-over-info {
+  background: rgba(255, 0, 0, 0.2);
+  padding: 15px;
+  border-radius: 10px;
+  border: 2px solid #ff0000;
+  text-align: center;
+}
+
+.game-over-info p {
+  margin: 5px 0;
+  font-size: 1.1rem;
+  color: #ff4444;
+}
+
+.game-rules {
+  background: rgba(0, 0, 0, 0.5);
+  padding: 20px 30px;
+  border-radius: 10px;
+  border: 2px solid #ff9900;
+  max-width: 600px;
+  width: 100%;
+}
+
+.game-rules h3 {
+  color: #ff9900;
+  margin-top: 0;
+  text-shadow: 0 0 10px rgba(255, 153, 0, 0.5);
+}
+
+.game-rules ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.game-rules li {
+  padding: 10px 0;
+  border-bottom: 1px solid rgba(255, 153, 0, 0.2);
+  font-size: 0.95rem;
+}
+
+.game-rules li:last-child {
+  border-bottom: none;
+}
+
+/* ===== MOBILE STYLES ===== */
+
+.mobile-hud {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  right: 10px;
+  display: flex;
+  justify-content: space-between;
+  gap: 15px;
+  background: rgba(0, 0, 0, 0.7);
+  padding: 10px;
+  border-radius: 8px;
+  font-size: 1.2rem;
+  font-weight: bold;
+  color: #00ff00;
+  text-shadow: 0 0 10px rgba(0, 255, 0, 0.5);
+  z-index: 10;
+}
+
+.mobile-score,
+.mobile-wave,
+.mobile-health {
+  flex: 1;
+  text-align: center;
+}
+
+/* Joystick */
+.joystick-base {
+  position: absolute;
+  bottom: 30px;
+  left: 30px;
+  width: 120px;
+  height: 120px;
+  background: rgba(0, 0, 0, 0.5);
+  border: 2px solid #00ff00;
+  border-radius: 50%;
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+  z-index: 20;
+}
+
+.joystick-base:active {
+  cursor: grabbing;
+}
+
+.joystick-background {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.joystick-stick {
+  width: 50px;
+  height: 50px;
+  background: linear-gradient(135deg, #00ff00, #00cc00);
+  border: 2px solid #00ff00;
+  border-radius: 50%;
+  box-shadow: 0 0 15px rgba(0, 255, 0, 0.6);
+  transition: all 0.05s ease;
+}
+
+/* Botão de atirar flutuante */
+.mobile-shoot-btn {
+  position: absolute;
+  bottom: 30px;
+  right: 30px;
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #ff0000, #cc0000);
+  border: 3px solid #ff0000;
+  color: #fff;
+  font-size: 3rem;
+  font-weight: bold;
+  cursor: pointer;
+  box-shadow: 0 0 20px rgba(255, 0, 0, 0.5);
+  transition: all 0.1s ease;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  touch-action: none;
+}
+
+.mobile-shoot-btn:active {
+  transform: scale(0.95);
+  box-shadow: 0 0 30px rgba(255, 0, 0, 0.8);
+}
+
+.mobile-controls {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  gap: 10px;
+  padding: 10px;
+  background: rgba(0, 0, 0, 0.8);
+  z-index: 999;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.mobile-btn {
+  flex: 1;
+  padding: 15px;
+  font-size: 1rem;
+  font-weight: bold;
+  border: 2px solid #00ff00;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #00ff00, #00cc00);
+  color: #000;
+  cursor: pointer;
+  transition: all 0.1s ease;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  box-shadow: 0 0 10px rgba(0, 255, 0, 0.3);
+  active: {
+    transform: scale(0.95);
+  }
+}
+
+.mobile-btn:active {
+  transform: scale(0.95);
+  box-shadow: 0 0 20px rgba(0, 255, 0, 0.6);
+}
+
+.mobile-move-left,
+.mobile-move-right {
+  background: linear-gradient(135deg, #ff9900, #ff6600);
+  border-color: #ff9900;
+  color: #fff;
+}
+
+.mobile-move-left:active,
+.mobile-move-right:active {
+  box-shadow: 0 0 20px rgba(255, 153, 0, 0.6);
+}
+
+.mobile-shoot {
+  background: linear-gradient(135deg, #ff0000, #cc0000);
+  border-color: #ff0000;
+  color: #fff;
+}
+
+.mobile-shoot:active {
+  box-shadow: 0 0 20px rgba(255, 0, 0, 0.6);
+}
+
+.game-canvas-wrapper.mobile-game {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100vw;
+  height: 100vh;
+  margin: 0;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  max-width: 100%;
+  aspect-ratio: auto;
+  z-index: 998;
+}
+
+.game-canvas-wrapper.mobile-game .game-canvas {
+  width: 100%;
+  height: 100%;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .stork-killer-container {
+    padding: 0;
+  }
+
+  .stork-killer-header {
+    display: none;
+  }
+
+  .game-info {
+    display: none;
+  }
+
+  .controls-info {
+    display: none;
+  }
+
+  .game-rules {
+    display: none;
+  }
+
+  .game-canvas-wrapper {
+    width: 100%;
+    max-width: 100%;
+    margin: 0;
+    border-radius: 0;
+  }
+
+  .game-canvas {
+    max-width: 100%;
+  }
+
+  .mobile-hud {
+    font-size: 1rem;
+    top: 5px;
+    left: 5px;
+    right: 5px;
+  }
+
+  .mobile-btn {
+    font-size: 0.85rem;
+    padding: 12px;
+  }
+}
