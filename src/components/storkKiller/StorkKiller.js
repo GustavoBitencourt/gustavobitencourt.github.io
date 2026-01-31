@@ -50,9 +50,12 @@ const StorkKiller = () => {
       }
     };
 
+    // Usar process.env.PUBLIC_URL para caminho correto
+    const basePath = process.env.PUBLIC_URL || '';
+
     // Carregar cegonha
     const storkImg = new Image();
-    storkImg.src = '/images/storkWithAk.png';
+    storkImg.src = `${basePath}/images/StorkWithAk.png`;
     storkImg.onload = () => {
       console.log('Stork image loaded successfully');
       onImageLoad();
@@ -62,7 +65,7 @@ const StorkKiller = () => {
 
     // Carregar inimigo
     const enemyImg = new Image();
-    enemyImg.src = '/images/enemy.png';
+    enemyImg.src = `${basePath}/images/enemy.png`;
     enemyImg.onload = () => {
       console.log('Enemy image loaded successfully');
       onImageLoad();
@@ -72,7 +75,7 @@ const StorkKiller = () => {
 
     // Carregar munição
     const bulletImg = new Image();
-    bulletImg.src = '/images/ammunition.png';
+    bulletImg.src = `${basePath}/images/ammunition.png`;
     bulletImg.onload = () => {
       console.log('Bullet image loaded successfully');
       onImageLoad();
