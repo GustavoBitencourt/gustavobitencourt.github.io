@@ -23,6 +23,23 @@ export class GameEngine {
     this.canvas = canvas;
     this.ctx = canvas.getContext('2d');
     this.images = images;
+    
+    // Inicializar áudios
+    const basePath = process.env.PUBLIC_URL || '';
+    this.sounds = {
+      welcome: new Audio(`${basePath}/sounds/welcome.wav`),
+      shoot: new Audio(`${basePath}/sounds/tiro.mp3`),
+      hit: new Audio(`${basePath}/sounds/acert.mp3`),
+    };
+    
+    // Configurar volume e preload
+    this.sounds.welcome.volume = 0.3;
+    this.sounds.shoot.volume = 0.3;
+    this.sounds.hit.volume = 0.3;
+    this.sounds.welcome.preload = 'auto';
+    this.sounds.shoot.preload = 'auto';
+    this.sounds.hit.preload = 'auto';
+    
     this.reset();
   }
 
@@ -85,6 +102,11 @@ export class GameEngine {
     this.mousePressed = false;
   }
 
+  startGame() {
+    // Tocar som de boas-vindas
+    this.playSound('welcome');
+  }
+
   shoot() {
     // Calcular direção do mouse
     const dx = this.mouseX - (this.player.x + this.player.width / 2);
@@ -101,6 +123,28 @@ export class GameEngine {
     };
 
     this.bullets.push(bullet);
+    
+    // Tocar som de tiro
+    this.playSound('shoot');
+  }
+
+  playSound(soundName) {
+    try {
+      if (this.sounds && this.sounds[soundName]) {
+        // Resetar o áudio para permitir toques rápidos
+        this.sounds[soundName].currentTime = 0;
+        const playPromise = this.sounds[soundName].play();
+        
+        // Lidar com possível erro de autoplay
+        if (playPromise !== undefined) {
+          playPromise.catch(error => {
+            console.log('Autoplay prevented:', error);
+          });
+        }
+      }
+    } catch (e) {
+      console.error('Error playing sound:', e);
+    }
   }
 
   spawnEnemy() {
@@ -208,6 +252,10 @@ export class GameEngine {
           this.createParticles(enemy.x + enemy.width / 2, enemy.y + enemy.height / 2);
           this.score += 10;
           this.kills += 1;
+          
+          // Tocar som de acerto
+          this.playSound('hit');
+          
           return false; // Remove enemy
         }
         return true;

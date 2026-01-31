@@ -268,6 +268,11 @@ const StorkKiller = () => {
     setHealth(3);
     setJoystickAngle(null);
     lastUpdateRef.current = Date.now();
+    
+    // Tocar som de welcome
+    if (gameEngineRef.current) {
+      gameEngineRef.current.startGame();
+    }
   };
 
   const restartGame = () => {
