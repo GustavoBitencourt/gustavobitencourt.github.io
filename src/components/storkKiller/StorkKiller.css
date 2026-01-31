@@ -367,9 +367,6 @@
   text-transform: uppercase;
   letter-spacing: 1px;
   box-shadow: 0 0 10px rgba(0, 255, 0, 0.3);
-  active: {
-    transform: scale(0.95);
-  }
 }
 
 .mobile-btn:active {
