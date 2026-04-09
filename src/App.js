@@ -15,6 +15,7 @@ import Snake from './components/snake/Snake';
 import Pong from './components/pong/Pong';
 import Football from './components/football/Football';
 import StorkKiller from './components/storkKiller/StorkKiller';
+import QuizCS from './components/quizcs/QuizCS';
 import { useLanguage } from './hooks/useLanguage';
 import './App.css';
 
@@ -49,6 +50,7 @@ function App() {
           <Route path="/pong" element={<Pong />} />
           <Route path="/football" element={<Football />} />
           <Route path="/storkKiller" element={<StorkKiller />} />
+          <Route path="/quizcs" element={<QuizCS />} />
         </Routes>
       </div>
     </Router>
