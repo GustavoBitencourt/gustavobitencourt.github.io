@@ -6,11 +6,11 @@ const SkillsSection = ({ t }) => {
 
   const isColliding = (rect1, rect2) => {
     const margin = 25;
-    
+
     return !(rect1.x > rect2.x + rect2.width + margin ||
-            rect1.x + rect1.width + margin < rect2.x ||
-            rect1.y > rect2.y + rect2.height + margin ||
-            rect1.y + rect1.height + margin < rect2.y);
+      rect1.x + rect1.width + margin < rect2.x ||
+      rect1.y > rect2.y + rect2.height + margin ||
+      rect1.y + rect1.height + margin < rect2.y);
   };
 
   const generateWords = useCallback(() => {
@@ -30,7 +30,7 @@ const SkillsSection = ({ t }) => {
       "Einstein",         // índice 11
       "Insomnia",         // índice 12 - SOBREPOSIÇÃO COM MYSQL
       "Jira",             // índice 13
-      "Trello",           // índice 14
+      "Copilot",           // índice 14
       "Git",              // índice 15
       "Bitbucket",        // índice 16
       "Docker",           // índice 17
@@ -39,7 +39,7 @@ const SkillsSection = ({ t }) => {
       "HTML5",            // índice 20
       "CSS3",             // índice 21
       "Bootstrap",        // índice 22 - SOBREPOSIÇÃO COM EINSTEIN
-      "Flexbox",          // índice 23 - SOBREPOSIÇÃO COM CONTENT ASSETS
+      "Claude AI",          // índice 23 - SOBREPOSIÇÃO COM CONTENT ASSETS
       "Grid Layout",      // índice 24 - SOBREPOSIÇÃO (Grid e Layout)
       "Responsive",       // índice 25
       "Sass",             // índice 26
@@ -47,9 +47,9 @@ const SkillsSection = ({ t }) => {
       "Vue.js",           // índice 28
       "Next.js",          // índice 29
       "PostgreSQL",       // índice 30
-      "MySQL"             // índice 31 - SOBREPOSIÇÃO COM INSOMNIA
+      "MySQL"            // índice 31 - SOBREPOSIÇÃO COM INSOMNIA
     ];
-    
+
     const container = containerRef.current;
     if (!container || isGenerating.current) return;
 
@@ -57,47 +57,47 @@ const SkillsSection = ({ t }) => {
 
     // Limpar container primeiro
     container.innerHTML = '';
-    
+
     // Aguardar um momento para container ter dimensões corretas
     setTimeout(() => {
       const containerRect = container.getBoundingClientRect();
       if (containerRect.width === 0 || containerRect.height === 0) return;
-      
+
       const centerX = containerRect.width / 2;
       const centerY = containerRect.height / 2;
       const maxRadius = Math.min(centerX, centerY) * 0.75;
-      
+
       // Detectar se é mobile para ajustar algoritmo
       const isMobileDevice = window.innerWidth <= 768;
-      
+
       // Criar elementos com tamanhos variados para melhor distribuição circular
       const wordElements = words.map((word, index) => {
         const span = document.createElement("span");
         span.className = "word";
         span.textContent = word;
-        
+
         // Tamanhos diferentes para desktop e mobile
         let fontSize;
         if (isMobileDevice) {
-          const mobileFontSizes = [0.62, 0.58, 0.65, 0.56, 0.61, 0.57, 0.64, 0.59, 0.56, 0.62, 
-                                  0.57, 0.63, 0.58, 0.55, 0.61, 0.57, 0.63, 0.59, 0.61, 0.56,
-                                  0.60, 0.58, 0.62, 0.57, 0.59, 0.61, 0.56, 0.63, 0.58, 0.60,
-                                  0.59, 0.57];
+          const mobileFontSizes = [0.62, 0.58, 0.65, 0.56, 0.61, 0.57, 0.64, 0.59, 0.56, 0.62,
+            0.57, 0.63, 0.58, 0.55, 0.61, 0.57, 0.63, 0.59, 0.61, 0.56,
+            0.60, 0.58, 0.62, 0.57, 0.59, 0.61, 0.56, 0.63, 0.58, 0.60,
+            0.59, 0.57];
           fontSize = mobileFontSizes[index] || 0.58;
         } else {
-          const desktopFontSizes = [1.4, 1.2, 1.1, 1.0, 0.9, 0.8, 1.3, 1.1, 0.95, 1.05, 
-                                   0.85, 1.15, 0.9, 0.8, 1.0, 0.85, 1.1, 0.9, 1.0, 0.95,
-                                   1.05, 0.88, 1.12, 0.92, 0.98, 1.08, 0.83, 1.18, 0.94, 1.02,
-                                   0.96, 0.91];
+          const desktopFontSizes = [1.4, 1.2, 1.1, 1.0, 0.9, 0.8, 1.3, 1.1, 0.95, 1.05,
+            0.85, 1.15, 0.9, 0.8, 1.0, 0.85, 1.1, 0.9, 1.0, 0.95,
+            1.05, 0.88, 1.12, 0.92, 0.98, 1.08, 0.83, 1.18, 0.94, 1.02,
+            0.96, 0.91];
           fontSize = desktopFontSizes[index] || 0.9;
         }
-        
+
         span.style.fontSize = `${fontSize}rem`;
         span.style.position = "absolute";
         span.style.visibility = "hidden";
-        
+
         container.appendChild(span);
-        
+
         return {
           element: span,
           word: word,
@@ -106,18 +106,18 @@ const SkillsSection = ({ t }) => {
           fontSize: fontSize
         };
       });
-      
+
       const placedElements = [];
-      
+
       // Algoritmo de colocação diferente para mobile e desktop
 
-      
+
       // FORÇA USAR POSIÇÕES FIXAS TANTO NO MOBILE QUANTO NO DESKTOP
       if (true) { // Mudança temporária: sempre usar posições fixas
         // Algoritmo com posições fixas
         const availableWidth = containerRect.width - 30;
         const availableHeight = containerRect.height - 30;
-        
+
         const predefinedPositions = [
           { x: 0.45, y: 0.50 }, // 0 - Commerce Cloud (mais central)
           { x: 0.55, y: 0.12 }, // 1 - Salesforce (aproximado)
@@ -152,10 +152,10 @@ const SkillsSection = ({ t }) => {
           { x: 0.78, y: 0.78 }, // 30 - PostgreSQL (baixo esquerda)
           { x: 0.75, y: 0.25 }  // 31 - MySQL (direita, separado do Insomnia)
         ];
-        
+
         wordElements.forEach((wordObj, index) => {
           let position = predefinedPositions[index] || predefinedPositions[index % predefinedPositions.length];
-          
+
           // Ajuste específico para mobile: desloca para esquerda para melhor centralização
           if (isMobileDevice) {
             position = {
@@ -163,16 +163,16 @@ const SkillsSection = ({ t }) => {
               y: position.y
             };
           }
-          
+
           let x = 15 + (position.x * availableWidth);
           let y = 15 + (position.y * availableHeight);
-          
+
           x = Math.max(15, Math.min(x, containerRect.width - wordObj.width - 15));
           y = Math.max(15, Math.min(y, containerRect.height - wordObj.height - 15));
-          
+
           // Log para debug - posições aplicadas
 
-          
+
           wordObj.element.style.left = `${x}px`;
           wordObj.element.style.top = `${y}px`;
           wordObj.element.style.visibility = "visible";
@@ -183,27 +183,27 @@ const SkillsSection = ({ t }) => {
           let placed = false;
           let attempts = 0;
           const maxAttempts = 150;
-          
+
           // Primeiro tentar colocar em espiral
           while (!placed && attempts < maxAttempts) {
             const spiralTurns = attempts / 15;
             const angle = spiralTurns * 2 * Math.PI;
             const radius = Math.min(20 + (attempts * 3), maxRadius);
-            
+
             const x = centerX + radius * Math.cos(angle) - wordObj.width / 2;
             const y = centerY + radius * Math.sin(angle) - wordObj.height / 2;
-            
-            if (x >= 10 && y >= 10 && 
-                x + wordObj.width <= containerRect.width - 10 && 
-                y + wordObj.height <= containerRect.height - 10) {
-              
+
+            if (x >= 10 && y >= 10 &&
+              x + wordObj.width <= containerRect.width - 10 &&
+              y + wordObj.height <= containerRect.height - 10) {
+
               const newPosition = {
                 x: x,
                 y: y,
                 width: wordObj.width,
                 height: wordObj.height
               };
-              
+
               let hasCollision = false;
               for (let placedPos of placedElements) {
                 if (isColliding(newPosition, placedPos)) {
@@ -211,7 +211,7 @@ const SkillsSection = ({ t }) => {
                   break;
                 }
               }
-              
+
               if (!hasCollision) {
                 placedElements.push(newPosition);
                 wordObj.element.style.left = `${x}px`;
@@ -220,27 +220,27 @@ const SkillsSection = ({ t }) => {
                 placed = true;
               }
             }
-            
+
             attempts++;
           }
-          
+
           // Se não conseguiu na espiral, usar círculos concêntricos
           if (!placed) {
             const circleIndex = Math.floor(index / 12);
             const positionInCircle = index % 12;
             const angle = (positionInCircle * 2 * Math.PI) / 12;
             const radius = Math.min(60 + (circleIndex * 80), maxRadius * 0.9);
-            
+
             const fallbackX = centerX + radius * Math.cos(angle) - wordObj.width / 2;
             const fallbackY = centerY + radius * Math.sin(angle) - wordObj.height / 2;
-            
+
             const finalX = Math.max(10, Math.min(fallbackX, containerRect.width - wordObj.width - 10));
             const finalY = Math.max(10, Math.min(fallbackY, containerRect.height - wordObj.height - 10));
-            
+
             wordObj.element.style.left = `${finalX}px`;
             wordObj.element.style.top = `${finalY}px`;
             wordObj.element.style.visibility = "visible";
-            
+
             placedElements.push({
               x: finalX,
               y: finalY,
@@ -250,7 +250,7 @@ const SkillsSection = ({ t }) => {
           }
         });
       }
-      
+
       isGenerating.current = false;
     }, 50);
   }, []); // useCallback sem dependências pois tudo está interno
