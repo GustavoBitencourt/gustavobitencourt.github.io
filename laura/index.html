@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>❤️ Para a Laura ❤️</title>
+
+    <script src="assets/jquery-3.6.0.min.js"></script>
+
+    <link rel="shortcut icon" href="imagens/heart.png">
+
+    <link rel="stylesheet" href="assets/css/bootstrap.min.css">
+
+    <link rel="stylesheet" href="assets/estilo.css">
+
+
+    <link rel="preload" as="image" href="imagens/fundo2.gif">
+    <link rel="preload" as="image" href="imagens/fundo3.gif">
+    <link rel="preload" as="image" href="imagens/fundo4.jpg">
+    <link rel="preload" as="image" href="imagens/fundo7.gif">
+    <link rel="preload" as="image" href="imagens/fundo9.gif">
+    <link rel="preload" as="audio" href="assets/musica.mp3">
+
+</head>
+<body class="fundo1">
+
+    <div class="pop-up">
+        <h1 class="text-muted">Título teste</h1>
+        <div>Descriçao teste</div>
+        <section class="text-center">
+            <button class="btn-azul" onclick="mostraPopUp(false)">Fechar</button>
+        </section>
+    </div>
+    
+    <div class="container d-flex justify-content-center">
+
+        <div id="tela1" class="tela tela-centro visivel">
+            <h1 class="text-muted">Bem-vinda</h1>
+            <p>Você está pronta?</p>
+            <button class="mudaTela btn-azul">Começar</button>
+
+        </div>
+
+        <div id="tela2" class="tela" fundo="fundo1">
+            <p class="text-muted"><small>Antes de começar, confirme:</small>
+                <br>
+            <strong>Você é esta pessoa?</strong></p>
+            <img src="imagens/tela2.png" class="custom" width="150" alt="">
+            <br>
+
+            <button class="mudaTela btn-azul btn-block mt-5" animacao="null" tempoAnimacao="500">Sim</button>
+            <br>
+            <button class="btn-vermelho btn-block" onclick="alert('Então você não deveria estar acessando este site. Vaza, mano!');window.location.href='https://www.dicio.com.br/trouxa/'; " >Não</button>
+
+        </div>
+
+        <div id="tela3" class="tela">
+            <p><strong>Tem certeza?</strong><br> Olhe bem:</p>
+            <img src="imagens/tela3.png" class="custom" width="150" alt="">
+
+            <br>
+            <button class="mudaTela btn-block btn-azul">Sim</button>
+            <br>
+            <button class="btn-block btn-vermelho" onclick="alert('Tudo bem, eu entendo sua vergonha.');window.location.href='https://www.dicio.com.br/otario/'; " >Não</button>
+        </div>
+
+        <div id="tela4" class="tela">
+            <h2>Espere...</h2>
+
+            <img src="imagens/tela4.jpg" class="custom mb-4" width="150" alt="">
+
+            <p>É a <strong>Laura</strong> que está acessando essa página agora?
+                <br><small class="text-muted" style="font-weight: 700;">É mesmo a LauraGatinha?</small>
+            </p>
+
+            <button class="mudaTela btn-azul">Sim, sou eu</button>
+            <button class="mudaTela btn-vermelho btn-block" onclick="alert('Você deveria ter vergonha de estar aqui!\n\nBom, eu sei que mesmo eu te levando para outra página, você voltará aqui depois porque sua curiosidade o obriga a isso, então pode seguir para a próxima página.');" >Não, sou um intruso(a)</button>
+        </div>
+
+        <div id="tela5" class="tela">
+            <p>Você precisa estar ouvindo a música de fundo.</p>
+            <hr>
+            <p><small>Quando estiver ouvindo, clique no botão.</small></p>
+            <button class="mudaTela btn-azul">Continuar</button>
+        </div>
+
+        <div id="tela6" class="invisivel letra2 temporizado tela-centro" fundo="fundo2" style="color: #FFF;" tempo="3000" >
+            <div tempo="3000">
+                <p>Bom, então vamos lá...</p>
+            </div>
+            <div tempo="3000">
+                <p>eu queria que você soubesse de algumas coisas.</p>
+            </div>
+            <div tempo="3000" final="true">
+                <p>Fiz esse presente para você.</p>
+            </div>
+        </div>
+
+        <div id="tela7" class="invisivel temporizado letra2 tela-centro" fundo="fundo3" style="color: #FFF;"  tempo="3000" >
+            <div tempo="4000">
+                <p>Às vezes é difícil imaginar...</p>
+            </div>
+            <div tempo="3500">
+                <p>que alguém pode aparecer do nada...</p>
+            </div>
+            <div tempo="3500">
+                <p>em um jogo de vôlei qualquer...</p>
+            </div>
+            <div tempo="4300">
+                <p>e fazer eu me apaixonar...</p>
+            </div>
+            <div tempo="5000" final="true">
+                <p>assim como você fez comigo.</p>
+            </div>
+        </div>
+
+        <div id="tela8" class="tela-centro tela" fundo="fundo4" tempo="6000">
+         
+            <p>E eu quero te mostrar isso.</p>
+
+            <button class="mudaTela btn-rosa">Continuar</button>
+
+        </div>
+
+        <div id="tela9" class="tela">
+         
+            <div class="text-start">
+                <div class="text-center">
+                    <h2 class="letra-vermelha">Esse Match</h2>
+                    <img src="imagens/tela8-1.png" alt="">
+                    <p class="letra2" style="font-size: 0.8em;"><strong>Em tantos anos eu nunca fiquei tanto em choque com um Match.</strong></p>
+                </div>
+                <hr>
+                <p><strong class="letra-vermelha">E quando digo em choque</strong>, é pelo fato de 12 dias depois me enviar uma mensagem</p>
+                <p><strong class="letra-vermelha">Conversas</strong> que eu demorava para responder pois não sabia direito o que falar.</p>
+                <img src="imagens/tela8-2.png" alt="">
+                <p><strong class="letra-vermelha">E assim</strong> me despertou uma vontade de conhecer, conversar e me envolver nos seus assuntos</p>
+                <p><strong class="letra-vermelha">E depois</strong> de tantas mensagens rolou aquele rolê no laranjal 😊</p>
+
+            </div>
+
+            <button class="mudaTela btn-rosa mt-3">Continuar</button>
+
+        </div>
+
+        <div id="tela10" class="invisivel temporizado letra2 tela-centro" fundo="fundo5" style="color: #FFF;" tempo="2000" >
+            <div tempo="3000">
+                <p>E só de pensar...</p>
+            </div>
+            <div tempo="2500">
+                <p>onde tudo começou...</p>
+            </div>
+            <div tempo="15000" >
+                <img src="imagens/tela11-1.png" class="custom" width="250" alt="">
+            </div>
+            <div tempo="3000">
+                <p>E só de pensar...</p>
+            </div>
+            <div tempo="4000">
+                <p>ainda bem que desmarquei o dentista...</p>
+            </div>
+            <div tempo="4000">
+                <p>❤️ Você é incrível ❤️</p>
+            </div>
+            <div tempo="2500" final="true">
+                <p>❤️ Você é impressionante ❤️</p>
+            </div>
+        </div>
+
+        <div id="tela11" class="invisivel temporizado letra2 tela-centro" fundo="fundo11" style="color: #999;" tempo="2500" >
+            <div tempo="2000">
+                <p>Bom...</p>
+            </div>
+            <div tempo="3500">
+                <p>acho que já não dá mais para adiar.</p>
+            </div>
+            <div tempo="3500" >
+                <p>Eu preciso te fazer a pergunta.</p>
+            </div>
+            <div tempo="4000" final="true">
+                <p>Agora estou mais confiante em perguntar...</p>
+            </div>
+        </div>
+
+        <div id="tela12" class="tela tela-centro">
+            <h2 class="text-muted">Você está pronta?</h2>
+            <p>Quando estiver, é só apertar o botão.</p>
+
+            <button class="mudaTela btn-verde">Estou pronta</button>
+        </div>
+
+        <div id="tela13" class="invisivel temporizado letra2 tela-centro" fundo="" style="color: #999;" tempo="1500" >
+            <div tempo="2000">
+                <p>Então...</p>
+            </div>
+            <div tempo="8000" final="true">
+                <p>agora, olhe nos meus olhos...</p>
+            </div>
+        </div>
+
+        <div id="tela14" class="tela tela-centro" fundo="">
+            <h2 class="text-muted mb-5 mt-2">Qual foi a resposta?</h2>
+            <button class="mudaTela btn-block btn-azul">SIM</button>
+            <br>
+            <button class="btn-block btn-vermelho" onclick="alert('Kkkk mentira, eu sei que foi SIM.');">NÃO</button>
+        </div>
+
+        <div id="tela15" class="tela">
+            <h2 class="mb-5" style="color: #CCC">SIIIIII</h2>
+              <img src="imagens/siii.jpg" class="custom" width="250" alt=""><br><br>
+              <img src="imagens/i1.jpg" class="custom" width="250" alt=""><br><br>
+              <img src="imagens/i2.jpg" class="custom" width="250" alt=""><br><br>
+              <img src="imagens/i3.jpg" class="custom" width="250" alt=""><br><br>
+            <h2 class="mb-5" style="color: rgb(243, 0, 0)">❤️ TE AMO ❤️</h2>
+        </div>
+
+    </div>
+
+    <script src="assets/js/bootstrap.min.js"></script>
+    <script src="assets/script.js"></script>
+    <script src="assets/all.min.js"></script>
+
+</body>
+</html>
