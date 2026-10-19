@@ -17,6 +17,7 @@ import Football from './components/football/Football';
 import StorkKiller from './components/storkKiller/StorkKiller';
 import StorkKiller3D from './components/storkKiller3D/StorkKiller3D';
 import QuizCS from './components/quizcs/QuizCS';
+import RomaFredGame from './components/romaFredGame/RomaFredGame';
 import { useLanguage } from './hooks/useLanguage';
 import './App.css';
 
@@ -54,6 +55,8 @@ function App() {
           <Route path="/storkKiller3D" element={<StorkKiller3D />} />
           <Route path="/storkkiller3d" element={<StorkKiller3D />} />
           <Route path="/quizcs" element={<QuizCS />} />
+          <Route path="/RomaFredGame" element={<RomaFredGame />} />
+          <Route path="/romafredgame" element={<RomaFredGame />} />
         </Routes>
       </div>
     </Router>

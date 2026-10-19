@@ -1,0 +1,101 @@
+@import url('https://fonts.googleapis.com/css2?family=Rammetto+One&family=Karla:wght@400;600;700&family=JetBrains+Mono:wght@500&display=swap');
+
+/* Cena 3D em tela cheia; peças do HUD presas nos cantos. */
+.rf-root {
+  --ink: #1b1714;
+  --panel: rgba(29, 24, 20, 0.74);
+  --panel-solid: #241e19;
+  --line: rgba(239, 229, 207, 0.16);
+  --bone: #efe5cf;
+  --muted: #b9ac94;
+  --ochre: #c96a2b;
+  --ochre-hi: #e8904f;
+  --font-display: "Rammetto One", "Arial Black", Impact, sans-serif;
+  --font-ui: "Karla", "Segoe UI", system-ui, sans-serif;
+  --font-key: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  color-scheme: dark;
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  overflow: hidden;
+  background: var(--ink);
+  color: var(--bone);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+  text-align: left;
+}
+.rf-root [hidden] { display: none !important; }
+#rf-stage { position: absolute; inset: 0; }
+#rf-stage canvas { display: block; width: 100%; height: 100%; outline: none; }
+.rf-root .hud { position: absolute; z-index: 5; pointer-events: none; }
+.rf-root .hud > * { pointer-events: auto; }
+.rf-root .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
+
+/* marca + status */
+#rf-brand { top: calc(14px + env(safe-area-inset-top, 0px)); left: max(16px, env(safe-area-inset-left, 0px)); display: grid; gap: 8px; max-width: min(360px, calc(100vw - 32px)); }
+#rf-brand h1 { margin: 0; font-family: var(--font-display); font-weight: 400; font-size: clamp(22px, 3.2vw, 30px); letter-spacing: 0.01em; line-height: 1; color: var(--bone); text-shadow: 0 2px 0 rgba(0,0,0,.45); }
+#rf-brand h1 span { color: var(--ochre-hi); }
+.rf-root .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.rf-root .chip { font-size: 12px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; padding: 5px 9px; border-radius: 999px; background: var(--panel); border: 1px solid var(--line); color: var(--bone); }
+.rf-root .chip b { color: var(--ochre-hi); font-weight: 700; }
+.rf-root .chip.club-off b { color: var(--muted); }
+
+/* legenda dos controles */
+#rf-keys { left: max(16px, env(safe-area-inset-left, 0px)); bottom: calc(16px + env(safe-area-inset-bottom, 0px)); padding: 10px 12px; display: grid; grid-template-columns: auto auto; gap: 6px 12px; align-items: center; font-size: 13px; color: var(--muted); }
+#rf-keys .k { display: flex; gap: 4px; justify-content: flex-end; }
+.rf-root kbd { font-family: var(--font-key); font-size: 11px; color: var(--bone); background: var(--panel-solid); border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 5px; padding: 2px 6px; min-width: 14px; text-align: center; }
+
+/* painel de animações */
+#rf-anims { right: max(16px, env(safe-area-inset-right, 0px)); top: calc(14px + env(safe-area-inset-top, 0px)); width: 258px; max-height: calc(100% - 28px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)); display: flex; flex-direction: column; overflow: hidden; }
+#rf-anims header { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--line); }
+#rf-anims h2 { margin: 0; font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); font-weight: 700; }
+#rf-anims .list { overflow-y: auto; padding: 6px 6px 10px; display: grid; gap: 2px; }
+#rf-anims .group { font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ochre-hi); padding: 10px 8px 4px; font-weight: 700; }
+.rf-root .clip { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 8px; width: 100%; text-align: left; background: transparent; color: var(--bone); border: 1px solid transparent; border-radius: 7px; padding: 6px 8px; font: inherit; font-size: 13px; cursor: pointer; }
+.rf-root .clip:hover { background: rgba(239,229,207,0.07); }
+.rf-root .clip:focus-visible, .rf-root button:focus-visible { outline: 2px solid var(--ochre-hi); outline-offset: 1px; }
+.rf-root .clip[aria-pressed="true"] { border-color: var(--ochre); background: rgba(201,106,43,0.16); }
+.rf-root .clip small { font-family: var(--font-key); font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.rf-root .btn { font: inherit; font-size: 12px; font-weight: 700; letter-spacing: 0.04em; color: var(--ink); background: var(--ochre-hi); border: 0; border-radius: 7px; padding: 6px 10px; cursor: pointer; }
+.rf-root .btn.ghost { color: var(--bone); background: transparent; border: 1px solid var(--line); }
+#rf-viewer-bar { left: 50%; transform: translateX(-50%); top: calc(14px + env(safe-area-inset-top, 0px)); padding: 8px 8px 8px 14px; display: flex; gap: 10px; align-items: center; font-size: 13px; max-width: calc(100vw - 32px); }
+#rf-viewer-bar strong { color: var(--ochre-hi); font-weight: 700; }
+#rf-toast { left: 50%; transform: translateX(-50%); top: calc(70px + env(safe-area-inset-top, 0px)); padding: 8px 14px; font-size: 13px; opacity: 0; transition: opacity .25s; }
+#rf-toast.show { opacity: 1; }
+
+/* carregamento + tela inicial */
+#rf-loading { position: absolute; inset: 0; z-index: 20; display: grid; place-items: center; background: radial-gradient(120% 90% at 50% 40%, rgba(58,42,29,0.92) 0%, rgba(27,23,20,0.97) 70%); padding: 0 16px; }
+#rf-loading .card { width: min(420px, 100%); display: grid; gap: 14px; text-align: center; justify-items: center; }
+#rf-loading h1 { margin: 0; font-family: var(--font-display); font-weight: 400; font-size: clamp(30px, 6vw, 42px); line-height: 1; }
+#rf-loading h1 span { color: var(--ochre-hi); }
+#rf-loading p { margin: 0; color: var(--muted); line-height: 1.5; max-width: 60ch; }
+#rf-loadprog { width: 100%; display: grid; gap: 10px; }
+.rf-root .bar { height: 8px; border-radius: 99px; background: rgba(239,229,207,0.12); overflow: hidden; }
+.rf-root .bar i { display: block; height: 100%; width: 0%; background: linear-gradient(90deg, var(--ochre), var(--ochre-hi)); transition: width .2s; }
+#rf-loadtxt { font-family: var(--font-key); font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+#rf-loading .err { color: #ffb18a; }
+#rf-play { margin-top: 8px; font-family: var(--font-display); font-size: clamp(26px, 5vw, 36px); letter-spacing: 0.04em; color: var(--ink); background: linear-gradient(180deg, var(--ochre-hi), var(--ochre)); border: 2px solid var(--bone); border-radius: 14px; padding: 14px 54px; cursor: pointer; box-shadow: 0 8px 30px rgba(0,0,0,0.45); transition: transform .15s, box-shadow .15s; }
+#rf-play:hover { transform: scale(1.06); box-shadow: 0 10px 40px rgba(232,144,79,0.4); }
+.rf-back { color: var(--muted); font-size: 13px; text-decoration: none; }
+.rf-back:hover { color: var(--bone); }
+
+/* controles de toque */
+#rf-touch { inset: 0; display: none; }
+#rf-stick { position: absolute; left: max(22px, calc(env(safe-area-inset-left, 0px) + 22px)); bottom: calc(26px + env(safe-area-inset-bottom, 0px)); width: 132px; height: 132px; border-radius: 50%; background: rgba(29,24,20,0.45); border: 1px solid var(--line); touch-action: none; }
+#rf-knob { position: absolute; left: 50%; top: 50%; width: 56px; height: 56px; margin: -28px 0 0 -28px; border-radius: 50%; background: rgba(239,229,207,0.85); }
+#rf-tbtns { position: absolute; right: max(18px, calc(env(safe-area-inset-right, 0px) + 18px)); bottom: calc(26px + env(safe-area-inset-bottom, 0px)); display: grid; grid-template-columns: repeat(2, 64px); gap: 10px; }
+#rf-tbtns button { width: 64px; height: 64px; border-radius: 50%; border: 1px solid var(--line); background: rgba(29,24,20,0.6); color: var(--bone); font: inherit; font-size: 11px; font-weight: 700; letter-spacing: 0.04em; touch-action: none; }
+#rf-tbtns button.hot { background: var(--ochre); color: var(--ink); }
+@media (pointer: coarse) {
+  #rf-touch { display: block; }
+  #rf-keys { display: none; }
+  #rf-anims { width: min(250px, calc(100vw - 32px)); }
+}
+@media (max-width: 640px) {
+  #rf-anims { top: auto; bottom: calc(176px + env(safe-area-inset-bottom, 0px)); max-height: 46%; }
+  #rf-viewer-bar { top: auto; bottom: calc(176px + env(safe-area-inset-bottom, 0px)); }
+}
+@media (prefers-reduced-motion: reduce) { .rf-root .bar i, #rf-toast { transition: none; } }
