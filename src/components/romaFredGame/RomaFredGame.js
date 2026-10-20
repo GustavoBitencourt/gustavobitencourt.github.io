@@ -11,6 +11,7 @@ import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPa
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { createMusic } from './music.js';
 import { createDinoManager, DINO_TYPES } from './dinos.js';
+import { createSfx } from './sfx.js';
 import './RomaFredGame.css';
 
 const MODELS = `${process.env.PUBLIC_URL || ''}/assets/models`;
@@ -138,7 +139,7 @@ const RomaFredGame = () => {
     /* ── mundos ── */
     const worlds = {};   // { mata, festa }: { root, octree, markers, people, personObjs, mixer }
     let world = null;
-    let model, mixer, club, dinos;
+    let model, mixer, club, dinos, feet = [];
     const actions = {}, clips = {};
     const flames = []; const fireLights = [];
 
@@ -172,6 +173,7 @@ const RomaFredGame = () => {
         scene, templates, caveMouth,
         onWave: (n, count) => toast(n === 1 ? `Dinossauros vindo! (${count})` : `Onda ${n}: ${count} dinossauros`),
         onDown: (count, d) => {
+          clubSound(true);
           $('chip-dinos').innerHTML = `Dinos <b>${count} no chão</b>`;
           toast(`${d.cfg.label} derrubado!`);
         },
@@ -227,6 +229,7 @@ const RomaFredGame = () => {
         if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; o.frustumCulled = false; }
         if (o.name === 'Bastao') club = o;
       });
+      feet = ['LeftFoot', 'RightFoot'].map((n) => ({ bone: model.getObjectByName(n), minH: Infinity, armed: true, cool: 0 }));
       mixer = new THREE.AnimationMixer(model);
       for (const c of gltf.animations) { clips[c.name] = c; actions[c.name] = mixer.clipAction(c); }
       mixer.addEventListener('finished', onActionFinished);
@@ -341,6 +344,7 @@ const RomaFredGame = () => {
     }
     function startAttack() {
       player.attacking = true; player.queued = false; player.swingId += 1;
+      swingSound = { id: player.swingId, done: false };
       if (dinos && world === worlds.mata) {
         const yaw = dinos.aim(model.position.x, model.position.z, player.yaw);
         if (yaw !== null) player.yaw = yaw;
@@ -365,6 +369,7 @@ const RomaFredGame = () => {
       if (Math.hypot(player.vel.x, player.vel.z) > 0.6) {
         // pulo em movimento: decola na hora e mantém o embalo
         player.vel.y = JUMP_VEL; player.onFloor = false; player.airTime = 0.01; player.landing = 0;
+        sfx.play('salto');
         play(clipFor('PuloNoAr'), { fade: 0.12 }); setState('Pulando');
         return;
       }
@@ -608,7 +613,7 @@ const RomaFredGame = () => {
       // tempo do pulo: decola perto do fim do clipe de impulso
       if (player.jumpTimer >= 0) {
         player.jumpTimer += dt;
-        if (player.jumpTimer > 0.2 && player.onFloor) { player.vel.y = JUMP_VEL; player.onFloor = false; player.airTime = 0.01; }
+        if (player.jumpTimer > 0.2 && player.onFloor) { player.vel.y = JUMP_VEL; player.onFloor = false; player.airTime = 0.01; sfx.play('salto'); }
         if (player.jumpTimer > 0.26) { player.jumpTimer = -1; play(clipFor('PuloNoAr'), { fade: 0.12 }); }
       }
 
@@ -637,6 +642,8 @@ const RomaFredGame = () => {
 
       // aterrissagem
       if (player.onFloor && player.airTime > 0.18) {
+        // quanto mais tempo no ar, mais forte a queda
+        sfx.play('queda', { volume: THREE.MathUtils.clamp(0.5 + player.airTime * 0.6, 0.5, 1) });
         const moving = Math.hypot(player.vel.x, player.vel.z) > 0.6;
         if (!moving && player.mode === 'play' && !player.attacking) {
           player.landing = 0.35; play(clipFor('PuloAterrissagem'), { fade: 0.08, once: true, timeScale: 1.25 });
@@ -757,6 +764,64 @@ const RomaFredGame = () => {
       timer.update();
       step(Math.min(timer.getDelta(), 1 / 20), true);
     }
+    /* ── sons do Romanele ── */
+    const sfx = createSfx();
+    let swingSound = { id: -1, done: true };
+    const footPos = new THREE.Vector3();
+    const clubRay = new THREE.Ray();
+
+    // passos: toca quando o pé desce e encosta no chão (segue a animação, andando ou correndo)
+    function updateFootsteps(dt) {
+      if (!feet.length || !feet[0].bone) return;
+      const speed = Math.hypot(player.vel.x, player.vel.z);
+      const walking = started && player.mode === 'play' && player.onFloor && !player.dance && !player.attacking && speed > 0.3;
+      for (const f of feet) {
+        f.bone.getWorldPosition(footPos);
+        const h = footPos.y - model.position.y;
+        if (player.onFloor) f.minH = Math.min(f.minH, h);   // altura do tornozelo com o pé apoiado
+        f.cool -= dt;
+        if (h > f.minH + 0.09) f.armed = true;
+        else if (f.armed && h < f.minH + 0.035) {
+          f.armed = false;
+          if (walking && f.cool <= 0) {
+            f.cool = 0.18;
+            const running = speed > 2.15;
+            sfx.play('passo', { volume: running ? 1 : 0.6, rate: running ? 1.05 : 1 });
+          }
+        }
+      }
+    }
+
+    // bastada: "hit" se encostar num dino, no cenário ou numa pessoa; senão, "swosh" no vento
+    function clubTouches() {
+      const p = model.position, fx = Math.sin(player.yaw), fz = Math.cos(player.yaw);
+      if (dinos && world === worlds.mata && dinos.touches(p.x, p.y, p.z, player.yaw)) return true;
+      // raios curtos no caminho do bastão (frente e ±30°, na altura do peito e da cintura)
+      for (const h of [1.05, 0.6]) {
+        for (const off of [0, -0.5, 0.5]) {
+          clubRay.origin.set(p.x, p.y + h, p.z);
+          clubRay.direction.set(Math.sin(player.yaw + off), 0, Math.cos(player.yaw + off));
+          const hit = world.octree.rayIntersect(clubRay);
+          if (hit && hit.distance < 1.35) return true;
+        }
+      }
+      for (const q of world.people) {
+        const dx = q[0] - p.x, dz = q[2] - p.z, d = Math.hypot(dx, dz);
+        if (d < 1.4 && Math.abs(q[1] - p.y) < 1.2 && (dx * fx + dz * fz) / Math.max(d, 1e-3) > 0.3) return true;
+      }
+      return false;
+    }
+    function clubSound(hit) {
+      if (swingSound.done || swingSound.id !== player.swingId) return;
+      swingSound.done = true;
+      sfx.play(hit ? 'tacoHit' : 'tacoSwosh');
+    }
+    function updateSwingSound() {
+      const a = player.current;
+      if (!player.attacking || swingSound.done || !a || !a.getClip().name.startsWith('Ataque')) return;
+      if (a.time / a.getClip().duration >= 0.38) clubSound(clubTouches());
+    }
+
     function step(dt, render) {
       const t = timer.getElapsed();
       stepParty(dt);
@@ -764,6 +829,7 @@ const RomaFredGame = () => {
       for (let i = 0; i < steps; i++) updatePlayer(dt / steps);
       updateAnimation();
       mixer.update(dt);
+      updateFootsteps(dt);
       updateCamera(dt);
       const festa = world === worlds.festa;
       if (festa) updateFesta(); else updateMata(t);
@@ -774,6 +840,7 @@ const RomaFredGame = () => {
         const p = model.position;
         dinos.update(dt, { octree: world.octree, player: { x: p.x, y: p.y, z: p.z, yaw: player.yaw }, swing });
       }
+      updateSwingSound();
       if (!render) return;
       if (festa && useBloom) composer.render(); else renderer.render(scene, camera);
     }
@@ -781,6 +848,7 @@ const RomaFredGame = () => {
     // tela inicial: "Jogar" aparece quando tudo carregou
     on($('play'), 'click', () => {
       started = true;
+      sfx.unlock();
       $('loading').hidden = true;
       canvas.focus();
     });
@@ -815,6 +883,7 @@ const RomaFredGame = () => {
       clearTimeout(toastTimer);
       renderer.setAnimationLoop(null);
       music.dispose();
+      sfx.dispose();
       cleanups.forEach((fn) => fn());
       if (mixer) mixer.stopAllAction();
       if (worlds.festa) worlds.festa.mixer.stopAllAction();

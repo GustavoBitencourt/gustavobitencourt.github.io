@@ -407,8 +407,19 @@ export function createDinoManager({ scene, templates, caveMouth, onPlayerHit, on
     return best;
   }
 
+  // a bastada encosta em algum dino (inclusive um já caído)? usado para o som de "hit"
+  function touches(px, py, pz, yaw) {
+    const fx = Math.sin(yaw), fz = Math.cos(yaw);
+    return dinos.some((d) => {
+      if (d.state === 'delay' || d.state === 'sink') return false;
+      const dx = d.obj.position.x - px, dz = d.obj.position.z - pz, dist = Math.hypot(dx, dz);
+      if (dist > CLUB_REACH || Math.abs(d.obj.position.y - py) > 1.5) return false;
+      return dist < 0.4 || (dx * fx + dz * fz) / dist >= CLUB_ARC;
+    });
+  }
+
   return {
-    group, update, reset, aim,
+    group, update, reset, aim, touches,
     setVisible(v) { group.visible = v; },
     get downs() { return downs; },
     get wave() { return wave; },
