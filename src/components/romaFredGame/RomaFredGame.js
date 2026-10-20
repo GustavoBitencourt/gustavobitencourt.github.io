@@ -13,6 +13,8 @@ import { createMusic } from './music.js';
 import { createDinoManager, DINO_TYPES } from './dinos.js';
 import { createSfx } from './sfx.js';
 import { createWater } from './water.js';
+import { createGrass } from './grass.js';
+import { createAmbience } from './ambience.js';
 import './RomaFredGame.css';
 
 const MODELS = `${process.env.PUBLIC_URL || ''}/assets/models`;
@@ -144,6 +146,28 @@ const RomaFredGame = () => {
     const actions = {}, clips = {};
     const flames = []; const fireLights = [];
     let water = null; // rio interativo (water.js)
+    let grass = null; // grama que se dobra (grass.js)
+
+    // Romanele com os pés dentro do rio?
+    const inWater = () => !!(water && world === worlds.mata && water.isWet(model.position.x, model.position.y, model.position.z));
+    // som com volume e lado (esquerda/direita) pela posição em relação à câmera
+    const camFwd = new THREE.Vector3();
+    function play3D(name, x, y, z, volume = 1, rate = 1) {
+      const dx = x - camera.position.x, dy = y - camera.position.y, dz = z - camera.position.z;
+      const d = Math.hypot(dx, dy, dz);
+      if (d > 45) return;
+      camera.getWorldDirection(camFwd);
+      const rx = -camFwd.z, rz = camFwd.x, rl = Math.hypot(rx, rz) || 1;
+      const pan = THREE.MathUtils.clamp((dx * rx + dz * rz) / rl / Math.max(d, 1.5), -1, 1) * 0.85;
+      sfx.play(name, { volume: volume / (1 + (d / 7) * (d / 7)), rate, pan });
+    }
+    // eventos de água dos dinossauros (os do Romanele seguem a animação dele)
+    function waterSound(e) {
+      if (e.key === 'player' || !water) return;
+      if (e.type === 'step') play3D('passoAgua', e.x, water.level, e.z, 0.75 + 0.5 * e.strength, 0.78);
+      else if (e.type === 'splash') play3D('splashAgua', e.x, water.level, e.z, 0.7 + 0.4 * e.strength, 0.88);
+      else if (e.type === 'fall') play3D('splashAgua', e.x, water.level, e.z, 1.3, 0.75);
+    }
 
     function setupMata(gltf) {
       const env = gltf.scene; scene.add(env);
@@ -166,8 +190,9 @@ const RomaFredGame = () => {
         if (o.isLight) { o.userData.base = o.intensity; fireLights.push(o); o.castShadow = false; }
       });
       if (waterMesh) {
-        try { water = createWater({ renderer, scene, mesh: waterMesh }); water.setSunDirection(sunDir); } catch (err) { console.warn('Água interativa desativada:', err); }
+        try { water = createWater({ renderer, scene, mesh: waterMesh, onEvent: waterSound }); water.setSunDirection(sunDir); } catch (err) { console.warn('Água interativa desativada:', err); }
       }
+      try { grass = createGrass(env); } catch (err) { console.warn('Grama interativa desativada:', err); }
       const zOf = (name, fallback) => { const o = env.getObjectByName(name); if (!o) return fallback; const v = new THREE.Vector3(); o.getWorldPosition(v); return v.z; };
       const riverBox = waterMesh ? new THREE.Box3().setFromObject(waterMesh) : null;
       worlds.mata = {
@@ -262,6 +287,7 @@ const RomaFredGame = () => {
       if (!festa && music.on) toggleMusic();
       if (dinos) { dinos.reset(); dinos.setVisible(!festa); }
       if (water) water.setVisible(!festa);
+      ambience.setActive(!festa);
       root.dataset.world = name;
       $('brand-where').textContent = festa ? 'na Xalassa' : 'na Mata';
       $('world').textContent = festa ? 'Voltar para a mata' : 'Ir para a Xalassa';
@@ -627,7 +653,7 @@ const RomaFredGame = () => {
       // tempo do pulo: decola perto do fim do clipe de impulso
       if (player.jumpTimer >= 0) {
         player.jumpTimer += dt;
-        if (player.jumpTimer > 0.2 && player.onFloor) { player.vel.y = JUMP_VEL; player.onFloor = false; player.airTime = 0.01; sfx.play('salto'); }
+        if (player.jumpTimer > 0.2 && player.onFloor) { player.vel.y = JUMP_VEL; player.onFloor = false; player.airTime = 0.01; sfx.play('salto'); if (inWater()) sfx.play('passoAgua', { volume: 1, rate: 0.9 }); }
         if (player.jumpTimer > 0.26) { player.jumpTimer = -1; play(clipFor('PuloNoAr'), { fade: 0.12 }); }
       }
 
@@ -667,7 +693,8 @@ const RomaFredGame = () => {
       // aterrissagem
       if (player.onFloor && player.airTime > 0.18) {
         // quanto mais tempo no ar, mais forte a queda
-        sfx.play('queda', { volume: THREE.MathUtils.clamp(0.5 + player.airTime * 0.6, 0.5, 1) });
+        if (inWater()) sfx.play('splashAgua', { volume: THREE.MathUtils.clamp(0.45 + player.airTime * 0.7, 0.5, 1.1) });
+        else sfx.play('queda', { volume: THREE.MathUtils.clamp(0.5 + player.airTime * 0.6, 0.5, 1) });
         const moving = Math.hypot(player.vel.x, player.vel.z) > 0.6;
         if (!moving && player.mode === 'play' && !player.attacking) {
           player.landing = 0.35; play(clipFor('PuloAterrissagem'), { fade: 0.08, once: true, timeScale: 1.25 });
@@ -725,7 +752,7 @@ const RomaFredGame = () => {
 
     // mata: interior da caverna escurece conforme entra
     const caveZ = { mouth: -10.5, deep: -16 };
-    function updateMata(t) {
+    function updateMata(t, dt) {
       const p = model.position;
       const inX = 1 - THREE.MathUtils.smoothstep(Math.abs(p.x), 4.5, 6.5);
       const depth = THREE.MathUtils.smoothstep(-p.z, -caveZ.mouth, -caveZ.deep) * inX;
@@ -741,6 +768,19 @@ const RomaFredGame = () => {
       // sombras do sol acompanham o jogador
       sun.target.position.copy(p); sun.position.copy(p).addScaledVector(sunDir, 70);
       sky.position.copy(camera.position); // o mapa vai até ~560 m: o domo do céu acompanha a câmera
+      // som ambiente: mistura as regiões conforme o Romanele anda (e abafa dentro da caverna)
+      const ss = THREE.MathUtils.smoothstep;
+      const road = ss(p.z, zn.exitZ - 10, zn.exitZ + 25), city = ss(p.z, zn.asphaltZ - 45, zn.asphaltZ + 10);
+      const dRiver = rb ? Math.max(rb.min.z - p.z, p.z - rb.max.z, 0) : 999;
+      // a natureza (mata e campo) vai sumindo aos poucos conforme ele se aproxima da cidade
+      const nearCity = ss(p.z, zn.exitZ - 40, zn.asphaltZ);
+      const nature = 1 - 0.7 * nearCity;
+      ambience.update(dt, {
+        mata: (1 - road) * nature * (1 - 0.75 * depth),
+        estrada: road * (1 - city) * nature,
+        cidade: city,
+        rio: (1 - ss(dRiver, 0, 45)) * (1 - 0.85 * depth),
+      });
     }
 
     // festa: pessoas entre a câmera e o Romanele somem para ele não sumir na multidão
@@ -794,6 +834,7 @@ const RomaFredGame = () => {
     }
     /* ── sons do Romanele ── */
     const sfx = createSfx();
+    const ambience = createAmbience();   // som ambiente da mata, rio, estrada e cidade
     let swingSound = { id: -1, done: true };
     const footPos = new THREE.Vector3();
     const clubRay = new THREE.Ray();
@@ -814,7 +855,8 @@ const RomaFredGame = () => {
           if (walking && f.cool <= 0) {
             f.cool = 0.18;
             const running = speed > 2.15;
-            sfx.play('passo', { volume: running ? 1 : 0.6, rate: running ? 1.05 : 1 });
+            if (inWater()) sfx.play('passoAgua', { volume: running ? 1 : 0.7, rate: running ? 1.05 : 0.95 });
+            else sfx.play('passo', { volume: running ? 1 : 0.6, rate: running ? 1.05 : 1 });
           }
         }
       }
@@ -860,7 +902,7 @@ const RomaFredGame = () => {
       updateFootsteps(dt);
       updateCamera(dt);
       const festa = world === worlds.festa;
-      if (festa) updateFesta(); else updateMata(t);
+      if (festa) updateFesta(); else updateMata(t, dt);
       if (!festa && started && dinos) {
         const a = player.current, clipName = a ? a.getClip().name : '';
         const swing = player.attacking && clipName.startsWith('Ataque')
@@ -875,9 +917,19 @@ const RomaFredGame = () => {
         if (dinos) for (const d of dinos.list) {
           if (d.state === 'delay' || !d.obj.visible) continue;
           const q = d.obj.position;
-          bodies.push({ key: d, x: q.x, y: q.y, z: q.z, r: 0.55, state: d.state, yaw: d.yaw });
+          bodies.push({ key: d, x: q.x, y: q.y, z: q.z, r: 0.55, state: d.state, yaw: d.yaw, stride: 1.1 });
         }
         water.update(dt, bodies);
+      }
+      // grama: o Romanele e os dinos empurram as plantas; dino caído amassa em volta
+      if (!festa && grass) {
+        const p = model.position, others = [];
+        if (dinos) for (const d of dinos.list) {
+          if (d.state === 'delay' || !d.obj.visible || d.state === 'sink') continue;
+          const lying = d.state === 'down' || d.state === 'lying';
+          others.push({ x: d.obj.position.x, z: d.obj.position.z, r: lying ? 1.9 : 1.2, s: 1 });
+        }
+        grass.update(dt, { x: p.x, z: p.z }, others);
       }
       updateSwingSound();
       if (!render) return;
@@ -888,6 +940,7 @@ const RomaFredGame = () => {
     on($('play'), 'click', () => {
       started = true;
       sfx.unlock();
+      ambience.unlock();
       $('loading').hidden = true;
       canvas.focus();
     });
@@ -923,6 +976,7 @@ const RomaFredGame = () => {
       renderer.setAnimationLoop(null);
       music.dispose();
       sfx.dispose();
+      ambience.dispose();
       if (water) water.dispose();
       cleanups.forEach((fn) => fn());
       if (mixer) mixer.stopAllAction();

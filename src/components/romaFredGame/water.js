@@ -14,6 +14,7 @@ import * as THREE from 'three';
  *   const water = createWater({ renderer, scene, mesh });
  *   water.update(dt, [{ key, x, y, z, r, vy, state }]);   // a cada quadro
  *   water.splash(x, z, força, raio);                       // impacto avulso
+ *   onEvent({ type: 'step' | 'splash' | 'fall', key, x, z, strength })  // para tocar os sons
  */
 
 const STEP = 1 / 120;          // passo fixo da simulação (s)
@@ -68,7 +69,7 @@ void main() {
 }`;
 const MASK_FS = /* glsl */`void main() { gl_FragColor = vec4(1.0); }`;
 
-export function createWater({ renderer, scene, mesh }) {
+export function createWater({ renderer, scene, mesh, onEvent = null }) {
   mesh.updateMatrixWorld(true);
   const box = new THREE.Box3().setFromObject(mesh);
   const level = (box.min.y + box.max.y) / 2;
@@ -279,7 +280,13 @@ float ambientH(vec2 f, vec2 w) {
         // caiu na água vindo de um pulo
         if (prev && !prev.wet && (prev.vy || 0) < -2.5) {
           splash(b.x, b.z, Math.min(-prev.vy, 9) * 0.3, b.r * 2); // força pela velocidade de queda, não pela imersão do 1º quadro
+          if (onEvent) onEvent({ type: 'splash', key: b.key, x: b.x, z: b.z, strength: Math.min(-prev.vy, 9) / 9 });
           spray(b.x, b.z, 30 + Math.floor(-prev.vy * 5), Math.min(-prev.vy, 8) * 0.45);
+        }
+        // passos na água (o jogo usa para o som; o Romanele tem os passos da animação)
+        if (speed > 0.4) {
+          tr.stepAcc = (tr.stepAcc || 0) + dt * speed / (b.stride || 0.9);
+          if (tr.stepAcc >= 1) { tr.stepAcc -= 1; if (onEvent) onEvent({ type: 'step', key: b.key, x: b.x, z: b.z, strength: Math.min(speed / 3.4, 1) }); }
         }
         // correndo levanta gotas
         if (speed > 1.6) {
@@ -291,7 +298,7 @@ float ambientH(vec2 f, vec2 w) {
         if (b.state === 'down' && prev && prev.state !== 'down') {
           const yaw = b.yaw || 0;
           splash(b.x - Math.sin(yaw) * 0.6, b.z - Math.cos(yaw) * 0.6, 2.4, 1.3, 0.8);
-          pending.push({ at: time + 0.8, x: b.x, z: b.z, sprayN: 120, sprayV: 3.2 });
+          pending.push({ at: time + 0.8, x: b.x, z: b.z, sprayN: 120, sprayV: 3.2, sound: { type: 'fall', key: b.key, x: b.x, z: b.z, strength: 1 } });
         }
       }
       Object.assign(tr, { x: b.x, y: b.y, z: b.z, vy, state: b.state, wet });
@@ -304,6 +311,7 @@ float ambientH(vec2 f, vec2 w) {
       const p = pending[i];
       if (p.at > time) continue;
       if (p.sprayN) spray(p.x, p.z, p.sprayN, p.sprayV);
+      if (p.sound && onEvent) onEvent(p.sound);
       if (p.impulse && n < MAX_SRC) src[n++].set(p.x, p.z, p.r, -p.impulse / Math.max(dt, STEP));
       pending.splice(i, 1);
     }
@@ -322,6 +330,8 @@ float ambientH(vec2 f, vec2 w) {
   }
 
   function setVisible(v) { drops.visible = v; }
+  // está com os pés na água? (dentro do rio e abaixo da superfície)
+  function isWet(x, y, z) { return inside(x, z) && level - y > 0.03 && level - y < 2.5; }
   function setSunDirection(v) { shared.uSunDir.value.copy(v).normalize(); }
 
   function dispose() {
@@ -330,5 +340,5 @@ float ambientH(vec2 f, vec2 w) {
     dropGeo.dispose(); drops.material.dispose(); dotTex.dispose(); scene.remove(drops);
   }
 
-  return { update, splash, setVisible, setSunDirection, dispose, level };
+  return { update, splash, setVisible, setSunDirection, isWet, dispose, level };
 }

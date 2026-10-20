@@ -1,5 +1,6 @@
 /*
-  Efeitos sonoros do Romanele: passos, salto, queda, bastada no ar e bastada acertando.
+  Efeitos sonoros do Romanele: passos, salto, queda, bastada no ar e bastada acertando,
+  e da água do rio (passos na água e splash, também usados pelos dinossauros).
   Cada grupo tem várias variações; a cada som sorteia uma diferente da anterior e muda
   um pouco o tom e o volume, para não ficar repetitivo.
 */
@@ -12,6 +13,8 @@ const GROUPS = {
   queda: { files: range(5).map((n) => `saltos_quedas/queda_${n}.wav`), volume: 0.75, pitch: 0.05 },
   tacoHit: { files: range(7).map((n) => `taco_hit/taco_hit_${n}.wav`), volume: 0.9, pitch: 0.06 },
   tacoSwosh: { files: range(7).map((n) => `taco_swosh/taco_swosh_${n}.wav`), volume: 0.6, pitch: 0.07 },
+  passoAgua: { files: range(8).map((n) => `agua/passo_agua_${n}.wav`), volume: 0.55, pitch: 0.1 },
+  splashAgua: { files: range(5).map((n) => `agua/splash_agua_${n}.wav`), volume: 0.85, pitch: 0.08 },
 };
 
 export function createSfx() {
@@ -36,7 +39,7 @@ export function createSfx() {
     buffers[name] = list.filter(Boolean);
   }));
 
-  function play(name, { volume = 1, rate = 1 } = {}) {
+  function play(name, { volume = 1, rate = 1, pan = 0 } = {}) {
     const list = buffers[name];
     if (!ctx || !list || !list.length || ctx.state !== 'running') return;
     // sorteia uma variação diferente da última
@@ -49,7 +52,9 @@ export function createSfx() {
     src.playbackRate.value = rate * (1 + (Math.random() * 2 - 1) * g.pitch);
     const gain = ctx.createGain();
     gain.gain.value = g.volume * volume * (0.88 + Math.random() * 0.24);
-    src.connect(gain); gain.connect(out);
+    src.connect(gain);
+    if (pan && ctx.createStereoPanner) { const p = ctx.createStereoPanner(); p.pan.value = Math.max(-1, Math.min(1, pan)); gain.connect(p); p.connect(out); }
+    else gain.connect(out);
     src.start();
   }
 
