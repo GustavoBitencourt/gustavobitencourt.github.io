@@ -429,7 +429,7 @@ const RomaFredGame = () => {
         busy = true;
         progressKeys = ['festa'];
         $('loadtitle').innerHTML = 'Indo para a <span>Xalassa</span>';
-        $('loadcopy').textContent = 'Carregando a balada à fantasia: 334 pessoas dançando, DJ, luzes e dois andares. São cerca de 17 MB.';
+        $('loadcopy').textContent = 'Carregando a balada à fantasia: 339 pessoas dançando, DJ, luzes e dois andares. São cerca de 22 MB.';
         $('loadcopy').hidden = false; $('loadprog').hidden = false; $('play').hidden = true; $('back').hidden = true;
         $('loading').classList.add('festa-load'); $('loading').hidden = false;
         showProgress();
