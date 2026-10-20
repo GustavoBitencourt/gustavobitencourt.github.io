@@ -5,7 +5,8 @@ import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
 /*
   Dinossauros da mata: aparecem quando o Romanele sai 2 m da caverna, rugem, correm/pulam até ele,
   mordem ou dão rabada, e caem com uma única bastada. Não entram na caverna: se ele volta para
-  dentro, ficam esperando na boca da caverna, rugindo.
+  dentro, ficam esperando na boca da caverna, rugindo. Também não saem da mata: depois que ele
+  passa da saída (marcador SaidaMata) não vêm mais ondas e os que estavam atrás dele param na borda.
 
   Todos os GLBs têm os mesmos clipes: Parado, Andar, Correr, Pular, Rugir, Atacar, Atacar2,
   TomarDano, Cair, Cair2, CairTras. As locomoções ficam no lugar; quem move é o código.
@@ -40,7 +41,7 @@ const rand = (a, b) => a + Math.random() * (b - a);
 const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
 const wrapAngle = (a) => Math.atan2(Math.sin(a), Math.cos(a));
 
-export function createDinoManager({ scene, templates, caveMouth, onPlayerHit, onDown, onWave }) {
+export function createDinoManager({ scene, templates, caveMouth, exitZ = Infinity, onPlayerHit, onDown, onWave }) {
   const group = new THREE.Group();
   group.name = 'Dinos';
   scene.add(group);
@@ -59,6 +60,8 @@ export function createDinoManager({ scene, templates, caveMouth, onPlayerHit, on
   const down = new THREE.Vector3(0, -1, 0);
 
   const inCaveArea = (x, z) => z < boundaryZ && Math.abs(x - caveMouth.x) < CAVE_HALF_W;
+  const EXIT_STOP = 3;         // param a 3 m antes da saída da mata
+  const leftForest = (z) => z > exitZ - 1;
 
   /* ── criação ── */
   function groundAt(octree, x, z) {
@@ -73,8 +76,8 @@ export function createDinoManager({ scene, templates, caveMouth, onPlayerHit, on
       // em leque na frente da caverna, entre 16 e 24 m do Romanele
       const ang = rand(-1.25, 1.25);
       const dist = rand(16, 24);
-      const x = THREE.MathUtils.clamp(player.x + Math.sin(ang) * dist, -70, 70);
-      const z = THREE.MathUtils.clamp(player.z + Math.cos(ang) * dist, boundaryZ + 3, 70);
+      const x = THREE.MathUtils.clamp(player.x + Math.sin(ang) * dist, -26, 26);
+      const z = THREE.MathUtils.clamp(player.z + Math.cos(ang) * dist, boundaryZ + 3, exitZ - EXIT_STOP - 4);
       if (inCaveArea(x, z)) continue;
       const y = groundAt(octree, x, z);
       if (y === null || y > player.y + 4 || y < player.y - 4) continue;
@@ -222,6 +225,7 @@ export function createDinoManager({ scene, templates, caveMouth, onPlayerHit, on
     // não entra na caverna
     const c = d.capsule.start;
     if (inCaveArea(c.x, c.z - 0.3)) d.capsule.translate(tmp.set(0, 0, boundaryZ + 0.3 - c.z));
+    if (c.z > exitZ - EXIT_STOP + 0.5) d.capsule.translate(tmp.set(0, 0, exitZ - EXIT_STOP + 0.5 - c.z));
     if (c.y < -20) { const g = groundAt(octree, c.x, c.z) || 0; d.capsule.translate(tmp.set(0, g + BODY_R - c.y, 0)); }
   }
 
@@ -295,24 +299,29 @@ export function createDinoManager({ scene, templates, caveMouth, onPlayerHit, on
       case 'chase': {
         // alvo: o Romanele; se ele está na caverna, a borda dela
         let tx = player.x, tz = player.z;
+        const gone = leftForest(player.z);
         if (!playerOutside) {
           tx = THREE.MathUtils.clamp(player.x, caveMouth.x - CAVE_HALF_W + 1.5, caveMouth.x + CAVE_HALF_W - 1.5);
           tz = boundaryZ + 0.6;
+        } else if (gone) {
+          // ele saiu da mata: vão até a borda e ficam rugindo ali
+          tx = THREE.MathUtils.clamp(p.x, player.x - 6, player.x + 6);
+          tz = exitZ - EXIT_STOP;
         }
         // um dino ataca por vez; os outros rodeiam a uns 3,5 m esperando a vez
         const someoneAttacking = dinos.some((o) => o !== d && o.state === 'attack');
-        if (someoneAttacking && playerOutside && distP < 4.5) {
+        if (someoneAttacking && playerOutside && !gone && distP < 4.5) {
           d.state = 'circle'; d.timer = rand(0.8, 1.6); d.circleDir = Math.random() < 0.5 ? -1 : 1;
           break;
         }
         const distT = Math.hypot(tx - p.x, tz - p.z);
         const off = turnTo(d, tx, tz, dt, d.state === 'wait' ? 2.5 : 4);
-        if (distP < d.cfg.bite && off < 0.6 && !someoneAttacking) {
+        if (distP < d.cfg.bite && off < 0.6 && !someoneAttacking && !gone) {
           d.state = 'attack'; d.attackHit = false; d.speed = 0;
           play(d, Math.random() < 0.6 ? 'Atacar' : 'Atacar2', { fade: 0.12, once: true });
           break;
         }
-        if (!playerOutside && distT < 1.2) {
+        if ((!playerOutside || gone) && (distT < 1.2 || (gone && p.z > exitZ - EXIT_STOP - 0.5))) {
           // esperando na boca da caverna: olha para ele e ruge de vez em quando
           d.state = 'wait'; d.speed = 0;
           turnTo(d, player.x, player.z, dt, 2.5);
@@ -360,7 +369,8 @@ export function createDinoManager({ scene, templates, caveMouth, onPlayerHit, on
   /* ── API ── */
   function update(dt, { octree, player, swing }) {
     const playerOutside = !inCaveArea(player.x, player.z);
-    if (!active && playerOutside) { active = true; startWave(octree, player); }
+    const gone = leftForest(player.z);
+    if (!active && playerOutside && !gone) { active = true; startWave(octree, player); }
     invulnerable = Math.max(0, invulnerable - dt);
 
     checkClub(player, swing);
@@ -384,7 +394,7 @@ export function createDinoManager({ scene, templates, caveMouth, onPlayerHit, on
     // próxima onda quando todos caíram (só se ele estiver fora da caverna)
     if (active && !dinos.some(isAlive)) {
       nextWaveIn -= dt;
-      if (nextWaveIn <= 0 && playerOutside) { nextWaveIn = 5; startWave(octree, player); }
+      if (nextWaveIn <= 0 && playerOutside && !gone) { nextWaveIn = 5; startWave(octree, player); }
     } else nextWaveIn = 5;
   }
 

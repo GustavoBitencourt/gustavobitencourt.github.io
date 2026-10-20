@@ -161,7 +161,7 @@ float ambientH(vec2 f, vec2 w) {
       .replace('#include <begin_vertex>', `#include <begin_vertex>
         vec4 wW = modelMatrix * vec4(transformed, 1.0);
         vec2 wUv = (wW.xz - uWaterOrigin) / uWaterSize;
-        vec2 fl = flowUv * vec2(1.0, 10.0); // x já em metros ao longo do rio
+        vec2 fl = flowUv; // metros: x ao longo do rio, y através
         transformed.y += texture2D(uWaterState, wUv).r + ambientH(fl, wW.xz);
         vWaterW = (modelMatrix * vec4(transformed, 1.0)).xyz;
         vFlow = fl;`);

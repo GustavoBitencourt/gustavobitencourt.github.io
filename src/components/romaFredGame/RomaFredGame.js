@@ -147,10 +147,12 @@ const RomaFredGame = () => {
 
     function setupMata(gltf) {
       const env = gltf.scene; scene.add(env);
-      const colliders = [];
+      const colliders = [], limits = [];
       let waterMesh = null;
       env.traverse((o) => {
-        if (o.name && o.name.startsWith('Colisao')) { o.visible = false; if (o.isMesh) colliders.push(o); return; }
+        // Colisao_Limite: parede invisível só para o Romanele (os dinos passam)
+        if (o.name && o.name.startsWith('Colisao')) { o.visible = false; if (o.isMesh) (o.name.startsWith('Colisao_Limite') ? limits : colliders).push(o); return; }
+        if (o.isMesh && o.userData && o.userData.colisao === 'visivel') colliders.push(o); // terreno/calçada visíveis que também são chão
         if (o.isMesh && o.userData && o.userData.agua) waterMesh = o;
         if (o.isMesh) {
           const re = /Capim|Cavalinha|Folhinhas|Samambaia\d|Arbusto/;
@@ -166,9 +168,13 @@ const RomaFredGame = () => {
       if (waterMesh) {
         try { water = createWater({ renderer, scene, mesh: waterMesh }); water.setSunDirection(sunDir); } catch (err) { console.warn('Água interativa desativada:', err); }
       }
+      const zOf = (name, fallback) => { const o = env.getObjectByName(name); if (!o) return fallback; const v = new THREE.Vector3(); o.getWorldPosition(v); return v.z; };
+      const riverBox = waterMesh ? new THREE.Box3().setFromObject(waterMesh) : null;
       worlds.mata = {
         name: 'mata', root: env, octree: buildOctree(env, colliders),
+        limitOctree: limits.length ? buildOctree(env, limits) : null,
         markers: { SpawnPlayer: env.getObjectByName('SpawnPlayer') }, people: [], personObjs: [], mixer: null,
+        zones: { exitZ: zOf('SaidaMata', Infinity), asphaltZ: zOf('InicioAsfalto', Infinity), riverBox },
       };
     }
 
@@ -177,7 +183,7 @@ const RomaFredGame = () => {
       const caveMouth = new THREE.Vector3();
       worlds.mata.root.getObjectByName('EntradaCaverna').getWorldPosition(caveMouth);
       dinos = createDinoManager({
-        scene, templates, caveMouth,
+        scene, templates, caveMouth, exitZ: worlds.mata.zones.exitZ,
         onWave: (n, count) => toast(n === 1 ? `Dinossauros vindo! (${count})` : `Onda ${n}: ${count} dinossauros`),
         onDown: (count, d) => {
           clubSound(true);
@@ -639,6 +645,16 @@ const RomaFredGame = () => {
         else player.vel.addScaledVector(hit.normal, -hit.normal.dot(player.vel));
         player.capsule.translate(hit.normal.multiplyScalar(hit.depth));
       }
+      // limites laterais do mapa (paredes invisíveis): só empurra na horizontal
+      if (world.limitOctree) {
+        for (let i = 0; i < 2; i++) {
+          const hit = world.limitOctree.capsuleIntersect(player.capsule);
+          if (!hit) break;
+          hit.normal.y = 0; if (hit.normal.lengthSq() < 1e-6) break; hit.normal.normalize();
+          player.vel.addScaledVector(hit.normal, -Math.min(0, hit.normal.dot(player.vel)));
+          player.capsule.translate(hit.normal.multiplyScalar(hit.depth));
+        }
+      }
       // gruda no chão em pequenos degraus para baixo
       if (!player.onFloor && wasOnFloor && player.vel.y <= 0 && player.jumpTimer < 0) {
         ray.origin.copy(player.capsule.start); ray.direction.set(0, -1, 0);
@@ -715,12 +731,16 @@ const RomaFredGame = () => {
       const depth = THREE.MathUtils.smoothstep(-p.z, -caveZ.mouth, -caveZ.deep) * inX;
       hemi.intensity = THREE.MathUtils.lerp(1.25, 0.32, depth);
       renderer.toneMappingExposure = THREE.MathUtils.lerp(0.95, 1.25, depth);
-      setPlace(depth > 0.5 ? 'Caverna' : (Math.hypot(p.x, p.z + 3) < 16 ? 'Clareira' : 'Mata'));
+      const zn = world.zones, rb = zn.riverBox;
+      const inRiver = rb && p.z > rb.min.z && p.z < rb.max.z && p.y < rb.max.y + 0.1;
+      setPlace(depth > 0.5 ? 'Caverna' : p.z > zn.asphaltZ ? 'Cidade' : p.z > zn.exitZ ? 'Estrada'
+        : inRiver ? 'Rio' : (Math.hypot(p.x, p.z + 3) < 16 ? 'Clareira' : 'Mata'));
       // fogo tremulando
       for (const L of fireLights) L.intensity = L.userData.base * (0.82 + 0.12 * Math.sin(t * 11.3 + L.id) + 0.08 * Math.sin(t * 23.7 + L.id * 2.1));
       for (const f of flames) { f.scale.y = 1 + 0.08 * Math.sin(t * 13 + f.id); f.scale.x = 1 + 0.05 * Math.sin(t * 9.1 + f.id * 1.7); }
       // sombras do sol acompanham o jogador
       sun.target.position.copy(p); sun.position.copy(p).addScaledVector(sunDir, 70);
+      sky.position.copy(camera.position); // o mapa vai até ~560 m: o domo do céu acompanha a câmera
     }
 
     // festa: pessoas entre a câmera e o Romanele somem para ele não sumir na multidão
