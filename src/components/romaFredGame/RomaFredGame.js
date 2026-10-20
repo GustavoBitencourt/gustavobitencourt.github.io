@@ -12,6 +12,7 @@ import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { createMusic } from './music.js';
 import { createDinoManager, DINO_TYPES } from './dinos.js';
 import { createSfx } from './sfx.js';
+import { createWater } from './water.js';
 import './RomaFredGame.css';
 
 const MODELS = `${process.env.PUBLIC_URL || ''}/assets/models`;
@@ -142,12 +143,15 @@ const RomaFredGame = () => {
     let model, mixer, club, dinos, feet = [];
     const actions = {}, clips = {};
     const flames = []; const fireLights = [];
+    let water = null; // rio interativo (water.js)
 
     function setupMata(gltf) {
       const env = gltf.scene; scene.add(env);
       const colliders = [];
+      let waterMesh = null;
       env.traverse((o) => {
         if (o.name && o.name.startsWith('Colisao')) { o.visible = false; if (o.isMesh) colliders.push(o); return; }
+        if (o.isMesh && o.userData && o.userData.agua) waterMesh = o;
         if (o.isMesh) {
           const re = /Capim|Cavalinha|Folhinhas|Samambaia\d|Arbusto/;
           const grassy = re.test(o.name) || re.test((o.parent && o.parent.name) || '');
@@ -159,6 +163,9 @@ const RomaFredGame = () => {
         }
         if (o.isLight) { o.userData.base = o.intensity; fireLights.push(o); o.castShadow = false; }
       });
+      if (waterMesh) {
+        try { water = createWater({ renderer, scene, mesh: waterMesh }); water.setSunDirection(sunDir); } catch (err) { console.warn('Água interativa desativada:', err); }
+      }
       worlds.mata = {
         name: 'mata', root: env, octree: buildOctree(env, colliders),
         markers: { SpawnPlayer: env.getObjectByName('SpawnPlayer') }, people: [], personObjs: [], mixer: null,
@@ -248,6 +255,7 @@ const RomaFredGame = () => {
       renderer.toneMappingExposure = festa ? 1.0 : 0.95;
       if (!festa && music.on) toggleMusic();
       if (dinos) { dinos.reset(); dinos.setVisible(!festa); }
+      if (water) water.setVisible(!festa);
       root.dataset.world = name;
       $('brand-where').textContent = festa ? 'na Xalassa' : 'na Mata';
       $('world').textContent = festa ? 'Voltar para a mata' : 'Ir para a Xalassa';
@@ -840,6 +848,17 @@ const RomaFredGame = () => {
         const p = model.position;
         dinos.update(dt, { octree: world.octree, player: { x: p.x, y: p.y, z: p.z, yaw: player.yaw }, swing });
       }
+      // água: Romanele e dinossauros empurram a superfície do rio
+      if (!festa && water) {
+        const p = model.position;
+        const bodies = [{ key: 'player', x: p.x, y: p.y, z: p.z, r: 0.34, vy: player.vel.y }];
+        if (dinos) for (const d of dinos.list) {
+          if (d.state === 'delay' || !d.obj.visible) continue;
+          const q = d.obj.position;
+          bodies.push({ key: d, x: q.x, y: q.y, z: q.z, r: 0.55, state: d.state, yaw: d.yaw });
+        }
+        water.update(dt, bodies);
+      }
       updateSwingSound();
       if (!render) return;
       if (festa && useBloom) composer.render(); else renderer.render(scene, camera);
@@ -884,6 +903,7 @@ const RomaFredGame = () => {
       renderer.setAnimationLoop(null);
       music.dispose();
       sfx.dispose();
+      if (water) water.dispose();
       cleanups.forEach((fn) => fn());
       if (mixer) mixer.stopAllAction();
       if (worlds.festa) worlds.festa.mixer.stopAllAction();
