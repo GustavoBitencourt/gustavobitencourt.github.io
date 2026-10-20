@@ -10,6 +10,7 @@ import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { createMusic } from './music.js';
+import { createDinoManager, DINO_TYPES } from './dinos.js';
 import './RomaFredGame.css';
 
 const MODELS = `${process.env.PUBLIC_URL || ''}/assets/models`;
@@ -116,9 +117,9 @@ const RomaFredGame = () => {
 
     /* ── carregamento ── */
     const loader = new GLTFLoader();
-    const progress = { mata: 0, char: 0, festa: 0 };
-    const SIZE_HINT = { mata: 13659160, char: 17057072, festa: 17333184 };
-    let progressKeys = ['mata', 'char'];
+    const progress = { mata: 0, char: 0, festa: 0, raptor: 0, trex: 0, inflavel: 0 };
+    const SIZE_HINT = { mata: 13659160, char: 17057072, festa: 21971364, raptor: 1502832, trex: 1515896, inflavel: 1099968 };
+    let progressKeys = ['mata', 'char', 'raptor', 'trex', 'inflavel'];
     function showProgress() {
       const loaded = progressKeys.reduce((s, k) => s + progress[k], 0);
       const total = progressKeys.reduce((s, k) => s + SIZE_HINT[k], 0);
@@ -137,7 +138,7 @@ const RomaFredGame = () => {
     /* ── mundos ── */
     const worlds = {};   // { mata, festa }: { root, octree, markers, people, personObjs, mixer }
     let world = null;
-    let model, mixer, club;
+    let model, mixer, club, dinos;
     const actions = {}, clips = {};
     const flames = []; const fireLights = [];
 
@@ -161,6 +162,28 @@ const RomaFredGame = () => {
         name: 'mata', root: env, octree: buildOctree(env, colliders),
         markers: { SpawnPlayer: env.getObjectByName('SpawnPlayer') }, people: [], personObjs: [], mixer: null,
       };
+    }
+
+    // Dinossauros: vêm quando o Romanele sai 2 m da caverna e caem com uma bastada
+    function setupDinos(templates) {
+      const caveMouth = new THREE.Vector3();
+      worlds.mata.root.getObjectByName('EntradaCaverna').getWorldPosition(caveMouth);
+      dinos = createDinoManager({
+        scene, templates, caveMouth,
+        onWave: (n, count) => toast(n === 1 ? `Dinossauros vindo! (${count})` : `Onda ${n}: ${count} dinossauros`),
+        onDown: (count, d) => {
+          $('chip-dinos').innerHTML = `Dinos <b>${count} no chão</b>`;
+          toast(`${d.cfg.label} derrubado!`);
+        },
+        onPlayerHit: (dx, dz) => {
+          // empurrão da mordida / rabada
+          stopDance();
+          player.vel.x += dx * 3.2; player.vel.z += dz * 3.2;
+          if (player.onFloor) { player.vel.y = 2; player.onFloor = false; player.airTime = 0.01; }
+          const el = $('hurt'); el.classList.remove('show'); void el.offsetWidth; el.classList.add('show');
+          toast('O dino pegou o Romanele!');
+        },
+      });
     }
 
     function setupFesta(gltf) {
@@ -221,6 +244,7 @@ const RomaFredGame = () => {
       scene.background = festa ? festaBg : null;
       renderer.toneMappingExposure = festa ? 1.0 : 0.95;
       if (!festa && music.on) toggleMusic();
+      if (dinos) { dinos.reset(); dinos.setVisible(!festa); }
       root.dataset.world = name;
       $('brand-where').textContent = festa ? 'na Xalassa' : 'na Mata';
       $('world').textContent = festa ? 'Voltar para a mata' : 'Ir para a Xalassa';
@@ -235,9 +259,9 @@ const RomaFredGame = () => {
       capsule: new Capsule(new THREE.Vector3(), new THREE.Vector3(), RADIUS),
       vel: new THREE.Vector3(), onFloor: false, airTime: 0, yaw: 0,
       club: true, attacking: false, attackIndex: 0, queued: false, jumpTimer: -1, landing: 0,
-      mode: 'play', current: null, stateLabel: 'Parado', dance: null, danceNext: 1,
+      mode: 'play', current: null, stateLabel: 'Parado', dance: null, danceNext: 1, swingId: 0,
     };
-    const input = { f: 0, b: 0, l: 0, r: 0, run: false, stick: new THREE.Vector2(), stickRun: false };
+    const input = { f: 0, b: 0, l: 0, r: 0, walk: false, stick: new THREE.Vector2(), stickWalk: false };
     const cam = { yaw: Math.PI, pitch: 0.32, dist: 4.4, target: new THREE.Vector3(), pos: new THREE.Vector3() };
     let partyClock = 0;
 
@@ -316,7 +340,11 @@ const RomaFredGame = () => {
       startAttack();
     }
     function startAttack() {
-      player.attacking = true; player.queued = false;
+      player.attacking = true; player.queued = false; player.swingId += 1;
+      if (dinos && world === worlds.mata) {
+        const yaw = dinos.aim(model.position.x, model.position.z, player.yaw);
+        if (yaw !== null) player.yaw = yaw;
+      }
       player.attackIndex = player.attackIndex % 2 + 1;
       play(`Ataque${player.attackIndex}_ComBastao`, { fade: 0.12, once: true, timeScale: 1.05 });
     }
@@ -466,7 +494,7 @@ const RomaFredGame = () => {
       if (!started || busy) return;
       if (e.target.closest && e.target.closest('button')) { if (e.code === 'Space' || e.code === 'Enter') return; }
       if (keyMap[e.code]) { input[keyMap[e.code]] = 1; if (player.mode === 'viewer') exitViewer(); e.preventDefault(); }
-      if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') input.run = true;
+      if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') input.walk = true;
       if (e.code === 'Space') { jump(); e.preventDefault(); }
       if (e.code === 'KeyF') attack();
       if (e.repeat) return;
@@ -478,9 +506,9 @@ const RomaFredGame = () => {
     });
     on(window, 'keyup', (e) => {
       if (keyMap[e.code]) input[keyMap[e.code]] = 0;
-      if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') input.run = false;
+      if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') input.walk = false;
     });
-    on(window, 'blur', () => { input.f = input.b = input.l = input.r = 0; input.run = false; });
+    on(window, 'blur', () => { input.f = input.b = input.l = input.r = 0; input.walk = false; });
 
     // câmera: arrastar com mouse ou um dedo fora dos controles
     const canvas = renderer.domElement;
@@ -525,8 +553,8 @@ const RomaFredGame = () => {
         e.preventDefault(); if (world !== worlds.festa) return;
         exitViewer(); stopDance(); placeAt('Camarote_Vista');
       });
-      on($('t-run'), 'pointerdown', (e) => {
-        e.preventDefault(); input.stickRun = !input.stickRun; $('t-run').classList.toggle('hot', input.stickRun);
+      on($('t-walk'), 'pointerdown', (e) => {
+        e.preventDefault(); input.stickWalk = !input.stickWalk; $('t-walk').classList.toggle('hot', input.stickWalk);
       });
     }
 
@@ -560,7 +588,8 @@ const RomaFredGame = () => {
       const rgtX = Math.cos(cam.yaw), rgtZ = -Math.sin(cam.yaw);
       wish.set(fwdX * iz + rgtX * ix, 0, fwdZ * iz + rgtZ * ix);
       if (wish.lengthSq() > 1e-6) wish.normalize();
-      const running = input.run || input.stickRun || input.stick.length() > 0.92;
+      // corre por padrão; Shift (ou o botão ANDAR no celular) faz ele caminhar
+      const running = !(input.walk || input.stickWalk);
       const locked = !started || player.mode !== 'play' || player.attacking || player.jumpTimer >= 0 || player.landing > 0 || player.dance;
       const target = locked ? 0 : mag * (running ? RUN_SPEED : WALK_SPEED);
 
@@ -726,7 +755,9 @@ const RomaFredGame = () => {
     }
     function frame() {
       timer.update();
-      const dt = Math.min(timer.getDelta(), 1 / 20);
+      step(Math.min(timer.getDelta(), 1 / 20), true);
+    }
+    function step(dt, render) {
       const t = timer.getElapsed();
       stepParty(dt);
       const steps = 4;
@@ -736,6 +767,14 @@ const RomaFredGame = () => {
       updateCamera(dt);
       const festa = world === worlds.festa;
       if (festa) updateFesta(); else updateMata(t);
+      if (!festa && started && dinos) {
+        const a = player.current, clipName = a ? a.getClip().name : '';
+        const swing = player.attacking && clipName.startsWith('Ataque')
+          ? { id: player.swingId, name: clipName, progress: a.time / a.getClip().duration } : null;
+        const p = model.position;
+        dinos.update(dt, { octree: world.octree, player: { x: p.x, y: p.y, z: p.z, yaw: player.yaw }, swing });
+      }
+      if (!render) return;
       if (festa && useBloom) composer.render(); else renderer.render(scene, camera);
     }
 
@@ -748,10 +787,15 @@ const RomaFredGame = () => {
 
     (async () => {
       try {
-        const [mataGltf, charGltf] = await Promise.all([loadGLB(MATA_PATH, 'mata'), loadGLB(CHAR_PATH, 'char')]);
+        const dinoKeys = Object.keys(DINO_TYPES);
+        const [mataGltf, charGltf, ...dinoGltfs] = await Promise.all([
+          loadGLB(MATA_PATH, 'mata'), loadGLB(CHAR_PATH, 'char'),
+          ...dinoKeys.map((k) => loadGLB(`${MODELS}/${DINO_TYPES[k].file}`, k)),
+        ]);
         if (disposed) return;
         setupMata(mataGltf);
         setupCharacter(charGltf);
+        setupDinos(Object.fromEntries(dinoKeys.map((k, i) => [k, dinoGltfs[i]])));
         setClub(true, false);
         setWorld('mata', 'SpawnPlayer');
         play(clipFor('Parado'), { fade: 0 });
@@ -796,7 +840,7 @@ const RomaFredGame = () => {
       <div id="rf-loading" role="status" aria-live="polite">
         <div className="card">
           <h1 id="rf-loadtitle">Romanele <span>na Mata</span></h1>
-          <p id="rf-loadcopy">Carregando o personagem riggado e a mata com a caverna. São cerca de 30&nbsp;MB.</p>
+          <p id="rf-loadcopy">Carregando o personagem riggado, a mata com a caverna e os dinossauros. São cerca de 35&nbsp;MB.</p>
           <div id="rf-loadprog">
             <div className="bar" aria-hidden="true"><i id="rf-loadbar" /></div>
             <div id="rf-loadtxt">0%</div>
@@ -813,12 +857,13 @@ const RomaFredGame = () => {
           <span className="chip" id="rf-chip-club">Bastão <b>Na mão</b></span>
           <span className="chip" id="rf-chip-place">Local <b>Caverna</b></span>
           <span className="chip beat only-festa" id="rf-chip-beat"><i />120 BPM</span>
+          <span className="chip only-mata" id="rf-chip-dinos">Dinos <b>0 no chão</b></span>
         </div>
       </div>
 
       <div className="hud panel" id="rf-keys" aria-label="Controles">
         <div className="k"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></div><span>andar</span>
-        <div className="k"><kbd>Shift</kbd></div><span>correr</span>
+        <div className="k"><kbd>Shift</kbd></div><span>caminhar (segurar)</span>
         <div className="k"><kbd>Espaço</kbd></div><span>pular</span>
         <div className="k"><kbd>E</kbd><kbd>1</kbd><kbd>2</kbd><kbd>3</kbd></div><span>dançar (no ritmo da festa)</span>
         <div className="k"><kbd>Q</kbd></div><span>pegar / guardar bastão</span>
@@ -855,13 +900,14 @@ const RomaFredGame = () => {
       </div>
 
       <div className="hud panel" id="rf-toast" role="status" aria-live="polite" />
+      <div id="rf-hurt" aria-hidden="true" />
 
       <div className="hud" id="rf-touch" aria-hidden="true">
         <div id="rf-stick"><div id="rf-knob" /></div>
         <div id="rf-tbtns">
           <button id="rf-t-club" type="button">BASTÃO</button>
           <button id="rf-t-dance" type="button">DANÇAR</button>
-          <button id="rf-t-run" type="button">CORRER</button>
+          <button id="rf-t-walk" type="button">ANDAR</button>
           <button id="rf-t-jump" type="button">PULAR</button>
           <button id="rf-t-atk" type="button">ATACAR</button>
           <button id="rf-t-up" className="only-festa" type="button">CAMAROTE</button>
