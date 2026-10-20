@@ -10,6 +10,8 @@
   --muted: #b9ac94;
   --ochre: #c96a2b;
   --ochre-hi: #e8904f;
+  --lime: #b8ff4f;
+  --glow: none;
   --font-display: "Rammetto One", "Arial Black", Impact, sans-serif;
   --font-ui: "Karla", "Segoe UI", system-ui, sans-serif;
   --font-key: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
@@ -27,6 +29,19 @@
   user-select: none;
   text-align: left;
 }
+/* Na festa o HUD vira neon (mesmas variáveis, outra paleta) */
+.rf-root[data-world="festa"] {
+  --ink: #0d0913;
+  --panel: rgba(20, 13, 30, 0.76);
+  --panel-solid: #1a1226;
+  --line: rgba(241, 233, 255, 0.16);
+  --bone: #f3edff;
+  --muted: #b8a9cf;
+  --ochre: #ff4fb8;
+  --ochre-hi: #ff86cf;
+  --glow: 0 0 18px rgba(255, 79, 184, .45);
+}
+.rf-root[data-world="mata"] .only-festa { display: none !important; }
 .rf-root [hidden] { display: none !important; }
 #rf-stage { position: absolute; inset: 0; }
 #rf-stage canvas { display: block; width: 100%; height: 100%; outline: none; }
@@ -35,40 +50,60 @@
 .rf-root .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
 
 /* marca + status */
-#rf-brand { top: calc(14px + env(safe-area-inset-top, 0px)); left: max(16px, env(safe-area-inset-left, 0px)); display: grid; gap: 8px; max-width: min(360px, calc(100vw - 32px)); }
-#rf-brand h1 { margin: 0; font-family: var(--font-display); font-weight: 400; font-size: clamp(22px, 3.2vw, 30px); letter-spacing: 0.01em; line-height: 1; color: var(--bone); text-shadow: 0 2px 0 rgba(0,0,0,.45); }
+#rf-brand { top: calc(14px + env(safe-area-inset-top, 0px)); left: max(16px, env(safe-area-inset-left, 0px)); display: grid; gap: 8px; max-width: min(380px, calc(100vw - 32px)); }
+#rf-brand h1 { margin: 0; font-family: var(--font-display); font-weight: 400; font-size: clamp(22px, 3.2vw, 30px); letter-spacing: 0.01em; line-height: 1; color: var(--bone); text-shadow: 0 2px 0 rgba(0,0,0,.45), var(--glow); }
 #rf-brand h1 span { color: var(--ochre-hi); }
 .rf-root .chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .rf-root .chip { font-size: 12px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; padding: 5px 9px; border-radius: 999px; background: var(--panel); border: 1px solid var(--line); color: var(--bone); }
 .rf-root .chip b { color: var(--ochre-hi); font-weight: 700; }
-.rf-root .chip.club-off b { color: var(--muted); }
+.rf-root .chip.off b { color: var(--muted); }
+.rf-root .chip.beat { font-family: var(--font-key); font-variant-numeric: tabular-nums; }
+.rf-root .chip.beat i { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--muted); margin-right: 6px; vertical-align: 0; transition: background .05s; }
+.rf-root .chip.beat.on i { background: var(--lime); box-shadow: 0 0 10px var(--lime); }
 
 /* legenda dos controles */
 #rf-keys { left: max(16px, env(safe-area-inset-left, 0px)); bottom: calc(16px + env(safe-area-inset-bottom, 0px)); padding: 10px 12px; display: grid; grid-template-columns: auto auto; gap: 6px 12px; align-items: center; font-size: 13px; color: var(--muted); }
 #rf-keys .k { display: flex; gap: 4px; justify-content: flex-end; }
 .rf-root kbd { font-family: var(--font-key); font-size: 11px; color: var(--bone); background: var(--panel-solid); border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 5px; padding: 2px 6px; min-width: 14px; text-align: center; }
 
-/* painel de animações */
-#rf-anims { right: max(16px, env(safe-area-inset-right, 0px)); top: calc(14px + env(safe-area-inset-top, 0px)); width: 258px; max-height: calc(100% - 28px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)); display: flex; flex-direction: column; overflow: hidden; }
-#rf-anims header { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--line); }
-#rf-anims h2 { margin: 0; font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); font-weight: 700; }
-#rf-anims .list { overflow-y: auto; padding: 6px 6px 10px; display: grid; gap: 2px; }
-#rf-anims .group { font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ochre-hi); padding: 10px 8px 4px; font-weight: 700; }
-.rf-root .clip { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 8px; width: 100%; text-align: left; background: transparent; color: var(--bone); border: 1px solid transparent; border-radius: 7px; padding: 6px 8px; font: inherit; font-size: 13px; cursor: pointer; }
-.rf-root .clip:hover { background: rgba(239,229,207,0.07); }
-.rf-root .clip:focus-visible, .rf-root button:focus-visible { outline: 2px solid var(--ochre-hi); outline-offset: 1px; }
-.rf-root .clip[aria-pressed="true"] { border-color: var(--ochre); background: rgba(201,106,43,0.16); }
-.rf-root .clip small { font-family: var(--font-key); font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+/* botões */
 .rf-root .btn { font: inherit; font-size: 12px; font-weight: 700; letter-spacing: 0.04em; color: var(--ink); background: var(--ochre-hi); border: 0; border-radius: 7px; padding: 6px 10px; cursor: pointer; }
 .rf-root .btn.ghost { color: var(--bone); background: transparent; border: 1px solid var(--line); }
+.rf-root .btn.ghost:hover { background: rgba(239,229,207,0.07); }
+.rf-root .btn.ghost[aria-pressed="true"] { border-color: var(--lime); color: var(--lime); }
+.rf-root .btn:focus-visible, .rf-root .clip:focus-visible, .rf-root button:focus-visible { outline: 2px solid var(--lime); outline-offset: 1px; }
+
+/* canto superior direito: Ir para a Xalassa / Voltar para a mata */
+#rf-topright { right: max(16px, env(safe-area-inset-right, 0px)); top: calc(14px + env(safe-area-inset-top, 0px)); display: flex; gap: 8px; justify-content: flex-end; }
+#rf-world { font-family: var(--font-display); font-weight: 400; font-size: 15px; letter-spacing: 0.02em; padding: 10px 16px; border-radius: 10px; color: #160a1c; background: linear-gradient(135deg, #ff4fb8, #b65cff); box-shadow: 0 0 18px rgba(255, 79, 184, .5); transition: transform .15s, box-shadow .15s; }
+#rf-world:hover { transform: scale(1.04); box-shadow: 0 0 26px rgba(255, 79, 184, .75); }
+.rf-root[data-world="festa"] #rf-world { color: #1b1714; background: linear-gradient(135deg, #e8904f, #8aa65a); box-shadow: 0 4px 14px rgba(0,0,0,.4); }
+#rf-opts-toggle { display: none; }
+
+/* coluna da direita: opções da festa + animações */
+#rf-side { right: max(16px, env(safe-area-inset-right, 0px)); top: calc(68px + env(safe-area-inset-top, 0px)); width: 262px; max-height: calc(100% - 82px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)); display: flex; flex-direction: column; gap: 8px; }
+.rf-root .box { display: flex; flex-direction: column; overflow: hidden; min-height: 0; flex-shrink: 0; }
+.rf-root #rf-anims { flex-shrink: 1; }
+.rf-root .box header { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--line); }
+.rf-root .box h2 { margin: 0; font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); font-weight: 700; }
+.rf-root .row { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 12px; }
+#rf-anims .list { overflow-y: auto; padding: 6px 6px 10px; display: grid; gap: 2px; min-height: 0; }
+#rf-anims .group { font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ochre-hi); padding: 10px 8px 4px; font-weight: 700; }
+#rf-anims.collapsed .list { display: none; }
+.rf-root .clip { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 8px; width: 100%; text-align: left; background: transparent; color: var(--bone); border: 1px solid transparent; border-radius: 7px; padding: 6px 8px; font: inherit; font-size: 13px; cursor: pointer; }
+.rf-root .clip:hover { background: rgba(239,229,207,0.07); }
+.rf-root .clip[aria-pressed="true"] { border-color: var(--ochre); background: rgba(201,106,43,0.16); }
+.rf-root .clip small { font-family: var(--font-key); font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+
 #rf-viewer-bar { left: 50%; transform: translateX(-50%); top: calc(14px + env(safe-area-inset-top, 0px)); padding: 8px 8px 8px 14px; display: flex; gap: 10px; align-items: center; font-size: 13px; max-width: calc(100vw - 32px); }
 #rf-viewer-bar strong { color: var(--ochre-hi); font-weight: 700; }
-#rf-toast { left: 50%; transform: translateX(-50%); top: calc(70px + env(safe-area-inset-top, 0px)); padding: 8px 14px; font-size: 13px; opacity: 0; transition: opacity .25s; }
+#rf-toast { left: 50%; transform: translateX(-50%); top: calc(70px + env(safe-area-inset-top, 0px)); padding: 8px 14px; font-size: 13px; opacity: 0; transition: opacity .25s; max-width: calc(100vw - 32px); }
 #rf-toast.show { opacity: 1; }
 
 /* carregamento + tela inicial */
 #rf-loading { position: absolute; inset: 0; z-index: 20; display: grid; place-items: center; background: radial-gradient(120% 90% at 50% 40%, rgba(58,42,29,0.92) 0%, rgba(27,23,20,0.97) 70%); padding: 0 16px; }
-#rf-loading .card { width: min(420px, 100%); display: grid; gap: 14px; text-align: center; justify-items: center; }
+#rf-loading.festa-load { background: radial-gradient(120% 90% at 50% 40%, #3a1838 0%, #0d0913 70%); }
+#rf-loading .card { width: min(440px, 100%); display: grid; gap: 14px; text-align: center; justify-items: center; }
 #rf-loading h1 { margin: 0; font-family: var(--font-display); font-weight: 400; font-size: clamp(30px, 6vw, 42px); line-height: 1; }
 #rf-loading h1 span { color: var(--ochre-hi); }
 #rf-loading p { margin: 0; color: var(--muted); line-height: 1.5; max-width: 60ch; }
@@ -86,16 +121,21 @@
 #rf-touch { inset: 0; display: none; }
 #rf-stick { position: absolute; left: max(22px, calc(env(safe-area-inset-left, 0px) + 22px)); bottom: calc(26px + env(safe-area-inset-bottom, 0px)); width: 132px; height: 132px; border-radius: 50%; background: rgba(29,24,20,0.45); border: 1px solid var(--line); touch-action: none; }
 #rf-knob { position: absolute; left: 50%; top: 50%; width: 56px; height: 56px; margin: -28px 0 0 -28px; border-radius: 50%; background: rgba(239,229,207,0.85); }
-#rf-tbtns { position: absolute; right: max(18px, calc(env(safe-area-inset-right, 0px) + 18px)); bottom: calc(26px + env(safe-area-inset-bottom, 0px)); display: grid; grid-template-columns: repeat(2, 64px); gap: 10px; }
-#rf-tbtns button { width: 64px; height: 64px; border-radius: 50%; border: 1px solid var(--line); background: rgba(29,24,20,0.6); color: var(--bone); font: inherit; font-size: 11px; font-weight: 700; letter-spacing: 0.04em; touch-action: none; }
+#rf-tbtns { position: absolute; right: max(18px, calc(env(safe-area-inset-right, 0px) + 18px)); bottom: calc(26px + env(safe-area-inset-bottom, 0px)); display: grid; grid-template-columns: repeat(3, 60px); gap: 10px; }
+#rf-tbtns button { width: 60px; height: 60px; border-radius: 50%; border: 1px solid var(--line); background: rgba(29,24,20,0.6); color: var(--bone); font: inherit; font-size: 10px; font-weight: 700; letter-spacing: 0.03em; touch-action: none; }
 #rf-tbtns button.hot { background: var(--ochre); color: var(--ink); }
 @media (pointer: coarse) {
   #rf-touch { display: block; }
   #rf-keys { display: none; }
-  #rf-anims { width: min(250px, calc(100vw - 32px)); }
 }
-@media (max-width: 640px) {
-  #rf-anims { top: auto; bottom: calc(176px + env(safe-area-inset-bottom, 0px)); max-height: 46%; }
+@media (max-width: 700px), (pointer: coarse) {
+  #rf-opts-toggle { display: inline-block; }
+  #rf-world { font-size: 13px; padding: 8px 12px; }
+  #rf-brand { top: calc(62px + env(safe-area-inset-top, 0px)); }
+  #rf-brand h1 { font-size: 20px; }
+  #rf-side { display: none; width: min(280px, calc(100vw - 32px)); max-height: calc(100% - 270px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)); }
+  .rf-root.opts-open #rf-side { display: flex; }
   #rf-viewer-bar { top: auto; bottom: calc(176px + env(safe-area-inset-bottom, 0px)); }
+  #rf-toast { top: calc(150px + env(safe-area-inset-top, 0px)); }
 }
-@media (prefers-reduced-motion: reduce) { .rf-root .bar i, #rf-toast { transition: none; } }
+@media (prefers-reduced-motion: reduce) { .rf-root .bar i, #rf-toast, .rf-root .chip.beat i { transition: none; } }
