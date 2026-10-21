@@ -15,16 +15,19 @@ import { createSfx } from './sfx.js';
 import { createWater } from './water.js';
 import { createGrass } from './grass.js';
 import { createAmbience } from './ambience.js';
+import { createCar, CAR_ANCHOR, CAR_ENTRY } from './car.js';
 import './RomaFredGame.css';
 
 const MODELS = `${process.env.PUBLIC_URL || ''}/assets/models`;
 const MATA_PATH = `${MODELS}/mata_caverna.glb`;
 const FESTA_PATH = `${MODELS}/festa_balada.glb`;
 const CHAR_PATH = `${MODELS}/romanele_animado.glb`;
+const CAR_PATH = `${MODELS}/carro_pedra.glb`;
 
 /* Constantes (metros, segundos) */
 const WALK_SPEED = 1.25;      // velocidade para a qual o ciclo de andar foi feito
 const RUN_SPEED = 3.4;        // velocidade para a qual o ciclo de correr foi feito
+const DRIVE_SPEED = RUN_SPEED * 1.5; // no carro (sem chão e sem motor, só as pernas dele): 1,5× a corrida
 const GRAVITY = 16;
 const JUMP_VEL = 5.2;
 const RADIUS = 0.32;
@@ -121,9 +124,9 @@ const RomaFredGame = () => {
 
     /* ── carregamento ── */
     const loader = new GLTFLoader();
-    const progress = { mata: 0, char: 0, festa: 0, raptor: 0, trex: 0, inflavel: 0 };
-    const SIZE_HINT = { mata: 13659160, char: 17057072, festa: 21971364, raptor: 1502832, trex: 1515896, inflavel: 1099968 };
-    let progressKeys = ['mata', 'char', 'raptor', 'trex', 'inflavel'];
+    const progress = { mata: 0, char: 0, festa: 0, raptor: 0, trex: 0, inflavel: 0, carro: 0 };
+    const SIZE_HINT = { mata: 13659160, char: 17057072, festa: 21971364, raptor: 1502832, trex: 1515896, inflavel: 1099968, carro: 3246880 };
+    let progressKeys = ['mata', 'char', 'raptor', 'trex', 'inflavel', 'carro'];
     function showProgress() {
       const loaded = progressKeys.reduce((s, k) => s + progress[k], 0);
       const total = progressKeys.reduce((s, k) => s + SIZE_HINT[k], 0);
@@ -142,7 +145,9 @@ const RomaFredGame = () => {
     /* ── mundos ── */
     const worlds = {};   // { mata, festa }: { root, octree, markers, people, personObjs, mixer }
     let world = null;
-    let model, mixer, club, dinos, feet = [];
+    let model, mixer, club, dinos, hips, feet = [];
+    const camFocus = new THREE.Vector3(); let camBlend = 0, camDistMul = 1; // alvo da câmera (suavizado ao entrar/sair do carro)
+    let car = null; // carro de pedra (car.js)
     const actions = {}, clips = {};
     const flames = []; const fireLights = [];
     let water = null; // rio interativo (water.js)
@@ -216,6 +221,7 @@ const RomaFredGame = () => {
           toast(`${d.cfg.label} derrubado!`);
         },
         onPlayerHit: (dx, dz) => {
+          if (inCar()) return; // dentro do carro a mordida não empurra
           // empurrão da mordida / rabada
           stopDance();
           player.vel.x += dx * 3.2; player.vel.z += dz * 3.2;
@@ -267,6 +273,7 @@ const RomaFredGame = () => {
         if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; o.frustumCulled = false; }
         if (o.name === 'Bastao') club = o;
       });
+      hips = model.getObjectByName('Hips');
       feet = ['LeftFoot', 'RightFoot'].map((n) => ({ bone: model.getObjectByName(n), minH: Infinity, armed: true, cool: 0 }));
       mixer = new THREE.AnimationMixer(model);
       for (const c of gltf.animations) { clips[c.name] = c; actions[c.name] = mixer.clipAction(c); }
@@ -287,6 +294,8 @@ const RomaFredGame = () => {
       if (!festa && music.on) toggleMusic();
       if (dinos) { dinos.reset(); dinos.setVisible(!festa); }
       if (water) water.setVisible(!festa);
+      if (inCar()) leaveCarNow();
+      if (car) car.setVisible(!festa);
       ambience.setActive(!festa);
       root.dataset.world = name;
       $('brand-where').textContent = festa ? 'na Xalassa' : 'na Mata';
@@ -360,6 +369,7 @@ const RomaFredGame = () => {
     function stopDance() { player.dance = null; }
 
     function setClub(isOn, announce = true) {
+      if (inCar()) return; // no carro o bastão fica guardado
       player.club = isOn; if (club) club.visible = isOn;
       $('chip-club').className = 'chip' + (isOn ? '' : ' off');
       $('chip-club').innerHTML = `Bastão <b>${isOn ? 'Na mão' : 'Guardado'}</b>`;
@@ -400,6 +410,10 @@ const RomaFredGame = () => {
         play(clipFor('Parado'), { fade: 0.3 });
       } else if (name.startsWith('PuloAterrissagem')) {
         player.landing = 0; play(clipFor('Parado'), { fade: 0.3 });
+      } else if (name === 'Carro_Entrar' && player.mode === 'car-enter') {
+        finishEnter();
+      } else if (name === 'Carro_Sair' && player.mode === 'car-exit') {
+        carInfo.pendingExit = true;   // termina depois do mixer.update (a raiz muda de lugar)
       }
     }
 
@@ -432,6 +446,7 @@ const RomaFredGame = () => {
       }
     }
     function enterViewer(name) {
+      if (inCar()) { toast('Saia do carro (C) para ver as animações'); return; }
       player.mode = 'viewer'; player.attacking = false; player.queued = false; player.jumpTimer = -1; player.vel.set(0, 0, 0); player.dance = null;
       setClub(name.endsWith('ComBastao'), false);
       const a = play(name, { fade: 0.2 });
@@ -544,6 +559,7 @@ const RomaFredGame = () => {
       if (e.code === 'KeyF') attack();
       if (e.repeat) return;
       if (e.code === 'KeyQ') setClub(!player.club);
+      if (e.code === 'KeyC') toggleCar();
       if (e.code === 'KeyE') startDance(0);
       if (e.code === 'Digit1') startDance(1);
       if (e.code === 'Digit2') startDance(2);
@@ -594,6 +610,7 @@ const RomaFredGame = () => {
       on($('t-atk'), 'pointerdown', (e) => { e.preventDefault(); attack(); });
       on($('t-club'), 'pointerdown', (e) => { e.preventDefault(); setClub(!player.club); });
       on($('t-dance'), 'pointerdown', (e) => { e.preventDefault(); startDance(0); });
+      on($('t-car'), 'pointerdown', (e) => { e.preventDefault(); toggleCar(); });
       on($('t-up'), 'pointerdown', (e) => {
         e.preventDefault(); if (world !== worlds.festa) return;
         exitViewer(); stopDance(); placeAt('Camarote_Vista');
@@ -662,6 +679,14 @@ const RomaFredGame = () => {
 
       player.capsule.translate(tmp.copy(player.vel).multiplyScalar(dt));
       pushOutOfPeople();
+      if (car && world === worlds.mata) {
+        // o carro é sólido; logo depois de sair (a porta fica rente à lataria) empurra devagar, sem tranco
+        if (carInfo.nudge > 0) {
+          carInfo.nudge -= dt;
+          nudgeCap.copy(player.capsule); car.pushOut(nudgeCap, RADIUS);
+          player.capsule.translate(carTmp2.subVectors(nudgeCap.start, player.capsule.start).multiplyScalar(1 - Math.exp(-10 * dt)));
+        } else car.pushOut(player.capsule, RADIUS);
+      }
       const wasOnFloor = player.onFloor;
       player.onFloor = false;
       for (let i = 0; i < 3; i++) {
@@ -711,6 +736,7 @@ const RomaFredGame = () => {
     }
 
     function updateAnimation() {
+      if (inCar()) return; // no carro as animações são escolhidas em updateCarMode
       if (player.dance && player.mode === 'play') {
         const a = player.current;
         if (a && a.getClip().name === player.dance) {
@@ -738,10 +764,28 @@ const RomaFredGame = () => {
     }
 
     function updateCamera(dt) {
-      cam.target.set(model.position.x, model.position.y + 1.45, model.position.z);
+      // entrando/saindo do carro a raiz fica no banco e quem se move é o corpo: a câmera segue
+      // o quadril e desliza suavemente nas trocas, sem corte
+      const moving = player.mode === 'car-enter' || player.mode === 'car-exit';
+      if (moving && hips) {
+        hips.getWorldPosition(camFocus); camFocus.y += 0.53;
+      } else camFocus.set(model.position.x, model.position.y + 1.45, model.position.z);
+      if (moving || camBlend > 0) {
+        camBlend = Math.max(0, camBlend - dt);
+        cam.target.lerp(camFocus, 1 - Math.exp(-7 * dt));
+      } else cam.target.copy(camFocus);
+      const driving = player.mode === 'car';
+      if (driving && !drag && Math.abs(car.state.speed) > 1) {
+        // dirigindo: a câmera vai voltando para trás do carro
+        const want = car.state.yaw + (car.state.speed > 0 ? Math.PI : 0);
+        let d = want - cam.yaw; d = Math.atan2(Math.sin(d), Math.cos(d));
+        cam.yaw += d * (1 - Math.exp(-1.6 * dt));
+      }
       const cp = Math.cos(cam.pitch);
       const dir = tmp.set(Math.sin(cam.yaw) * cp, Math.sin(cam.pitch), Math.cos(cam.yaw) * cp).normalize();
-      let dist = cam.dist;
+      // no carro a câmera se afasta um pouco; a troca de distância é suave para não dar corte
+      camDistMul += ((inCar() ? 1.45 : 1) - camDistMul) * (1 - Math.exp(-2.5 * dt));
+      let dist = cam.dist * camDistMul;
       ray.origin.copy(cam.target); ray.direction.copy(dir);
       const hit = world.octree.rayIntersect(ray);
       if (hit && hit.distance < dist + 0.3) dist = Math.max(0.6, hit.distance - 0.3);
@@ -815,6 +859,175 @@ const RomaFredGame = () => {
       const el = $('chip-place'); if (el.dataset.v !== label) { el.dataset.v = label; el.innerHTML = `Local <b>${label}</b>`; }
     }
 
+    /* ── carro de pedra: anda com as pernas do Romanele (sem chão, sem motor) ── */
+    const carTmp = new THREE.Vector3(), carTmp2 = new THREE.Vector3();
+    const carInfo = { label: '', hinted: false, toldDrive: false, t: 0, club: true };
+    const carEntry = CAR_ENTRY.clone(), carExit = CAR_ENTRY.clone(); // ajustados pelas animações em setupCar
+    const carInv = new THREE.Matrix4(), carWp = new THREE.Vector3();
+    const nudgeCap = new Capsule();
+    function inCar() { return player.mode.startsWith('car'); }
+    function setupCar(gltf) {
+      car = createCar({ scene, gltf });
+      // clipes do Romanele (entrar, sair, parado e dirigindo) tocam no mixer dele
+      for (const c of Object.values(car.romClips)) { clips[c.name] = c; actions[c.name] = mixer.clipAction(c); }
+      // estacionado no começo da estrada de chão, logo depois do rio e da saída da mata
+      const zn = worlds.mata.zones;
+      car.park(worlds.mata.octree, 2.4, Number.isFinite(zn.exitZ) ? zn.exitZ + 14 : 163, 0);
+      // onde o corpo dele realmente está no 1º quadro de "entrar" e no último de "sair"
+      // (relativo ao banco), para trocar de animação sem o corpo pular
+      const stand = measureHips('Parado_SemBastao', false);
+      const enter0 = measureHips('Carro_Entrar', false), exitEnd = measureHips('Carro_Sair', true);
+      if (stand && enter0) carEntry.copy(CAR_ANCHOR).add(carTmp.set(enter0.x - stand.x, 0, enter0.z - stand.z));
+      if (stand && exitEnd) carExit.copy(CAR_ANCHOR).add(carTmp.set(exitEnd.x - stand.x, 0, exitEnd.z - stand.z));
+    }
+    // posição do quadril (no espaço do Romanele) num quadro de um clipe, sem mexer na pose atual
+    function measureHips(clipName, atEnd) {
+      const clip = clips[clipName]; if (!clip || !hips) return null;
+      const savedP = model.position.clone(), savedQ = model.quaternion.clone();
+      model.position.set(0, 0, 0); model.quaternion.identity();
+      const m = new THREE.AnimationMixer(model), a = m.clipAction(clip);
+      a.play(); m.setTime(atEnd ? clip.duration - 1e-3 : 0);
+      model.updateMatrixWorld(true);
+      const v = hips.getWorldPosition(new THREE.Vector3());
+      m.stopAllAction(); m.uncacheRoot(model);
+      model.position.copy(savedP); model.quaternion.copy(savedQ);
+      mixer.update(0);   // reaplica a pose de agora
+      return v;
+    }
+    function nearCar() {
+      if (!car || world !== worlds.mata || !car.root.visible) return false;
+      const e = car.worldOf(carEntry, carTmp), p = model.position;
+      return Math.hypot(e.x - p.x, e.z - p.z) < 6 && Math.abs(e.y - p.y) < 1.5;
+    }
+    function toggleCar() {
+      if (!started || busy || !car) return;
+      if (player.mode === 'car') { exitCar(); return; }
+      if (player.mode === 'viewer') exitViewer();
+      if (player.mode !== 'play' || player.attacking || player.jumpTimer >= 0 || !player.onFloor) return;
+      if (!nearCar()) { if (world === worlds.mata) toast('Chegue perto da porta do carro (na estrada) para entrar'); return; }
+      stopDance();
+      carInfo.club = player.club;
+      player.club = false; if (club) club.visible = false;   // guarda o bastão sem mexer no chip
+      player.mode = 'car-approach'; player.vel.set(0, 0, 0); carInfo.t = 0;
+      setState('Indo para o carro');
+    }
+    // põe a raiz do Romanele no banco do motorista (mesmo ponto usado no Blender)
+    function placeInCar() {
+      car.worldOf(CAR_ANCHOR, model.position);
+      model.quaternion.copy(car.root.quaternion);
+      player.capsule.start.set(model.position.x, model.position.y + RADIUS, model.position.z);
+      player.capsule.end.set(model.position.x, model.position.y + HEIGHT - RADIUS, model.position.z);
+    }
+    // próximo ponto do caminho até a porta (lado +X do carro), contornando o carro pelas quinas
+    function approachWaypoint(p) {
+      carInv.copy(car.root.matrixWorld).invert();
+      const lp = carTmp2.copy(p).applyMatrix4(carInv), h = car.half, m = 0.75;
+      if (lp.x >= carEntry.x - 0.35) return car.worldOf(carEntry, carWp);         // já do lado da porta
+      const zc = lp.z > h.zf ? h.zf + m : lp.z < -h.zb ? -(h.zb + m) : null;
+      if (zc !== null) return car.worldOf(carTmp2.set(h.x + m, 0, zc), carWp);    // na frente/atrás: quina do lado da porta
+      // do lado oposto: vai até a quina mais próxima da porta (atrás) ou da frente
+      const back = Math.abs(lp.z + h.zb) <= Math.abs(lp.z - h.zf);
+      return car.worldOf(carTmp2.set(-(h.x + m), 0, back ? -(h.zb + m) : h.zf + m), carWp);
+    }
+    // caminha sozinho até a porta (sem teleporte), vira para a frente do carro e começa a entrar
+    function updateApproach(dt) {
+      const p = model.position, entry = car.worldOf(carEntry, carTmp);
+      const w = approachWaypoint(p), final = w.distanceToSquared(entry) < 1e-4;
+      const dx = w.x - p.x, dz = w.z - p.z, d = Math.hypot(dx, dz);
+      carInfo.t += dt;
+      let a = (!final || d > 0.45 ? Math.atan2(dx, dz) : car.state.yaw) - player.yaw; a = Math.atan2(Math.sin(a), Math.cos(a));
+      player.yaw += a * (1 - Math.exp(-10 * dt));
+      if (!final || (d > 0.04 && carInfo.t < 12)) {
+        const sp = final ? Math.min(WALK_SPEED, d * 3 + 0.35) : WALK_SPEED, k = Math.min(1, (sp * dt) / Math.max(d, 1e-4));
+        player.capsule.translate(carTmp2.set(dx * k, (entry.y - p.y) * Math.min(1, 10 * dt), dz * k));
+        play(clipFor('Andar'), { fade: 0.2, sync: true, timeScale: THREE.MathUtils.clamp(sp / WALK_SPEED, 0.6, 1.2) });
+        carInfo.settle = 0;
+      } else {
+        player.capsule.translate(carTmp2.set(dx, 0, dz));
+        play(clipFor('Parado'), { fade: 0.15 });
+        carInfo.settle = (carInfo.settle || 0) + dt;
+        if (carInfo.settle > 0.18 && Math.abs(a) < 0.08) { startEnter(); return; }
+      }
+      model.position.set(player.capsule.start.x, player.capsule.start.y - RADIUS, player.capsule.start.z);
+      model.rotation.set(0, player.yaw, 0);
+    }
+    function startEnter() {
+      player.mode = 'car-enter';
+      placeInCar();
+      play('Carro_Entrar', { fade: 0, once: true, timeScale: 1.1 });
+      car.play('Porta_Entrar', { once: true, timeScale: 1.1, fade: 0.1 });
+      setState('Entrando no carro');
+    }
+    function finishEnter() {
+      player.mode = 'car'; camBlend = 0.8;
+      play('Carro_Parado', { fade: 0.2 }); car.play('Parado', { fade: 0.2 });
+      setState('No carro');
+      if (!carInfo.toldDrive) { carInfo.toldDrive = true; toast('W/S: pernas pra frente e pra trás · A/D: volante · C: sair'); }
+    }
+    function updateCarMode(dt) {
+      if (player.mode === 'car-approach') { updateApproach(dt); return; }
+      if (player.mode === 'car') {
+        let throttle = input.f - input.b, steer = input.l - input.r;
+        if (input.stick.lengthSq() > 0.01) { throttle = -input.stick.y; steer = -input.stick.x; }
+        const sp = car.drive(dt, { throttle, steer, maxSpeed: DRIVE_SPEED, octree: world.octree, limitOctree: world.limitOctree });
+        const s = Math.abs(sp);
+        if (s > 0.25) {
+          // as pernas correm no ritmo das rodas (o ciclo foi feito para 5,1 m/s)
+          play('Carro_Dirigir', { fade: 0.25, timeScale: Math.sign(sp) * THREE.MathUtils.clamp(s / DRIVE_SPEED, 0.3, 1.25) });
+          car.play('Rodando', { fade: 0.2, timeScale: sp / DRIVE_SPEED });
+          setState(s > DRIVE_SPEED * 0.8 ? 'Pisando fundo' : sp < 0 ? 'Dando ré' : 'Dirigindo');
+        } else {
+          play('Carro_Parado', { fade: 0.35 }); car.play('Parado', { fade: 0.3 });
+          setState('No carro');
+        }
+        player.yaw = car.state.yaw;
+        player.vel.set(Math.sin(car.state.yaw) * sp, 0, Math.cos(car.state.yaw) * sp);
+      }
+      placeInCar();
+      player.onFloor = true; player.airTime = 0;
+    }
+    function exitCar() {
+      if (Math.abs(car.state.speed) > 1.2) { toast('Pare o carro para sair (solte o W)'); return; }
+      car.state.speed = 0; player.vel.set(0, 0, 0);
+      player.mode = 'car-exit';
+      play('Carro_Sair', { fade: 0.25, once: true, timeScale: 1.1 });
+      car.play('Porta_Sair', { once: true, timeScale: 1.1, fade: 0.15 });
+      setState('Saindo do carro');
+    }
+    function restoreClub() { player.club = carInfo.club; if (club) club.visible = player.club; }
+    function finishExit() {
+      camBlend = 0.8; carInfo.nudge = 0.6;
+      const e = car.worldOf(carExit, carTmp);   // onde o corpo terminou a animação de sair
+      player.yaw = car.state.yaw;
+      player.capsule.start.set(e.x, e.y + RADIUS + 0.02, e.z);
+      player.capsule.end.set(e.x, e.y + HEIGHT - RADIUS, e.z);
+      for (let i = 0; i < 3; i++) {   // se a porta abriu encostada em algo, empurra para fora
+        const hit = world.octree.capsuleIntersect(player.capsule); if (!hit) break;
+        player.capsule.translate(hit.normal.multiplyScalar(hit.depth));
+      }
+      model.position.set(player.capsule.start.x, player.capsule.start.y - RADIUS, player.capsule.start.z);
+      model.rotation.set(0, player.yaw, 0);
+      player.mode = 'play'; player.onFloor = true; player.vel.set(0, 0, 0);
+      restoreClub();
+      play(clipFor('Parado'), { fade: 0 });   // o último quadro de "sair" já é ele em pé ao lado da porta
+      car.play('Parado', { fade: 0.2 });
+      setState('Parado');
+    }
+    function leaveCarNow() {   // trocou de mundo com ele no carro
+      player.mode = 'play'; restoreClub();
+      model.rotation.set(0, player.yaw, 0);
+      if (car) { car.state.speed = 0; car.play('Parado', { fade: 0 }); }
+    }
+    function updateCarHint() {
+      const near = player.mode === 'play' && nearCar();
+      const label = player.mode === 'car' ? 'SAIR' : near ? 'CARRO' : '';
+      if (label !== carInfo.label) {
+        carInfo.label = label;
+        const b = $('t-car'); b.classList.toggle('show', !!label); if (label) b.textContent = label;
+      }
+      if (near && !carInfo.hinted) { carInfo.hinted = true; toast(isTouch ? 'Toque em CARRO para entrar' : 'Aperte C para entrar no carro'); }
+    }
+
     /* ── loop ── */
     const timer = new THREE.Timer();
     function stepParty(dt) {
@@ -843,7 +1056,7 @@ const RomaFredGame = () => {
     function updateFootsteps(dt) {
       if (!feet.length || !feet[0].bone) return;
       const speed = Math.hypot(player.vel.x, player.vel.z);
-      const walking = started && player.mode === 'play' && player.onFloor && !player.dance && !player.attacking && speed > 0.3;
+      const walking = started && (player.mode === 'play' || player.mode === 'car') && player.onFloor && !player.dance && !player.attacking && speed > 0.3;
       for (const f of feet) {
         f.bone.getWorldPosition(footPos);
         const h = footPos.y - model.position.y;
@@ -896,9 +1109,12 @@ const RomaFredGame = () => {
       const t = timer.getElapsed();
       stepParty(dt);
       const steps = 4;
-      for (let i = 0; i < steps; i++) updatePlayer(dt / steps);
+      if (inCar()) updateCarMode(dt);
+      else for (let i = 0; i < steps; i++) updatePlayer(dt / steps);
       updateAnimation();
       mixer.update(dt);
+      if (carInfo.pendingExit) { carInfo.pendingExit = false; finishExit(); mixer.update(0); }
+      if (car && world === worlds.mata) { car.update(dt); updateCarHint(); }
       updateFootsteps(dt);
       updateCamera(dt);
       const festa = world === worlds.festa;
@@ -948,13 +1164,14 @@ const RomaFredGame = () => {
     (async () => {
       try {
         const dinoKeys = Object.keys(DINO_TYPES);
-        const [mataGltf, charGltf, ...dinoGltfs] = await Promise.all([
-          loadGLB(MATA_PATH, 'mata'), loadGLB(CHAR_PATH, 'char'),
+        const [mataGltf, charGltf, carGltf, ...dinoGltfs] = await Promise.all([
+          loadGLB(MATA_PATH, 'mata'), loadGLB(CHAR_PATH, 'char'), loadGLB(CAR_PATH, 'carro'),
           ...dinoKeys.map((k) => loadGLB(`${MODELS}/${DINO_TYPES[k].file}`, k)),
         ]);
         if (disposed) return;
         setupMata(mataGltf);
         setupCharacter(charGltf);
+        setupCar(carGltf);
         setupDinos(Object.fromEntries(dinoKeys.map((k, i) => [k, dinoGltfs[i]])));
         setClub(true, false);
         setWorld('mata', 'SpawnPlayer');
@@ -978,6 +1195,7 @@ const RomaFredGame = () => {
       sfx.dispose();
       ambience.dispose();
       if (water) water.dispose();
+      if (car) car.dispose();
       cleanups.forEach((fn) => fn());
       if (mixer) mixer.stopAllAction();
       if (worlds.festa) worlds.festa.mixer.stopAllAction();
@@ -1003,7 +1221,7 @@ const RomaFredGame = () => {
       <div id="rf-loading" role="status" aria-live="polite">
         <div className="card">
           <h1 id="rf-loadtitle">Romanele <span>na Mata</span></h1>
-          <p id="rf-loadcopy">Carregando o personagem riggado, a mata com a caverna e os dinossauros. São cerca de 35&nbsp;MB.</p>
+          <p id="rf-loadcopy">Carregando o personagem riggado, a mata com a caverna, os dinossauros e o carro de pedra. São cerca de 38&nbsp;MB.</p>
           <div id="rf-loadprog">
             <div className="bar" aria-hidden="true"><i id="rf-loadbar" /></div>
             <div id="rf-loadtxt">0%</div>
@@ -1030,6 +1248,7 @@ const RomaFredGame = () => {
         <div className="k"><kbd>Espaço</kbd></div><span>pular</span>
         <div className="k"><kbd>E</kbd><kbd>1</kbd><kbd>2</kbd><kbd>3</kbd></div><span>dançar (no ritmo da festa)</span>
         <div className="k"><kbd>Q</kbd></div><span>pegar / guardar bastão</span>
+        <div className="k only-mata"><kbd>C</kbd></div><span className="only-mata">entrar / sair do carro (na estrada)</span>
         <div className="k"><kbd>Clique</kbd><kbd>F</kbd></div><span>atacar (com bastão)</span>
         <div className="k"><kbd>Arrastar</kbd><kbd>Roda</kbd></div><span>girar e aproximar câmera</span>
       </div>
@@ -1074,6 +1293,7 @@ const RomaFredGame = () => {
           <button id="rf-t-jump" type="button">PULAR</button>
           <button id="rf-t-atk" type="button">ATACAR</button>
           <button id="rf-t-up" className="only-festa" type="button">CAMAROTE</button>
+          <button id="rf-t-car" className="only-mata" type="button">CARRO</button>
         </div>
       </div>
     </div>
