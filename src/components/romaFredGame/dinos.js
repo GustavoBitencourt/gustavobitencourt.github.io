@@ -404,14 +404,14 @@ export function createDinoManager({ scene, templates, caveMouth, exitZ = Infinit
   }
 
   // mira automática da bastada: direção do dino vivo mais próximo à frente (até ±100°, 3 m)
-  function aim(px, pz, yaw) {
+  function aim(px, pz, yaw, maxDeg = 100) {
     let best = null, bestD = 3;
     for (const d of dinos) {
       if (!isAlive(d) || d.state === 'delay') continue;
       const dx = d.obj.position.x - px, dz = d.obj.position.z - pz, dist = Math.hypot(dx, dz);
       if (dist > bestD) continue;
       const ang = Math.atan2(dx, dz);
-      if (Math.abs(wrapAngle(ang - yaw)) > THREE.MathUtils.degToRad(100)) continue;
+      if (Math.abs(wrapAngle(ang - yaw)) > THREE.MathUtils.degToRad(maxDeg)) continue;
       best = ang; bestD = dist;
     }
     return best;

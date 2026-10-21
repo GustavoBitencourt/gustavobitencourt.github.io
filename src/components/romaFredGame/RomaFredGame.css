@@ -47,6 +47,12 @@
 #rf-hurt { position: absolute; inset: 0; z-index: 4; pointer-events: none; opacity: 0; background: radial-gradient(ellipse at center, transparent 45%, rgba(200, 20, 20, 0.55) 100%); }
 #rf-hurt.show { animation: rf-hurt 0.6s ease-out; }
 @keyframes rf-hurt { from { opacity: 1; } to { opacity: 0; } }
+/* mira (PC, botão direito segurado): cruz no centro da tela */
+#rf-crosshair { position: absolute; left: 50%; top: 50%; width: 26px; height: 26px; margin: -13px 0 0 -13px; z-index: 4; pointer-events: none; opacity: 0; transition: opacity .15s; }
+#rf-crosshair::before, #rf-crosshair::after { content: ""; position: absolute; background: rgba(255, 255, 255, 0.92); box-shadow: 0 0 3px rgba(0, 0, 0, 0.8); border-radius: 1px; }
+#rf-crosshair::before { left: 12px; top: 0; width: 2px; height: 26px; }
+#rf-crosshair::after { top: 12px; left: 0; height: 2px; width: 26px; }
+.rf-root.aiming #rf-crosshair { opacity: 1; }
 @media (prefers-reduced-motion: reduce) { #rf-hurt.show { animation-duration: 0.01s; } }
 .rf-root [hidden] { display: none !important; }
 #rf-stage { position: absolute; inset: 0; }
@@ -101,9 +107,9 @@
 .rf-root .clip[aria-pressed="true"] { border-color: var(--ochre); background: rgba(201,106,43,0.16); }
 .rf-root .clip small { font-family: var(--font-key); font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
 
-#rf-viewer-bar { left: 50%; transform: translateX(-50%); top: calc(14px + env(safe-area-inset-top, 0px)); padding: 8px 8px 8px 14px; display: flex; gap: 10px; align-items: center; font-size: 13px; max-width: calc(100vw - 32px); }
+#rf-viewer-bar { left: 50%; transform: translateX(-50%); top: calc(124px + env(safe-area-inset-top, 0px)); padding: 8px 8px 8px 14px; display: flex; gap: 10px; align-items: center; font-size: 13px; max-width: calc(100vw - 32px); }
 #rf-viewer-bar strong { color: var(--ochre-hi); font-weight: 700; }
-#rf-toast { left: 50%; transform: translateX(-50%); top: calc(70px + env(safe-area-inset-top, 0px)); padding: 8px 14px; font-size: 13px; opacity: 0; transition: opacity .25s; max-width: calc(100vw - 32px); }
+#rf-toast { left: 50%; transform: translateX(-50%); top: calc(76px + env(safe-area-inset-top, 0px)); padding: 8px 14px; font-size: 13px; opacity: 0; transition: opacity .25s; max-width: calc(100vw - 32px); }
 #rf-toast.show { opacity: 1; }
 
 /* carregamento + tela inicial */
@@ -132,6 +138,28 @@
 #rf-tbtns button.hot { background: var(--ochre); color: var(--ink); }
 #rf-tbtns #rf-t-car { display: none; background: var(--ochre); color: var(--ink); }
 #rf-tbtns #rf-t-car.show { display: block; }
+/* copos de kit: contador lá em cima e o copinho voando da cabeça do dino */
+#rf-copos { position: fixed; z-index: 3; left: 50%; transform: translateX(-50%); top: calc(12px + env(safe-area-inset-top, 0px)); display: flex; align-items: center; gap: 4px; padding: 3px 16px 3px 6px; border-radius: 999px; }
+#rf-copos img { width: 48px; height: 48px; object-fit: contain; filter: drop-shadow(0 2px 4px rgba(0,0,0,.55)); transition: opacity .2s, filter .2s; }
+#rf-copos .txt { display: grid; line-height: 1; gap: 2px; }
+#rf-copos b { font-family: var(--font-display); font-weight: 400; font-size: 26px; color: var(--bone); font-variant-numeric: tabular-nums; display: inline-block; transform-origin: left center; }
+#rf-copos small { font-size: 10px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); font-weight: 700; }
+#rf-copos.empty img { opacity: .5; filter: grayscale(.7) drop-shadow(0 2px 4px rgba(0,0,0,.55)); }
+#rf-copos.bump-up b { animation: rf-cup-up .5s ease-out; }
+#rf-copos.bump-up img { animation: rf-cup-pop .5s ease-out; }
+#rf-copos.bump-down b { animation: rf-cup-down .5s ease-out; }
+@keyframes rf-cup-up { 0% { transform: scale(1); } 30% { transform: scale(1.5); color: var(--ochre-hi); } 100% { transform: scale(1); } }
+@keyframes rf-cup-down { 0% { transform: none; } 30% { transform: translateY(5px) scale(.8); color: #ff7a6a; } 100% { transform: none; } }
+@keyframes rf-cup-pop { 0% { transform: none; } 35% { transform: scale(1.22) rotate(-10deg); } 100% { transform: none; } }
+.rf-cupfly { position: fixed; left: 0; top: 0; width: 58px; height: 58px; z-index: 6; pointer-events: none; filter: drop-shadow(0 3px 6px rgba(0,0,0,.6)); will-change: transform; }
+#rf-tbtns button.off { opacity: .45; }
+@media (prefers-reduced-motion: reduce) { #rf-copos b, #rf-copos img { animation: none !important; } }
+/* telas estreitas: o contador entra embaixo dos chips, no canto de cima */
+@media (max-width: 1180px) {
+  #rf-copos { position: static; transform: none; justify-self: start; padding: 2px 14px 2px 4px; }
+  #rf-copos img { width: 40px; height: 40px; }
+  #rf-copos b { font-size: 22px; }
+}
 @media (pointer: coarse) {
   #rf-touch { display: block; }
   #rf-keys { display: none; }

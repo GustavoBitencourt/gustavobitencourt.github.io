@@ -16,6 +16,7 @@ import { createWater } from './water.js';
 import { createGrass } from './grass.js';
 import { createAmbience } from './ambience.js';
 import { createCar, CAR_ANCHOR, CAR_ENTRY } from './car.js';
+import { createCopos, flyCupIcon } from './copos.js';
 import './RomaFredGame.css';
 
 const MODELS = `${process.env.PUBLIC_URL || ''}/assets/models`;
@@ -23,6 +24,8 @@ const MATA_PATH = `${MODELS}/mata_caverna.glb`;
 const FESTA_PATH = `${MODELS}/festa_balada.glb`;
 const CHAR_PATH = `${MODELS}/romanele_animado.glb`;
 const CAR_PATH = `${MODELS}/carro_pedra.glb`;
+const COPO_PATH = `${MODELS}/copo_kit.glb`;
+const CUP_ICON = `${process.env.PUBLIC_URL || ''}/assets/ui/copo_kit.png`;
 
 /* Constantes (metros, segundos) */
 const WALK_SPEED = 1.25;      // velocidade para a qual o ciclo de andar foi feito
@@ -124,9 +127,9 @@ const RomaFredGame = () => {
 
     /* ── carregamento ── */
     const loader = new GLTFLoader();
-    const progress = { mata: 0, char: 0, festa: 0, raptor: 0, trex: 0, inflavel: 0, carro: 0 };
-    const SIZE_HINT = { mata: 13659160, char: 17057072, festa: 21971364, raptor: 1502832, trex: 1515896, inflavel: 1099968, carro: 3246880 };
-    let progressKeys = ['mata', 'char', 'raptor', 'trex', 'inflavel', 'carro'];
+    const progress = { mata: 0, char: 0, festa: 0, raptor: 0, trex: 0, inflavel: 0, carro: 0, copo: 0 };
+    const SIZE_HINT = { mata: 13659160, char: 17057072, festa: 21971364, raptor: 1502832, trex: 1515896, inflavel: 1099968, carro: 3246880, copo: 371660 };
+    let progressKeys = ['mata', 'char', 'raptor', 'trex', 'inflavel', 'carro', 'copo'];
     function showProgress() {
       const loaded = progressKeys.reduce((s, k) => s + progress[k], 0);
       const total = progressKeys.reduce((s, k) => s + SIZE_HINT[k], 0);
@@ -147,7 +150,9 @@ const RomaFredGame = () => {
     let world = null;
     let model, mixer, club, dinos, hips, feet = [];
     const camFocus = new THREE.Vector3(); let camBlend = 0, camDistMul = 1; // alvo da câmera (suavizado ao entrar/sair do carro)
+    let aiming = false, aimBlend = 0, lastLook = -10; // PC: mira com o botão direito e último movimento do mouse
     let car = null; // carro de pedra (car.js)
+    let copos = null, cupCount = 0; // copo de kit da Xalassa (copos.js)
     const actions = {}, clips = {};
     const flames = []; const fireLights = [];
     let water = null; // rio interativo (water.js)
@@ -219,6 +224,7 @@ const RomaFredGame = () => {
           clubSound(true);
           $('chip-dinos').innerHTML = `Dinos <b>${count} no chão</b>`;
           toast(`${d.cfg.label} derrubado!`);
+          cupFromDino(d); // +1 copo de kit voando da cabeça do dino
         },
         onPlayerHit: (dx, dz) => {
           if (inCar()) return; // dentro do carro a mordida não empurra
@@ -295,6 +301,7 @@ const RomaFredGame = () => {
       if (dinos) { dinos.reset(); dinos.setVisible(!festa); }
       if (water) water.setVisible(!festa);
       if (inCar()) leaveCarNow();
+      if (player.mode === 'drink') cancelDrink();
       if (car) car.setVisible(!festa);
       ambience.setActive(!festa);
       root.dataset.world = name;
@@ -369,7 +376,7 @@ const RomaFredGame = () => {
     function stopDance() { player.dance = null; }
 
     function setClub(isOn, announce = true) {
-      if (inCar()) return; // no carro o bastão fica guardado
+      if (inCar() || player.mode === 'drink') return; // no carro (ou bebendo) o bastão fica guardado
       player.club = isOn; if (club) club.visible = isOn;
       $('chip-club').className = 'chip' + (isOn ? '' : ' off');
       $('chip-club').innerHTML = `Bastão <b>${isOn ? 'Na mão' : 'Guardado'}</b>`;
@@ -396,7 +403,8 @@ const RomaFredGame = () => {
       player.attacking = true; player.queued = false; player.swingId += 1;
       swingSound = { id: player.swingId, done: false };
       if (dinos && world === worlds.mata) {
-        const yaw = dinos.aim(model.position.x, model.position.z, player.yaw);
+        // mirando (botão direito) a ajuda é pequena: o golpe vai para onde ele mira
+        const yaw = dinos.aim(model.position.x, model.position.z, player.yaw, aiming ? 25 : 100);
         if (yaw !== null) player.yaw = yaw;
       }
       player.attackIndex = player.attackIndex % 2 + 1;
@@ -404,6 +412,7 @@ const RomaFredGame = () => {
     }
     function onActionFinished(e) {
       const name = e.action.getClip().name;
+      if (player.mode === 'drink' && name !== 'Beber') return; // bebendo: ignora o fim de outro clipe (ex.: aterrissagem)
       if (name.startsWith('Ataque')) {
         if (player.queued && player.club) { startAttack(); return; }
         player.attacking = false;
@@ -414,6 +423,8 @@ const RomaFredGame = () => {
         finishEnter();
       } else if (name === 'Carro_Sair' && player.mode === 'car-exit') {
         carInfo.pendingExit = true;   // termina depois do mixer.update (a raiz muda de lugar)
+      } else if (name === 'Beber' && player.mode === 'drink') {
+        finishDrink();
       }
     }
 
@@ -447,6 +458,7 @@ const RomaFredGame = () => {
     }
     function enterViewer(name) {
       if (inCar()) { toast('Saia do carro (C) para ver as animações'); return; }
+      if (player.mode === 'drink') return;
       player.mode = 'viewer'; player.attacking = false; player.queued = false; player.jumpTimer = -1; player.vel.set(0, 0, 0); player.dance = null;
       setClub(name.endsWith('ComBastao'), false);
       const a = play(name, { fade: 0.2 });
@@ -560,6 +572,7 @@ const RomaFredGame = () => {
       if (e.repeat) return;
       if (e.code === 'KeyQ') setClub(!player.club);
       if (e.code === 'KeyC') toggleCar();
+      if (e.code === 'KeyB') drink();
       if (e.code === 'KeyE') startDance(0);
       if (e.code === 'Digit1') startDance(1);
       if (e.code === 'Digit2') startDance(2);
@@ -571,10 +584,43 @@ const RomaFredGame = () => {
     });
     on(window, 'blur', () => { input.f = input.b = input.l = input.r = 0; input.walk = false; });
 
-    // câmera: arrastar com mouse ou um dedo fora dos controles
     const canvas = renderer.domElement;
+
+    // PC: mouse capturado (pointer lock). Mexer o mouse só gira a câmera em volta do Romanele;
+    // botão direito segurado = mira (ele vira para onde a câmera aponta); clique esquerdo = bastada
+    const isLocked = () => document.pointerLockElement === canvas;
+    function lockMouse() {
+      if (isTouch || !started || isLocked()) return;
+      try { const p = canvas.requestPointerLock(); if (p && p.catch) p.catch(() => {}); } catch (err) { /* sem pointer lock */ }
+    }
+    function setAiming(v) {
+      if (aiming === v) return;
+      aiming = v;
+      root.classList.toggle('aiming', v);
+    }
+    if (!isTouch) {
+      on(document, 'pointerlockchange', () => {
+        if (!isLocked()) { setAiming(false); if (started) toast('Clique na tela para voltar a controlar a câmera'); }
+      });
+      on(document, 'mousemove', (e) => {
+        if (!isLocked()) return;
+        cam.yaw -= e.movementX * 0.0026;
+        cam.pitch = THREE.MathUtils.clamp(cam.pitch + e.movementY * 0.0022, -0.25, 1.15);
+        lastLook = timer.getElapsed();
+      });
+      on(canvas, 'mousedown', (e) => {
+        if (!isLocked()) { lockMouse(); return; }   // o clique que captura o mouse não ataca
+        if (e.button === 0) attack();
+        if (e.button === 2 && !inCar()) setAiming(true);
+      });
+      on(document, 'mouseup', (e) => { if (e.button === 2) setAiming(false); });
+      on(canvas, 'contextmenu', (e) => e.preventDefault());
+    }
+
+    // celular (e PC sem pointer lock): arrastar um dedo / o mouse fora dos controles gira a câmera
     let drag = null;
     on(canvas, 'pointerdown', (e) => {
+      if (!isTouch && e.pointerType === 'mouse') return;   // no PC o mouse é tratado acima
       drag = { id: e.pointerId, x: e.clientX, y: e.clientY, moved: 0 };
       canvas.setPointerCapture(e.pointerId); canvas.focus();
     });
@@ -585,7 +631,6 @@ const RomaFredGame = () => {
       cam.yaw -= dx * 0.006; cam.pitch = THREE.MathUtils.clamp(cam.pitch + dy * 0.005, -0.25, 1.15);
     });
     on(canvas, 'pointerup', (e) => {
-      if (drag && drag.id === e.pointerId && drag.moved < 6 && e.pointerType === 'mouse' && e.button === 0) attack();
       drag = null;
     });
     on(canvas, 'wheel', (e) => {
@@ -611,6 +656,7 @@ const RomaFredGame = () => {
       on($('t-club'), 'pointerdown', (e) => { e.preventDefault(); setClub(!player.club); });
       on($('t-dance'), 'pointerdown', (e) => { e.preventDefault(); startDance(0); });
       on($('t-car'), 'pointerdown', (e) => { e.preventDefault(); toggleCar(); });
+      on($('t-drink'), 'pointerdown', (e) => { e.preventDefault(); drink(); });
       on($('t-up'), 'pointerdown', (e) => {
         e.preventDefault(); if (world !== worlds.festa) return;
         exitViewer(); stopDance(); placeAt('Camarote_Vista');
@@ -641,19 +687,37 @@ const RomaFredGame = () => {
     }
     function updatePlayer(dt) {
       const octree = world.octree;
-      // direção desejada a partir do yaw da câmera
+      const usingStick = input.stick.lengthSq() > 0.01;
+      const tank = !isTouch && !usingStick;   // PC: a direção dele não depende da câmera
       let ix = input.r - input.l, iz = input.f - input.b;
       let mag = Math.min(1, Math.hypot(ix, iz));
-      if (input.stick.lengthSq() > 0.01) { ix = input.stick.x; iz = -input.stick.y; mag = Math.min(1, input.stick.length()); }
+      if (usingStick) { ix = input.stick.x; iz = -input.stick.y; mag = Math.min(1, input.stick.length()); }
       if (mag > 0.1 && player.dance) stopDance();
-      const fwdX = -Math.sin(cam.yaw), fwdZ = -Math.cos(cam.yaw);
-      const rgtX = Math.cos(cam.yaw), rgtZ = -Math.sin(cam.yaw);
-      wish.set(fwdX * iz + rgtX * ix, 0, fwdZ * iz + rgtZ * ix);
-      if (wish.lengthSq() > 1e-6) wish.normalize();
       // corre por padrão; Shift (ou o botão ANDAR no celular) faz ele caminhar
       const running = !(input.walk || input.stickWalk);
       const locked = !started || player.mode !== 'play' || player.attacking || player.jumpTimer >= 0 || player.landing > 0 || player.dance;
-      const target = locked ? 0 : mag * (running ? RUN_SPEED : WALK_SPEED);
+      let target;
+      if (tank) {
+        if (aiming) {
+          // mira: vira para onde a câmera aponta (a mira fica no centro da tela)
+          let d = cam.yaw + Math.PI - player.yaw; d = Math.atan2(Math.sin(d), Math.cos(d));
+          player.yaw += d * (1 - Math.exp(-18 * dt));
+        } else if (!locked) {
+          // A/D viram o Romanele; a câmera vira junto e mantém o ângulo que o jogador escolheu
+          const turn = (input.l - input.r) * 2.6 * dt;
+          player.yaw += turn; cam.yaw += turn;
+        }
+        // W anda para a frente dele, S dá ré (caminhando de costas); mirando, sempre caminha
+        wish.set(Math.sin(player.yaw) * iz, 0, Math.cos(player.yaw) * iz);
+        target = locked || iz === 0 ? 0 : (iz < 0 || aiming || !running ? WALK_SPEED : RUN_SPEED);
+      } else {
+        // celular: direção a partir do yaw da câmera (como antes)
+        const fwdX = -Math.sin(cam.yaw), fwdZ = -Math.cos(cam.yaw);
+        const rgtX = Math.cos(cam.yaw), rgtZ = -Math.sin(cam.yaw);
+        wish.set(fwdX * iz + rgtX * ix, 0, fwdZ * iz + rgtZ * ix);
+        if (wish.lengthSq() > 1e-6) wish.normalize();
+        target = locked ? 0 : mag * (running ? RUN_SPEED : WALK_SPEED);
+      }
 
       const hv = tmp.set(player.vel.x, 0, player.vel.z);
       const desired = tmp2.copy(wish).multiplyScalar(target);
@@ -661,7 +725,7 @@ const RomaFredGame = () => {
       hv.lerp(desired, 1 - Math.exp(-accel * dt));
       player.vel.x = hv.x; player.vel.z = hv.z;
 
-      if (target > 0.05) {
+      if (!tank && target > 0.05) {
         const want = Math.atan2(wish.x, wish.z);
         let d = want - player.yaw; d = Math.atan2(Math.sin(d), Math.cos(d));
         player.yaw += d * (1 - Math.exp(-10 * dt));
@@ -756,6 +820,12 @@ const RomaFredGame = () => {
         play(clipFor('PuloNoAr'), { fade: 0.2 }); setState(player.vel.y > 0 ? 'Pulando' : 'No ar'); return;
       }
       if (player.landing > 0 && speed < 0.6) { setState('Aterrissando'); return; }
+      // andando de costas (S no PC): ciclo de andar tocado ao contrário
+      const fwd = player.vel.x * Math.sin(player.yaw) + player.vel.z * Math.cos(player.yaw);
+      if (fwd < -0.15) {
+        play(clipFor('Andar'), { fade: 0.25, sync: true, timeScale: -THREE.MathUtils.clamp(speed / WALK_SPEED, 0.55, 1.3) }); setState('Andando de costas');
+        return;
+      }
       if (speed > 2.15) {
         play(clipFor('Correr'), { fade: 0.25, sync: true, timeScale: THREE.MathUtils.clamp(speed / RUN_SPEED, 0.7, 1.25) }); setState('Correndo');
       } else if (speed > 0.15) {
@@ -774,8 +844,12 @@ const RomaFredGame = () => {
         camBlend = Math.max(0, camBlend - dt);
         cam.target.lerp(camFocus, 1 - Math.exp(-7 * dt));
       } else cam.target.copy(camFocus);
+      // mira por cima do ombro: câmera mais perto e o Romanele um pouco à esquerda da mira
+      aimBlend += ((aiming ? 1 : 0) - aimBlend) * (1 - Math.exp(-10 * dt));
+      if (aimBlend > 0.001) cam.target.add(tmp2.set(Math.cos(cam.yaw), 0, -Math.sin(cam.yaw)).multiplyScalar(0.6 * aimBlend));
       const driving = player.mode === 'car';
-      if (driving && !drag && Math.abs(car.state.speed) > 1) {
+      const looking = drag || timer.getElapsed() - lastLook < 1.2;   // o jogador está olhando em volta
+      if (driving && !looking && Math.abs(car.state.speed) > 1) {
         // dirigindo: a câmera vai voltando para trás do carro
         const want = car.state.yaw + (car.state.speed > 0 ? Math.PI : 0);
         let d = want - cam.yaw; d = Math.atan2(Math.sin(d), Math.cos(d));
@@ -785,7 +859,7 @@ const RomaFredGame = () => {
       const dir = tmp.set(Math.sin(cam.yaw) * cp, Math.sin(cam.pitch), Math.cos(cam.yaw) * cp).normalize();
       // no carro a câmera se afasta um pouco; a troca de distância é suave para não dar corte
       camDistMul += ((inCar() ? 1.45 : 1) - camDistMul) * (1 - Math.exp(-2.5 * dt));
-      let dist = cam.dist * camDistMul;
+      let dist = cam.dist * camDistMul * (1 - 0.28 * aimBlend);
       ray.origin.copy(cam.target); ray.direction.copy(dir);
       const hit = world.octree.rayIntersect(ray);
       if (hit && hit.distance < dist + 0.3) dist = Math.max(0.6, hit.distance - 0.3);
@@ -905,7 +979,7 @@ const RomaFredGame = () => {
       if (player.mode === 'viewer') exitViewer();
       if (player.mode !== 'play' || player.attacking || player.jumpTimer >= 0 || !player.onFloor) return;
       if (!nearCar()) { if (world === worlds.mata) toast('Chegue perto da porta do carro (na estrada) para entrar'); return; }
-      stopDance();
+      stopDance(); setAiming(false);
       carInfo.club = player.club;
       player.club = false; if (club) club.visible = false;   // guarda o bastão sem mexer no chip
       player.mode = 'car-approach'; player.vel.set(0, 0, 0); carInfo.t = 0;
@@ -1027,6 +1101,73 @@ const RomaFredGame = () => {
       }
       if (near && !carInfo.hinted) { carInfo.hinted = true; toast(isTouch ? 'Toque em CARRO para entrar' : 'Aperte C para entrar no carro'); }
     }
+
+    /* ── copo de kit: cada dino derrubado vale um copo; com B ele vira o copo e joga no chão ── */
+    const cupTmp = new THREE.Vector3(), cupHead = new THREE.Vector3();
+    function setCupCount(n, dir = 0) {
+      cupCount = Math.max(0, n);
+      $('copos-n').textContent = String(cupCount);
+      const box = $('copos');
+      box.classList.toggle('empty', cupCount === 0);
+      box.setAttribute('aria-label', `${cupCount} ${cupCount === 1 ? 'copo' : 'copos'} de kit`);
+      if (dir) { box.classList.remove('bump-up', 'bump-down'); void box.offsetWidth; box.classList.add(dir > 0 ? 'bump-up' : 'bump-down'); }
+      $('t-drink').classList.toggle('off', cupCount === 0);
+    }
+    function setupCopos(gltf) {
+      copos = createCopos({ model, gltf });
+      if (copos.clip) { clips.Beber = copos.clip; actions.Beber = mixer.clipAction(copos.clip); }
+      setCupCount(0);
+    }
+    // ponto de saída do copinho: a cabeça do dino (osso mais alto com "cabeça"/"head" no nome)
+    function dinoHead(d, out) {
+      if (d.headBone === undefined) {
+        let best = null, by = -Infinity;
+        d.obj.updateMatrixWorld(true);
+        d.obj.traverse((o) => {
+          if (o.isBone && /cabe|head/i.test(o.name)) { o.getWorldPosition(cupTmp); if (cupTmp.y > by) { by = cupTmp.y; best = o; } }
+        });
+        d.headBone = best;
+      }
+      if (d.headBone) return d.headBone.getWorldPosition(out).add(cupTmp.set(0, 0.3, 0));
+      return out.copy(d.obj.position).add(cupTmp.set(0, 2.1, 0));
+    }
+    function cupFromDino(d) {
+      const p = dinoHead(d, cupHead).project(camera);
+      const rect = renderer.domElement.getBoundingClientRect();
+      const from = p.z > 1 || Math.abs(p.x) > 1.2 || Math.abs(p.y) > 1.2
+        ? { x: rect.left + rect.width / 2, y: rect.top + rect.height * 0.45 }
+        : { x: rect.left + ((p.x + 1) / 2) * rect.width, y: rect.top + ((1 - p.y) / 2) * rect.height };
+      flyCupIcon({
+        from, toEl: $('copos-ico'), src: CUP_ICON, layer: root,
+        onArrive: () => { if (disposed) return; setCupCount(cupCount + 1, 1); if (copos) copos.plim(Math.min(cupCount, 12)); },
+      });
+    }
+    function drink() {
+      if (!started || busy || !copos || !copos.clip) return;
+      if (player.mode === 'viewer') exitViewer();
+      if (player.mode !== 'play' || player.attacking || player.jumpTimer >= 0 || !player.onFloor) return;
+      if (cupCount <= 0) { toast('Derrube um dinossauro para ganhar um copo de kit'); return; }
+      stopDance();
+      setCupCount(cupCount - 1, -1);              // pegou o copo: o contador desce 1
+      if (club) club.visible = false;             // a mão direita segura o copo
+      player.mode = 'drink'; player.vel.x = 0; player.vel.z = 0;
+      copos.setHeld(true);
+      play('Beber', { fade: 0.15, once: true });
+      copos.scheduleDrinkSounds();
+      setState('Bebendo o kit');
+    }
+    function endDrink() {
+      copos.setHeld(false);
+      player.mode = 'play';
+      if (club) club.visible = player.club;
+      setState('Parado');
+    }
+    function finishDrink() {
+      copos.dropOnGround(world.root, world.octree);   // o copo fica largado no chão
+      endDrink();
+      play(clipFor('Parado'), { fade: 0.3 });
+    }
+    function cancelDrink() { copos.cancelSounds(); endDrink(); }
 
     /* ── loop ── */
     const timer = new THREE.Timer();
@@ -1157,21 +1298,24 @@ const RomaFredGame = () => {
       started = true;
       sfx.unlock();
       ambience.unlock();
+      if (copos) copos.unlock();
       $('loading').hidden = true;
       canvas.focus();
+      lockMouse();   // PC: o mouse passa a girar a câmera (Esc solta)
     });
 
     (async () => {
       try {
         const dinoKeys = Object.keys(DINO_TYPES);
-        const [mataGltf, charGltf, carGltf, ...dinoGltfs] = await Promise.all([
-          loadGLB(MATA_PATH, 'mata'), loadGLB(CHAR_PATH, 'char'), loadGLB(CAR_PATH, 'carro'),
+        const [mataGltf, charGltf, carGltf, copoGltf, ...dinoGltfs] = await Promise.all([
+          loadGLB(MATA_PATH, 'mata'), loadGLB(CHAR_PATH, 'char'), loadGLB(CAR_PATH, 'carro'), loadGLB(COPO_PATH, 'copo'),
           ...dinoKeys.map((k) => loadGLB(`${MODELS}/${DINO_TYPES[k].file}`, k)),
         ]);
         if (disposed) return;
         setupMata(mataGltf);
         setupCharacter(charGltf);
         setupCar(carGltf);
+        setupCopos(copoGltf);
         setupDinos(Object.fromEntries(dinoKeys.map((k, i) => [k, dinoGltfs[i]])));
         setClub(true, false);
         setWorld('mata', 'SpawnPlayer');
@@ -1196,6 +1340,7 @@ const RomaFredGame = () => {
       ambience.dispose();
       if (water) water.dispose();
       if (car) car.dispose();
+      if (copos) copos.dispose();
       cleanups.forEach((fn) => fn());
       if (mixer) mixer.stopAllAction();
       if (worlds.festa) worlds.festa.mixer.stopAllAction();
@@ -1240,17 +1385,26 @@ const RomaFredGame = () => {
           <span className="chip beat only-festa" id="rf-chip-beat"><i />120 BPM</span>
           <span className="chip only-mata" id="rf-chip-dinos">Dinos <b>0 no chão</b></span>
         </div>
+        <div className="panel empty" id="rf-copos" role="status" aria-label="0 copos de kit" title="Copos de kit: derrube dinossauros para ganhar, B para beber">
+          <img id="rf-copos-ico" src={`${process.env.PUBLIC_URL || ''}/assets/ui/copo_kit.png`} alt="" />
+          <div className="txt"><b id="rf-copos-n">0</b><small>copos de kit</small></div>
+        </div>
       </div>
 
       <div className="hud panel" id="rf-keys" aria-label="Controles">
-        <div className="k"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></div><span>andar</span>
+        <div className="k"><kbd>W</kbd><kbd>S</kbd></div><span>andar para frente / de costas</span>
+        <div className="k"><kbd>A</kbd><kbd>D</kbd></div><span>virar</span>
+        <div className="k"><kbd>Mouse</kbd></div><span>olhar em volta</span>
+        <div className="k"><kbd>Botão direito</kbd></div><span>mirar (segurar)</span>
         <div className="k"><kbd>Shift</kbd></div><span>caminhar (segurar)</span>
         <div className="k"><kbd>Espaço</kbd></div><span>pular</span>
         <div className="k"><kbd>E</kbd><kbd>1</kbd><kbd>2</kbd><kbd>3</kbd></div><span>dançar (no ritmo da festa)</span>
         <div className="k"><kbd>Q</kbd></div><span>pegar / guardar bastão</span>
         <div className="k only-mata"><kbd>C</kbd></div><span className="only-mata">entrar / sair do carro (na estrada)</span>
+        <div className="k"><kbd>B</kbd></div><span>beber um copo de kit</span>
         <div className="k"><kbd>Clique</kbd><kbd>F</kbd></div><span>atacar (com bastão)</span>
-        <div className="k"><kbd>Arrastar</kbd><kbd>Roda</kbd></div><span>girar e aproximar câmera</span>
+        <div className="k"><kbd>Roda</kbd></div><span>aproximar câmera</span>
+        <div className="k"><kbd>Esc</kbd></div><span>soltar o mouse</span>
       </div>
 
       <div className="hud" id="rf-topright">
@@ -1281,6 +1435,7 @@ const RomaFredGame = () => {
         <button className="btn" id="rf-viewer-exit" type="button">Voltar a jogar</button>
       </div>
 
+      <div id="rf-crosshair" aria-hidden="true" />
       <div className="hud panel" id="rf-toast" role="status" aria-live="polite" />
       <div id="rf-hurt" aria-hidden="true" />
 
@@ -1294,6 +1449,7 @@ const RomaFredGame = () => {
           <button id="rf-t-atk" type="button">ATACAR</button>
           <button id="rf-t-up" className="only-festa" type="button">CAMAROTE</button>
           <button id="rf-t-car" className="only-mata" type="button">CARRO</button>
+          <button id="rf-t-drink" className="off" type="button">BEBER</button>
         </div>
       </div>
     </div>
