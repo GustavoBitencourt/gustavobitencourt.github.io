@@ -128,7 +128,7 @@ const RomaFredGame = () => {
     /* ── carregamento ── */
     const loader = new GLTFLoader();
     const progress = { mata: 0, char: 0, festa: 0, raptor: 0, trex: 0, inflavel: 0, carro: 0, copo: 0 };
-    const SIZE_HINT = { mata: 13659160, char: 17057072, festa: 21971364, raptor: 1502832, trex: 1515896, inflavel: 1099968, carro: 3246880, copo: 371660 };
+    const SIZE_HINT = { mata: 20574400, char: 17057072, festa: 21971364, raptor: 1502832, trex: 1515896, inflavel: 1099968, carro: 3246880, copo: 371660 };
     let progressKeys = ['mata', 'char', 'raptor', 'trex', 'inflavel', 'carro', 'copo'];
     function showProgress() {
       const loaded = progressKeys.reduce((s, k) => s + progress[k], 0);
@@ -209,7 +209,7 @@ const RomaFredGame = () => {
         name: 'mata', root: env, octree: buildOctree(env, colliders),
         limitOctree: limits.length ? buildOctree(env, limits) : null,
         markers: { SpawnPlayer: env.getObjectByName('SpawnPlayer') }, people: [], personObjs: [], mixer: null,
-        zones: { exitZ: zOf('SaidaMata', Infinity), asphaltZ: zOf('InicioAsfalto', Infinity), riverBox },
+        zones: { exitZ: zOf('SaidaMata', Infinity), asphaltZ: zOf('InicioAsfalto', Infinity), stadiumZ: zOf('RuaEstadio', Infinity), riverBox },
       };
     }
 
@@ -878,7 +878,7 @@ const RomaFredGame = () => {
       renderer.toneMappingExposure = THREE.MathUtils.lerp(0.95, 1.25, depth);
       const zn = world.zones, rb = zn.riverBox;
       const inRiver = rb && p.z > rb.min.z && p.z < rb.max.z && p.y < rb.max.y + 0.1;
-      setPlace(depth > 0.5 ? 'Caverna' : p.z > zn.asphaltZ ? 'Cidade' : p.z > zn.exitZ ? 'Estrada'
+      setPlace(depth > 0.5 ? 'Caverna' : (p.z > zn.stadiumZ - 7.5 && p.x > 2) ? 'Estádio Farroupilha' : p.z > zn.asphaltZ ? 'Cidade' : p.z > zn.exitZ ? 'Estrada'
         : inRiver ? 'Rio' : (Math.hypot(p.x, p.z + 3) < 16 ? 'Clareira' : 'Mata'));
       // fogo tremulando
       for (const L of fireLights) L.intensity = L.userData.base * (0.82 + 0.12 * Math.sin(t * 11.3 + L.id) + 0.08 * Math.sin(t * 23.7 + L.id * 2.1));
@@ -1048,7 +1048,7 @@ const RomaFredGame = () => {
         if (s > 0.25) {
           // as pernas correm no ritmo das rodas (o ciclo foi feito para 5,1 m/s)
           play('Carro_Dirigir', { fade: 0.25, timeScale: Math.sign(sp) * THREE.MathUtils.clamp(s / DRIVE_SPEED, 0.3, 1.25) });
-          car.play('Rodando', { fade: 0.2, timeScale: sp / DRIVE_SPEED });
+          car.play('Rodando', { fade: 0.2, timeScale: (sp / DRIVE_SPEED) * (0.31 / 0.354) }); // rodas do carro novo: raio 0,354 m (o ciclo foi feito para 0,31 m)
           setState(s > DRIVE_SPEED * 0.8 ? 'Pisando fundo' : sp < 0 ? 'Dando ré' : 'Dirigindo');
         } else {
           play('Carro_Parado', { fade: 0.35 }); car.play('Parado', { fade: 0.3 });
