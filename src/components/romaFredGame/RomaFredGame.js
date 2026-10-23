@@ -25,6 +25,9 @@ const FESTA_PATH = `${MODELS}/festa_balada.glb`;
 const CHAR_PATH = `${MODELS}/romanele_animado.glb`;
 const CAR_PATH = `${MODELS}/carro_pedra.glb`;
 const COPO_PATH = `${MODELS}/copo_kit.glb`;
+// beber sentado no carro: ossos que tocam o gole (o resto fica na pose do carro) e quando ele solta o copo
+const CAR_DRINK_BONES = /^(Neck|Head|Right(Shoulder|Arm|ForeArm|Hand)|Liquido)/;
+const CAR_CUP_RELEASE = 103 / 24;
 const CUP_ICON = `${process.env.PUBLIC_URL || ''}/assets/ui/copo_kit.png`;
 
 /* Constantes (metros, segundos) */
@@ -153,7 +156,7 @@ const RomaFredGame = () => {
     let aiming = false, aimBlend = 0, lastLook = -10; // PC: mira com o botão direito e último movimento do mouse
     let footMoveT = 0; // PC: há quanto tempo ele está andando (a câmera volta para trás dele aos poucos)
     let car = null; // carro de pedra (car.js)
-    let copos = null, cupCount = 0; // copo de kit da Xalassa (copos.js)
+    let copos = null, cupCount = 0, rightHand = null; // copo de kit da Xalassa (copos.js)
     const actions = {}, clips = {};
     const flames = []; const fireLights = [];
     let water = null; // rio interativo (water.js)
@@ -1048,7 +1051,19 @@ const RomaFredGame = () => {
     }
     function updateCarMode(dt) {
       if (player.mode === 'car-approach') { updateApproach(dt); return; }
-      if (player.mode === 'car') {
+      if (player.mode === 'car-drink') {
+        // freia sozinho (sem acelerar nem virar) e só começa a beber com o carro parado
+        const sp = car.drive(dt, { throttle: 0, steer: 0, maxSpeed: DRIVE_SPEED, octree: world.octree, limitOctree: world.limitOctree });
+        if (carInfo.drink === 'brake') {
+          if (Math.abs(sp) > 0.25) {
+            play('Carro_Dirigir', { fade: 0.25, timeScale: Math.sign(sp) * THREE.MathUtils.clamp(Math.abs(sp) / DRIVE_SPEED, 0.3, 1.25) });
+            car.play('Rodando', { fade: 0.2, timeScale: (sp / DRIVE_SPEED) * (0.31 / 0.354) });
+          } else { play('Carro_Parado', { fade: 0.3 }); car.play('Parado', { fade: 0.3 }); }
+          if (Math.abs(sp) < 0.15) startCarDrink();
+        } else car.play('Parado', { fade: 0.3 });
+        player.yaw = car.state.yaw;
+        player.vel.set(Math.sin(car.state.yaw) * sp, 0, Math.cos(car.state.yaw) * sp);
+      } else if (player.mode === 'car') {
         let throttle = input.f - input.b, steer = input.l - input.r;
         if (input.stick.lengthSq() > 0.01) { throttle = -input.stick.y; steer = -input.stick.x; }
         const sp = car.drive(dt, { throttle, steer, maxSpeed: DRIVE_SPEED, octree: world.octree, limitOctree: world.limitOctree });
@@ -1096,6 +1111,7 @@ const RomaFredGame = () => {
       setState('Parado');
     }
     function leaveCarNow() {   // trocou de mundo com ele no carro
+      if (player.mode === 'car-drink') { if (carInfo.drink === 'drink') endCarDrink(false); carInfo.drink = null; }
       player.mode = 'play'; restoreClub();
       model.rotation.set(0, player.yaw, 0);
       if (car) { car.state.speed = 0; car.play('Parado', { fade: 0 }); }
@@ -1123,7 +1139,19 @@ const RomaFredGame = () => {
     }
     function setupCopos(gltf) {
       copos = createCopos({ model, gltf });
-      if (copos.clip) { clips.Beber = copos.clip; actions.Beber = mixer.clipAction(copos.clip); }
+      if (copos.clip) {
+        clips.Beber = copos.clip; actions.Beber = mixer.clipAction(copos.clip);
+        // no carro: só a cabeça e o braço direito bebem; o resto continua sentado (mão esquerda no volante)
+        const nodeOf = (t) => t.name.split('.')[0];
+        const sentado = new THREE.AnimationClip('BeberSentado', copos.clip.duration, copos.clip.tracks.filter((t) => CAR_DRINK_BONES.test(nodeOf(t))));
+        actions.BeberSentado = mixer.clipAction(sentado);
+        if (clips.Carro_Parado) {
+          const base = new THREE.AnimationClip('Carro_ParadoBase', clips.Carro_Parado.duration, clips.Carro_Parado.tracks.filter((t) => !CAR_DRINK_BONES.test(nodeOf(t))));
+          actions.Carro_ParadoBase = mixer.clipAction(base);
+        }
+        rightHand = model.getObjectByName('RightHand');
+        copos.calibrate(rightHand);
+      }
       setCupCount(0);
     }
     // ponto de saída do copinho: a cabeça do dino (osso mais alto com "cabeça"/"head" no nome)
@@ -1152,6 +1180,7 @@ const RomaFredGame = () => {
     }
     function drink() {
       if (!started || busy || !copos || !copos.clip) return;
+      if (player.mode === 'car') { carDrink(); return; }
       if (player.mode === 'viewer') exitViewer();
       if (player.mode !== 'play' || player.attacking || player.jumpTimer >= 0 || !player.onFloor) return;
       if (cupCount <= 0) { toast('Derrube um dinossauro para ganhar um copo de kit'); return; }
@@ -1176,6 +1205,43 @@ const RomaFredGame = () => {
       play(clipFor('Parado'), { fade: 0.3 });
     }
     function cancelDrink() { copos.cancelSounds(); endDrink(); }
+
+    /* ── beber no carro: se estiver andando ele freia sozinho e depois bebe sentado ── */
+    function carDrink() {
+      if (!actions.BeberSentado || !actions.Carro_ParadoBase) return;
+      if (cupCount <= 0) { toast('Derrube um dinossauro para ganhar um copo de kit'); return; }
+      player.mode = 'car-drink'; carInfo.drink = 'brake';
+      setState(Math.abs(car.state.speed) > 0.25 ? 'Parando para beber' : 'Bebendo o kit');
+    }
+    function startCarDrink() {
+      carInfo.drink = 'drink';
+      car.state.speed = 0; player.vel.set(0, 0, 0);
+      setCupCount(cupCount - 1, -1);              // pegou o copo: o contador desce 1
+      const base = actions.Carro_ParadoBase, up = actions.BeberSentado;
+      base.enabled = true; base.setLoop(THREE.LoopRepeat, Infinity); base.reset().setEffectiveWeight(1).fadeIn(0.3).play();
+      up.enabled = true; up.setLoop(THREE.LoopOnce, 1); up.clampWhenFinished = true;
+      up.reset().setEffectiveTimeScale(1).setEffectiveWeight(1).fadeIn(0.3).play();
+      if (player.current && player.current !== base) player.current.fadeOut(0.3);
+      player.current = base;
+      copos.followHand(rightHand); copos.setHeld(true);
+      copos.scheduleDrinkSounds();
+      setState('Bebendo o kit');
+    }
+    // depois do mixer: o copo acompanha a mão; quando ele joga o copo, cai do carro para o chão
+    function updateCarDrinkCup() {
+      if (player.mode !== 'car-drink' || carInfo.drink !== 'drink') return;
+      copos.followHand(rightHand);
+      if (actions.BeberSentado.time >= CAR_CUP_RELEASE) endCarDrink(true);
+    }
+    function endCarDrink(dropped) {
+      if (dropped) copos.dropOnGround(world.root, world.octree); else copos.cancelSounds();
+      copos.setHeld(false);
+      if (actions.BeberSentado) actions.BeberSentado.fadeOut(0.45);
+      carInfo.drink = null;
+      player.mode = 'car';
+      play('Carro_Parado', { fade: 0.45 });
+      setState('No carro');
+    }
 
     /* ── loop ── */
     const timer = new THREE.Timer();
@@ -1262,6 +1328,7 @@ const RomaFredGame = () => {
       else for (let i = 0; i < steps; i++) updatePlayer(dt / steps);
       updateAnimation();
       mixer.update(dt);
+      updateCarDrinkCup();
       if (carInfo.pendingExit) { carInfo.pendingExit = false; finishExit(); mixer.update(0); }
       if (car && world === worlds.mata) { car.update(dt); updateCarHint(); }
       updateFootsteps(dt);

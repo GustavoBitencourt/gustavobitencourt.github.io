@@ -55,6 +55,27 @@ export function createCopos({ model, gltf }) {
   }
   function clearGround() { for (const o of ground) o.removeFromParent(); ground.length = 0; }
 
+  // no carro só a cabeça e o braço direito tocam o clipe; o copo vai preso na mão direita
+  // (no clipe ele fica parado na mão do começo até o arremesso, então a relação é fixa)
+  let handRel = null;
+  const _m = new THREE.Matrix4(), _p = new THREE.Matrix4();
+  function calibrate(handBone) {
+    if (!clip || !handBone) return;
+    const tmpMixer = new THREE.AnimationMixer(model);
+    const a = tmpMixer.clipAction(clip); a.play(); tmpMixer.setTime(1.0);
+    model.updateMatrixWorld(true);
+    handRel = new THREE.Matrix4().copy(handBone.matrixWorld).invert().multiply(cupNode.matrixWorld);
+    a.stop(); tmpMixer.uncacheRoot(model);
+  }
+  function followHand(handBone) {
+    if (!handRel || !handBone) return;
+    model.updateMatrixWorld(true);
+    _m.multiplyMatrices(handBone.matrixWorld, handRel);
+    _p.copy(cupNode.parent.matrixWorld).invert();
+    _m.premultiply(_p).decompose(cupNode.position, cupNode.quaternion, cupNode.scale);
+    cupNode.updateMatrixWorld(true);
+  }
+
   // ── sons sintetizados: "plim" do copo chegando, goles e o copo batendo no chão ──
   let ctx = null;
   function unlock() {
@@ -96,7 +117,7 @@ export function createCopos({ model, gltf }) {
   return {
     cupScene, cupNode, liquid, clip,
     setHeld(v) { cupScene.visible = v; },
-    dropOnGround, clearGround, unlock, plim, scheduleDrinkSounds, cancelSounds,
+    dropOnGround, clearGround, unlock, plim, scheduleDrinkSounds, cancelSounds, calibrate, followHand,
     dispose() { cancelSounds(); clearGround(); try { if (ctx) ctx.close(); } catch (e) { /* nada */ } },
   };
 }
