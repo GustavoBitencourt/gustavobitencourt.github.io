@@ -151,6 +151,7 @@ const RomaFredGame = () => {
     let model, mixer, club, dinos, hips, feet = [];
     const camFocus = new THREE.Vector3(); let camBlend = 0, camDistMul = 1; // alvo da câmera (suavizado ao entrar/sair do carro)
     let aiming = false, aimBlend = 0, lastLook = -10; // PC: mira com o botão direito e último movimento do mouse
+    let footMoveT = 0; // PC: há quanto tempo ele está andando (a câmera volta para trás dele aos poucos)
     let car = null; // carro de pedra (car.js)
     let copos = null, cupCount = 0; // copo de kit da Xalassa (copos.js)
     const actions = {}, clips = {};
@@ -703,9 +704,8 @@ const RomaFredGame = () => {
           let d = cam.yaw + Math.PI - player.yaw; d = Math.atan2(Math.sin(d), Math.cos(d));
           player.yaw += d * (1 - Math.exp(-18 * dt));
         } else if (!locked) {
-          // A/D viram o Romanele; a câmera vira junto e mantém o ângulo que o jogador escolheu
-          const turn = (input.l - input.r) * 2.6 * dt;
-          player.yaw += turn; cam.yaw += turn;
+          // A/D viram só o Romanele; a câmera volta para trás dele sozinha quando ele anda (ver câmera)
+          player.yaw += (input.l - input.r) * 2.6 * dt;
         }
         // W anda para a frente dele, S dá ré (caminhando de costas); mirando, sempre caminha
         wish.set(Math.sin(player.yaw) * iz, 0, Math.cos(player.yaw) * iz);
@@ -854,6 +854,14 @@ const RomaFredGame = () => {
         const want = car.state.yaw + (car.state.speed > 0 ? Math.PI : 0);
         let d = want - cam.yaw; d = Math.atan2(Math.sin(d), Math.cos(d));
         cam.yaw += d * (1 - Math.exp(-1.6 * dt));
+      }
+      // a pé no PC: andando por um tempinho, a câmera vai voltando devagar para trás dele (como no carro)
+      const walkingPc = !isTouch && player.mode === 'play' && !aiming && !looking && Math.hypot(player.vel.x, player.vel.z) > 0.6;
+      footMoveT = walkingPc ? footMoveT + dt : 0;
+      if (footMoveT > 0.8) {
+        const k = Math.min(1, (footMoveT - 0.8) / 1.2);   // começa bem suave e firma em ~1 s
+        let d = player.yaw + Math.PI - cam.yaw; d = Math.atan2(Math.sin(d), Math.cos(d));
+        cam.yaw += d * (1 - Math.exp(-1.6 * k * dt));
       }
       const cp = Math.cos(cam.pitch);
       const dir = tmp.set(Math.sin(cam.yaw) * cp, Math.sin(cam.pitch), Math.cos(cam.yaw) * cp).normalize();

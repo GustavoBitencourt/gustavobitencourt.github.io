@@ -10,6 +10,45 @@ import * as THREE from 'three';
 export const CAR_ANCHOR = new THREE.Vector3(0.40, 0, -0.03);   // raiz do Romanele sentado (igual no Blender)
 export const CAR_ENTRY = new THREE.Vector3(1.22, 0, -0.85);    // onde ele fica em pé, ao lado da porta
 
+/*
+ * Pneus lisos por dentro das rodas: a banda de rodagem do modelo tem falhas na parte de cima
+ * (escondida pelo para-lama); com a roda girando essas falhas iam para baixo e a roda parecia
+ * se desfazer. Como o pneu é uma superfície de revolução em volta do eixo, ele não precisa girar.
+ */
+function addTires(root) {
+  let mesh = null;
+  root.traverse((o) => { if (o.isSkinnedMesh && !mesh) mesh = o; });
+  if (!mesh) return;
+  root.updateMatrixWorld(true);
+  const sk = mesh.skeleton, si = mesh.geometry.attributes.skinIndex, sw = mesh.geometry.attributes.skinWeight;
+  const inv = new THREE.Matrix4().copy(root.matrixWorld).invert();
+  const v = new THREE.Vector3(), c = new THREE.Vector3();
+  const mat = new THREE.MeshStandardMaterial({ color: 0x151515, roughness: 0.92, metalness: 0, side: THREE.DoubleSide });
+  sk.bones.forEach((bone, bi) => {
+    if (!/^Roda_/.test(bone.name)) return;
+    c.setFromMatrixPosition(bone.matrixWorld).applyMatrix4(inv);   // centro da roda (raiz do carro no chão)
+    const R = c.y - 0.008;                                         // um tiquinho para dentro do pneu original
+    let xMin = Infinity, xMax = -Infinity;
+    for (let i = 0; i < si.count; i++) {
+      if (si.getX(i) !== bi || sw.getX(i) < 0.5) continue;
+      mesh.getVertexPosition(i, v); v.applyMatrix4(mesh.matrixWorld).applyMatrix4(inv);
+      const r = Math.hypot(v.y - c.y, v.z - c.z);
+      if (r > R - 0.06 && r < R + 0.03) { xMin = Math.min(xMin, v.x); xMax = Math.max(xMax, v.x); }
+    }
+    if (!(xMax > xMin)) return;
+    const w = xMax - xMin - 0.016, Ri = R * 0.74, b = Math.min(0.035, w * 0.2);
+    const prof = [[Ri, -w / 2], [R - b, -w / 2], [R, -w / 2 + b], [R, w / 2 - b], [R - b, w / 2], [Ri, w / 2]]
+      .map(([r, y]) => new THREE.Vector2(r, y));
+    const geo = new THREE.LatheGeometry(prof, 36);
+    geo.rotateZ(-Math.PI / 2);                                     // eixo do torno (Y) -> eixo da roda (X)
+    const tire = new THREE.Mesh(geo, mat);
+    tire.name = `Pneu_${bone.name}`;
+    tire.position.set((xMin + xMax) / 2, c.y, c.z);
+    tire.castShadow = true; tire.receiveShadow = true;
+    root.add(tire);
+  });
+}
+
 export function createCar({ scene, gltf }) {
   const root = gltf.scene;
   // o GLB traz o esqueleto do Romanele só para carregar as animações dele: não vai para a cena
@@ -44,6 +83,7 @@ export function createCar({ scene, gltf }) {
     return a;
   }
   play('Parado', { fade: 0 });
+  addTires(root);
 
   const state = { pos: new THREE.Vector3(), yaw: 0, pitch: 0, roll: 0, speed: 0, steer: 0 };
   const fwd = new THREE.Vector3(), side = new THREE.Vector3();
