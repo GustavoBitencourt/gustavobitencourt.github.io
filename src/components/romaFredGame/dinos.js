@@ -41,7 +41,7 @@ const rand = (a, b) => a + Math.random() * (b - a);
 const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
 const wrapAngle = (a) => Math.atan2(Math.sin(a), Math.cos(a));
 
-export function createDinoManager({ scene, templates, caveMouth, exitZ = Infinity, onPlayerHit, onDown, onWave }) {
+export function createDinoManager({ scene, templates, caveMouth, exitZ = Infinity, onPlayerHit, onDown, onWave, onSound }) {
   const group = new THREE.Group();
   group.name = 'Dinos';
   scene.add(group);
@@ -64,6 +64,10 @@ export function createDinoManager({ scene, templates, caveMouth, exitZ = Infinit
   const leftForest = (z) => z > exitZ - 1;
 
   /* ── criação ── */
+  // o GLTFLoader tira o ponto do nome dos ossos ("foot.L" vira "footL")
+  function findBone(obj, name) {
+    return obj.getObjectByName(name) || obj.getObjectByName(name.replace(/[.:/[\]]/g, '')) || obj.getObjectByName(name.replace('.', '_'));
+  }
   function groundAt(octree, x, z) {
     ray.origin.set(x, 40, z); ray.direction.copy(down);
     const hit = octree.rayIntersect(ray);
@@ -97,6 +101,8 @@ export function createDinoManager({ scene, templates, caveMouth, exitZ = Infinit
         yaw: Math.atan2(player.x - x, player.z - z),
         state: 'delay', timer: rand(0, 1.4), speed: 0,
         attackHit: false, roarIn: rand(3, 6), sinkT: 0,
+        vocalIn: rand(4, 9), stepCool: 0,
+        feet: ['foot.L', 'foot.R'].map((n) => ({ bone: findBone(obj, n), minH: Infinity, armed: true })).filter((f) => f.bone),
       };
       obj.rotation.y = d.yaw;
       obj.visible = false;
@@ -127,7 +133,38 @@ export function createDinoManager({ scene, templates, caveMouth, exitZ = Infinit
     next.setEffectiveTimeScale(timeScale).setEffectiveWeight(1).fadeIn(fade).play();
     if (prev && prev !== next) prev.fadeOut(fade);
     d.current = next;
+    if (name === 'Rugir' && onSound) onSound('rugido', d);
     return next;
+  }
+
+  /* ── sons: passos (quando o pé desce e encosta no chão) e rugidos soltos na correria ── */
+  const footW = new THREE.Vector3();
+  const LOCOMOTION = { chase: 1, circle: 1 };
+  function sounds(d, dt, player) {
+    if (!onSound || !d.obj.visible) return;
+    d.stepCool -= dt;
+    const moving = LOCOMOTION[d.state] && d.speed > 0.3 && d.onFloor;
+    if (d.feet.length) {
+      d.obj.updateMatrixWorld(true);
+      for (const f of d.feet) {
+        f.bone.getWorldPosition(footW);
+        const h = footW.y - d.obj.position.y;
+        if (moving) f.minH = Math.min(f.minH, h);   // altura do pé apoiado
+        if (h > f.minH + 0.08) f.armed = true;
+        else if (f.armed && h < f.minH + 0.03) {
+          f.armed = false;
+          if (moving && d.stepCool <= 0) { d.stepCool = 0.12; onSound('passo', d, THREE.MathUtils.clamp(d.speed / 3.4, 0.45, 1)); }
+        }
+      }
+    }
+    // correndo atrás dele, ruge de vez em quando (sorteia o rugido no som)
+    if (d.state === 'chase') {
+      d.vocalIn -= dt;
+      if (d.vocalIn <= 0) {
+        d.vocalIn = rand(7, 14);
+        if (Math.hypot(player.x - d.obj.position.x, player.z - d.obj.position.z) < 35) onSound('rugido', d);
+      }
+    }
   }
 
   function onFinished(d, name) {
@@ -389,6 +426,7 @@ export function createDinoManager({ scene, templates, caveMouth, exitZ = Infinit
       d.obj.position.set(d.capsule.start.x, d.capsule.start.y - BODY_R, d.capsule.start.z);
       d.obj.rotation.y = d.yaw;
       d.mixer.update(dt);
+      sounds(d, dt, player);
     }
 
     // próxima onda quando todos caíram (só se ele estiver fora da caverna)

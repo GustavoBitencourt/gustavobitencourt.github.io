@@ -166,14 +166,22 @@ const RomaFredGame = () => {
     const inWater = () => !!(water && world === worlds.mata && water.isWet(model.position.x, model.position.y, model.position.z));
     // som com volume e lado (esquerda/direita) pela posição em relação à câmera
     const camFwd = new THREE.Vector3();
-    function play3D(name, x, y, z, volume = 1, rate = 1) {
+    function play3D(name, x, y, z, volume = 1, rate = 1, ref = 7) {
       const dx = x - camera.position.x, dy = y - camera.position.y, dz = z - camera.position.z;
       const d = Math.hypot(dx, dy, dz);
-      if (d > 45) return;
+      if (d > ref * 6.5) return;
       camera.getWorldDirection(camFwd);
       const rx = -camFwd.z, rz = camFwd.x, rl = Math.hypot(rx, rz) || 1;
       const pan = THREE.MathUtils.clamp((dx * rx + dz * rz) / rl / Math.max(d, 1.5), -1, 1) * 0.85;
-      sfx.play(name, { volume: volume / (1 + (d / 7) * (d / 7)), rate, pan });
+      sfx.play(name, { volume: volume / (1 + (d / ref) * (d / ref)), rate, pan });
+    }
+    // sons dos dinossauros: cada tipo com seu tom (o T-Rex mais grave, o raptor e o inflável mais agudos)
+    const DINO_VOICE = { trex: { rate: 0.86, step: 1.15 }, raptor: { rate: 1.12, step: 0.7 }, inflavel: { rate: 1.22, step: 0.55 } };
+    function dinoSound(kind, d, strength = 1) {
+      if (world !== worlds.mata) return;
+      const v = DINO_VOICE[d.type] || { rate: 1, step: 1 }, p = d.obj.position;
+      if (kind === 'rugido') play3D('rugido', p.x, p.y + 1.2, p.z, 1.15, v.rate, 13);
+      else if (kind === 'passo') play3D('passoDino', p.x, p.y, p.z, v.step * (0.6 + 0.5 * strength), v.rate, 8);
     }
     // eventos de água dos dinossauros (os do Romanele seguem a animação dele)
     function waterSound(e) {
@@ -230,8 +238,10 @@ const RomaFredGame = () => {
           toast(`${d.cfg.label} derrubado!`);
           cupFromDino(d); // +1 copo de kit voando da cabeça do dino
         },
+        onSound: dinoSound,
         onPlayerHit: (dx, dz) => {
           if (inCar()) return; // dentro do carro a mordida não empurra
+          sfx.play('dano');    // grito de dor (sorteia entre as variações)
           // empurrão da mordida / rabada
           stopDance();
           player.vel.x += dx * 3.2; player.vel.z += dz * 3.2;
@@ -511,16 +521,16 @@ const RomaFredGame = () => {
       if (player.stateLabel !== label) { player.stateLabel = label; $('chip-state').innerHTML = `Estado <b>${label}</b>`; }
     }
 
-    /* ── som: batida house de 120 BPM gerada ao vivo, no tempo das luzes ── */
+    /* ── som da festa: "Remix na Casa do Sol" em loop, com as luzes e a galera na batida ── */
     const music = createMusic(SPB);
-    function toggleMusic() {
+    function toggleMusic(quiet = false) {
       if (music.on) { music.stop(); $('music').textContent = 'Ligar som'; $('music').setAttribute('aria-pressed', 'false'); }
       else {
-        music.start(partyClock); $('music').textContent = 'Desligar som'; $('music').setAttribute('aria-pressed', 'true');
-        toast('Som ligado: 120 BPM, no tempo das luzes');
+        music.start(() => partyClock); $('music').textContent = 'Desligar som'; $('music').setAttribute('aria-pressed', 'true');
+        if (quiet !== true) toast('Som ligado: Remix na Casa do Sol');
       }
     }
-    on($('music'), 'click', toggleMusic);
+    on($('music'), 'click', () => toggleMusic());
     on($('bloom'), 'click', () => {
       useBloom = !useBloom; $('bloom').setAttribute('aria-pressed', String(useBloom));
       toast(useBloom ? 'Brilho das luzes ligado' : 'Brilho desligado (mais leve)');
@@ -529,6 +539,7 @@ const RomaFredGame = () => {
 
     /* ── troca de mundo: mata ⇄ Xalassa ── */
     async function goToFesta() {
+      music.load();   // a música baixa junto com a festa
       if (!worlds.festa) {
         busy = true;
         progressKeys = ['festa'];
@@ -554,7 +565,8 @@ const RomaFredGame = () => {
         busy = false;
       }
       setWorld('festa', 'SpawnPlayer');
-      toast('Bem-vindo à Xalassa! Aperte E para dançar e ligue o som no painel');
+      if (!music.on) toggleMusic(true);   // o som da festa já entra tocando (dá para desligar no painel)
+      toast('Bem-vindo à Xalassa! Aperte E para dançar');
     }
     on($('world'), 'click', () => {
       if (busy || !started) return;
@@ -1247,8 +1259,9 @@ const RomaFredGame = () => {
     const timer = new THREE.Timer();
     function stepParty(dt) {
       const partyMixer = world.mixer;
-      if (partyMixer && music.on) {
-        const pt = music.partyTime(); const d = pt - partyClock;
+      const pt = music.on ? music.partyTime() : null;
+      if (partyMixer && pt !== null) {
+        const d = pt - partyClock;
         if (d > -0.1 && d < 0.3) partyMixer.update(Math.max(0, d)); else partyMixer.setTime(pt);
         partyClock = Math.max(partyClock, pt);
       } else {

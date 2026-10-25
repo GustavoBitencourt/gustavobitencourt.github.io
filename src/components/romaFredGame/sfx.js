@@ -1,6 +1,7 @@
 /*
-  Efeitos sonoros do Romanele: passos, salto, queda, bastada no ar e bastada acertando,
-  e da água do rio (passos na água e splash, também usados pelos dinossauros).
+  Efeitos sonoros do Romanele: passos, salto, queda, bastada no ar e bastada acertando, dano,
+  da água do rio (passos na água e splash, também usados pelos dinossauros) e dos dinossauros
+  (passos e rugidos).
   Cada grupo tem várias variações; a cada som sorteia uma diferente da anterior e muda
   um pouco o tom e o volume, para não ficar repetitivo.
 */
@@ -15,6 +16,9 @@ const GROUPS = {
   tacoSwosh: { files: range(7).map((n) => `taco_swosh/taco_swosh_${n}.wav`), volume: 0.6, pitch: 0.07 },
   passoAgua: { files: range(8).map((n) => `agua/passo_agua_${n}.wav`), volume: 0.55, pitch: 0.1 },
   splashAgua: { files: range(5).map((n) => `agua/splash_agua_${n}.wav`), volume: 0.85, pitch: 0.08 },
+  dano: { files: range(6).map((n) => `dano/dano_${n}.wav`), volume: 0.9, pitch: 0.04 },
+  passoDino: { files: range(8).map((n) => `passo_dino/passo_dino_${n}.wav`), volume: 0.8, pitch: 0.08 },
+  rugido: { files: range(7).map((n) => `rugido_dino/rugido_dino_${n}.wav`), volume: 1, pitch: 0.06 },
 };
 
 export function createSfx() {

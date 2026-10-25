@@ -1,73 +1,72 @@
-/* Batida house de 120 BPM sintetizada ao vivo, alinhada ao show de luzes e ao público da festa. */
+/*
+  Som da Xalassa: o "Remix na Casa do Sol" tocando em loop dentro da festa.
+  A música tem 125 BPM e o público, as luzes e as danças foram feitos a 120 BPM:
+  enquanto ela toca, o relógio da festa anda 125/120 mais rápido e começa num tempo
+  forte, então as luzes e a galera ficam na batida da música.
+*/
+const SONG_URL = `${process.env.PUBLIC_URL || ''}/sounds/festa/remix_na_casa_do_sol.mp3`;
+const SONG_BPM = 125;
+const SONG_BEATS = 256;   // 2:02,88 = 256 tempos exatos (o loop fecha no compasso)
+
 export function createMusic(SPB) {
+  const rate = (SPB * SONG_BPM) / 60;   // segundos da festa por segundo da música
   return {
-    ctx: null, on: false, t0: 0, step: 0, timer: null,
+    ctx: null, on: false, playing: false, buffer: null, loading: null, src: null,
+    tStart: 0, pBase: 0, loopStart: 0, loopEnd: 0,
     init() {
       const C = this.ctx = new (window.AudioContext || window.webkitAudioContext)();
-      this.out = C.createGain(); this.out.gain.value = 0.55;
-      const comp = C.createDynamicsCompressor(); comp.threshold.value = -14; comp.ratio.value = 4;
-      this.out.connect(comp); comp.connect(C.destination);
-      const n = C.createBuffer(1, C.sampleRate, C.sampleRate); const d = n.getChannelData(0);
-      for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
-      this.noise = n;
+      this.out = C.createGain(); this.out.gain.value = 0.8;
+      this.out.connect(C.destination);
     },
-    env(g, t, a, peak, dec) {
-      g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(peak, t + a); g.gain.exponentialRampToValueAtTime(0.0001, t + a + dec);
-    },
-    kick(t) {
-      const C = this.ctx, o = C.createOscillator(), g = C.createGain();
-      o.frequency.setValueAtTime(150, t); o.frequency.exponentialRampToValueAtTime(44, t + 0.12);
-      this.env(g, t, 0.002, 1.0, 0.34); o.connect(g); g.connect(this.out); o.start(t); o.stop(t + 0.4);
-    },
-    noiseHit(t, type, freq, q, peak, dec) {
-      const C = this.ctx, s = C.createBufferSource(), f = C.createBiquadFilter(), g = C.createGain();
-      s.buffer = this.noise; f.type = type; f.frequency.value = freq; f.Q.value = q;
-      this.env(g, t, 0.001, peak, dec); s.connect(f); f.connect(g); g.connect(this.out); s.start(t, Math.random() * 0.5); s.stop(t + dec + 0.05);
-    },
-    clap(t, v = 0.5) { for (const k of [0, 0.011, 0.022]) this.noiseHit(t + k, 'bandpass', 1300, 0.9, v, k < 0.02 ? 0.03 : 0.16); },
-    hat(t, open) { this.noiseHit(t, 'highpass', 7500, 0.7, open ? 0.16 : 0.09, open ? 0.16 : 0.035); },
-    bass(t, f) {
-      const C = this.ctx, o = C.createOscillator(), o2 = C.createOscillator(), lp = C.createBiquadFilter(), g = C.createGain();
-      o.type = 'sawtooth'; o2.type = 'square'; o.frequency.value = f; o2.frequency.value = f * 0.5;
-      lp.type = 'lowpass'; lp.Q.value = 6; lp.frequency.setValueAtTime(900, t); lp.frequency.exponentialRampToValueAtTime(160, t + 0.2);
-      this.env(g, t, 0.004, 0.32, 0.2); o.connect(lp); o2.connect(lp); lp.connect(g); g.connect(this.out);
-      o.start(t); o2.start(t); o.stop(t + 0.3); o2.stop(t + 0.3);
-    },
-    stab(t, notes, v = 0.07) {
-      const C = this.ctx, lp = C.createBiquadFilter(), g = C.createGain();
-      lp.type = 'lowpass'; lp.frequency.setValueAtTime(2600, t); lp.frequency.exponentialRampToValueAtTime(500, t + 0.25);
-      this.env(g, t, 0.004, v, 0.26); lp.connect(g); g.connect(this.out);
-      for (const f of notes) {
-        const o = C.createOscillator(); o.type = 'sawtooth'; o.frequency.value = f; o.detune.value = (Math.random() - 0.5) * 14;
-        o.connect(lp); o.start(t); o.stop(t + 0.32);
+    // baixa e decodifica a música (dá para chamar antes, enquanto a festa carrega)
+    load() {
+      if (!this.ctx) this.init();
+      if (!this.loading) {
+        this.loading = fetch(SONG_URL)
+          .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.arrayBuffer(); })
+          .then((ab) => this.ctx.decodeAudioData(ab))
+          .then((buf) => {
+            this.buffer = buf;
+            // o MP3 ganha um pouco de silêncio do codificador no começo: o loop começa no
+            // primeiro som e dura exatamente os 256 tempos, sem tranco na volta
+            const d = buf.getChannelData(0);
+            const lim = Math.min(d.length, Math.floor(buf.sampleRate * 0.2));
+            let i = 0;
+            while (i < lim && Math.abs(d[i]) < 1e-4) i++;
+            this.loopStart = i / buf.sampleRate;
+            this.loopEnd = Math.min(buf.duration, this.loopStart + (SONG_BEATS * 60) / SONG_BPM);
+            return buf;
+          })
+          .catch((err) => { console.warn('Música da festa indisponível:', err); this.loading = null; return null; });
       }
+      return this.loading;
     },
-    // 4 compassos: Am, F, C, G (um loop de 16 tempos = um loop do show de luzes)
-    BASS: [55, 43.65, 65.41, 49.0],
-    CHORDS: [[220, 261.63, 329.63], [174.61, 220, 261.63], [261.63, 329.63, 392], [196, 246.94, 293.66]],
-    playStep(step, t) {
-      const s = step % 16, bar = Math.floor(step / 16) % 4;
-      if (s % 4 === 0) this.kick(t);
-      if (s === 4 || s === 12) this.clap(t);
-      if (bar === 3 && s >= 8 && s % 2 === 0) this.clap(t, 0.18 + 0.04 * (s - 8)); // virada junto com os strobos
-      if (s % 4 === 2) { this.hat(t, true); this.bass(t, this.BASS[bar]); } else if (s % 2 === 1) this.hat(t, false);
-      if (s === 3 || s === 10) this.stab(t, this.CHORDS[bar]);
-    },
-    schedule() {
-      const sps = SPB / 4;
-      while (this.t0 + this.step * sps < this.ctx.currentTime + 0.12) { this.playStep(this.step, this.t0 + this.step * sps); this.step++; }
-    },
-    start(partyClock) {
+    // getClock(): relógio atual da festa (a música entra num tempo forte dele)
+    start(getClock) {
       if (!this.ctx) this.init();
       this.ctx.resume();
-      // alinha: tempo da festa p corresponde ao tempo de áudio t0 + p
-      const nextBeat = Math.ceil(partyClock / SPB + 1e-6);
-      this.t0 = this.ctx.currentTime + 0.06 + (nextBeat * SPB - partyClock) - nextBeat * SPB;
-      this.step = nextBeat * 4;
-      this.on = true; this.timer = setInterval(() => this.schedule(), 25); this.schedule();
+      this.on = true;
+      this.load().then((buf) => {
+        if (!buf || !this.on || this.playing || !this.ctx) return;
+        const C = this.ctx;
+        const src = C.createBufferSource();
+        src.buffer = buf; src.loop = true; src.loopStart = this.loopStart; src.loopEnd = this.loopEnd;
+        src.connect(this.out);
+        this.tStart = C.currentTime + 0.08;
+        this.pBase = Math.ceil((getClock() + 0.08) / SPB - 1e-6) * SPB;
+        src.start(this.tStart, this.loopStart);
+        this.src = src; this.playing = true;
+      });
     },
-    stop() { this.on = false; clearInterval(this.timer); if (this.ctx) this.ctx.suspend(); },
-    partyTime() { return this.ctx.currentTime - this.t0; },
+    stop() {
+      this.on = false; this.playing = false;
+      if (this.src) { try { this.src.stop(); } catch (e) { /* já parou */ } this.src.disconnect(); this.src = null; }
+    },
+    // tempo da festa no instante atual da música (null enquanto ela ainda não começou)
+    partyTime() {
+      if (!this.playing) return null;
+      return this.pBase + (this.ctx.currentTime - this.tStart) * rate;
+    },
     dispose() { this.stop(); if (this.ctx) this.ctx.close(); this.ctx = null; },
   };
 }
