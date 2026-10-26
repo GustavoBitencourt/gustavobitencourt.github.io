@@ -131,7 +131,7 @@ const RomaFredGame = () => {
     /* ── carregamento ── */
     const loader = new GLTFLoader();
     const progress = { mata: 0, char: 0, festa: 0, raptor: 0, trex: 0, inflavel: 0, carro: 0, copo: 0 };
-    const SIZE_HINT = { mata: 20574400, char: 17057072, festa: 21971364, raptor: 1502832, trex: 1515896, inflavel: 1099968, carro: 3246880, copo: 371660 };
+    const SIZE_HINT = { mata: 23843340, char: 17057072, festa: 21971364, raptor: 1502832, trex: 1515896, inflavel: 1099968, carro: 3246880, copo: 371660 };
     let progressKeys = ['mata', 'char', 'raptor', 'trex', 'inflavel', 'carro', 'copo'];
     function showProgress() {
       const loaded = progressKeys.reduce((s, k) => s + progress[k], 0);
@@ -159,6 +159,7 @@ const RomaFredGame = () => {
     let copos = null, cupCount = 0, rightHand = null; // copo de kit da Xalassa (copos.js)
     const actions = {}, clips = {};
     const flames = []; const fireLights = [];
+    const fountainJets = [], fountainPools = [];   // água do chafariz do calçadão (texturas correndo)
     let water = null; // rio interativo (water.js)
     let grass = null; // grama que se dobra (grass.js)
 
@@ -198,7 +199,10 @@ const RomaFredGame = () => {
       env.traverse((o) => {
         // Colisao_Limite: parede invisível só para o Romanele (os dinos passam)
         if (o.name && o.name.startsWith('Colisao')) { o.visible = false; if (o.isMesh) (o.name.startsWith('Colisao_Limite') ? limits : colliders).push(o); return; }
-        if (o.isMesh && o.userData && o.userData.colisao === 'visivel') colliders.push(o); // terreno/calçada visíveis que também são chão
+        // terreno/calçada/prédios visíveis que também são chão ou parede (com vários materiais o
+        // GLTFLoader cria um grupo: a marca 'colisao' fica no grupo e as malhas são filhas dele)
+        const ud = o.userData && o.userData.colisao ? o.userData : (o.parent && o.parent.userData) || {};
+        if (o.isMesh && ud.colisao === 'visivel') colliders.push(o);
         if (o.isMesh && o.userData && o.userData.agua) waterMesh = o;
         if (o.isMesh) {
           const re = /Capim|Cavalinha|Folhinhas|Samambaia\d|Arbusto/;
@@ -208,6 +212,11 @@ const RomaFredGame = () => {
           if (m && m.name === 'Agua') { m.depthWrite = false; m.roughness = 0.05; }
           if (m && m.name === 'Fogo') { m.depthWrite = false; m.blending = THREE.AdditiveBlending; flames.push(o); o.castShadow = false; }
           if (m && m.name === 'Pintura') { m.depthWrite = false; m.polygonOffset = true; m.polygonOffsetFactor = -2; }
+          if (m && (m.name === 'AguaChafariz' || m.name === 'AguaChafarizLago')) {
+            m.transparent = true; m.depthWrite = false; m.side = THREE.DoubleSide; o.castShadow = false; o.renderOrder = 2;
+            if (m.map) { m.map.wrapS = m.map.wrapT = THREE.RepeatWrapping; m.map.needsUpdate = true; }
+            (m.name === 'AguaChafariz' ? fountainJets : fountainPools).push(m);
+          }
         }
         if (o.isLight) { o.userData.base = o.intensity; fireLights.push(o); o.castShadow = false; }
       });
@@ -216,12 +225,13 @@ const RomaFredGame = () => {
       }
       try { grass = createGrass(env); } catch (err) { console.warn('Grama interativa desativada:', err); }
       const zOf = (name, fallback) => { const o = env.getObjectByName(name); if (!o) return fallback; const v = new THREE.Vector3(); o.getWorldPosition(v); return v.z; };
+      const posOf = (name) => { const o = env.getObjectByName(name); return o ? o.getWorldPosition(new THREE.Vector3()) : null; };
       const riverBox = waterMesh ? new THREE.Box3().setFromObject(waterMesh) : null;
       worlds.mata = {
         name: 'mata', root: env, octree: buildOctree(env, colliders),
         limitOctree: limits.length ? buildOctree(env, limits) : null,
         markers: { SpawnPlayer: env.getObjectByName('SpawnPlayer') }, people: [], personObjs: [], mixer: null,
-        zones: { exitZ: zOf('SaidaMata', Infinity), asphaltZ: zOf('InicioAsfalto', Infinity), stadiumZ: zOf('RuaEstadio', Infinity), riverBox },
+        zones: { exitZ: zOf('SaidaMata', Infinity), asphaltZ: zOf('InicioAsfalto', Infinity), stadiumZ: zOf('RuaEstadio', Infinity), calcadao: posOf('Calcadao'), chafariz: posOf('Chafariz_Centro'), riverBox },
       };
     }
 
@@ -901,11 +911,15 @@ const RomaFredGame = () => {
       renderer.toneMappingExposure = THREE.MathUtils.lerp(0.95, 1.25, depth);
       const zn = world.zones, rb = zn.riverBox;
       const inRiver = rb && p.z > rb.min.z && p.z < rb.max.z && p.y < rb.max.y + 0.1;
-      setPlace(depth > 0.5 ? 'Caverna' : (p.z > zn.stadiumZ - 7.5 && p.x > 2) ? 'Estádio Farroupilha' : p.z > zn.asphaltZ ? 'Cidade' : p.z > zn.exitZ ? 'Estrada'
+      const ca = zn.calcadao;
+      setPlace(depth > 0.5 ? 'Caverna' : (ca && p.x > ca.x - 0.5 && Math.abs(p.z - ca.z) < 40) ? 'Calçadão' : (p.z > zn.stadiumZ - 7.5 && p.x > 2) ? 'Estádio Farroupilha' : p.z > zn.asphaltZ ? 'Cidade' : p.z > zn.exitZ ? 'Estrada'
         : inRiver ? 'Rio' : (Math.hypot(p.x, p.z + 3) < 16 ? 'Clareira' : 'Mata'));
       // fogo tremulando
       for (const L of fireLights) L.intensity = L.userData.base * (0.82 + 0.12 * Math.sin(t * 11.3 + L.id) + 0.08 * Math.sin(t * 23.7 + L.id * 2.1));
       for (const f of flames) { f.scale.y = 1 + 0.08 * Math.sin(t * 13 + f.id); f.scale.x = 1 + 0.05 * Math.sin(t * 9.1 + f.id * 1.7); }
+      // chafariz: os filetes escorrem e o espelho d'água ondula devagar
+      for (const m of fountainJets) if (m.map) m.map.offset.y = (m.map.offset.y - dt * 1.6) % 1;
+      for (const m of fountainPools) if (m.map) { m.map.offset.x = (m.map.offset.x + dt * 0.035) % 1; m.map.offset.y = (m.map.offset.y + dt * 0.02) % 1; }
       // sombras do sol acompanham o jogador
       sun.target.position.copy(p); sun.position.copy(p).addScaledVector(sunDir, 70);
       sky.position.copy(camera.position); // o mapa vai até ~560 m: o domo do céu acompanha a câmera
@@ -913,6 +927,7 @@ const RomaFredGame = () => {
       const ss = THREE.MathUtils.smoothstep;
       const road = ss(p.z, zn.exitZ - 10, zn.exitZ + 25), city = ss(p.z, zn.asphaltZ - 45, zn.asphaltZ + 10);
       const dRiver = rb ? Math.max(rb.min.z - p.z, p.z - rb.max.z, 0) : 999;
+      const fz = zn.chafariz, dFonte = fz ? Math.hypot(p.x - fz.x, p.z - fz.z) : 999;   // barulhinho de água perto do chafariz
       // a natureza (mata e campo) vai sumindo aos poucos conforme ele se aproxima da cidade
       const nearCity = ss(p.z, zn.exitZ - 40, zn.asphaltZ);
       const nature = 1 - 0.7 * nearCity;
@@ -920,7 +935,7 @@ const RomaFredGame = () => {
         mata: (1 - road) * nature * (1 - 0.75 * depth),
         estrada: road * (1 - city) * nature,
         cidade: city,
-        rio: (1 - ss(dRiver, 0, 45)) * (1 - 0.85 * depth),
+        rio: Math.max((1 - ss(dRiver, 0, 45)) * (1 - 0.85 * depth), 0.75 * (1 - ss(dFonte, 4, 24))),
       });
     }
 
@@ -958,7 +973,7 @@ const RomaFredGame = () => {
 
     /* ── carro de pedra: anda com as pernas do Romanele (sem chão, sem motor) ── */
     const carTmp = new THREE.Vector3(), carTmp2 = new THREE.Vector3();
-    const carInfo = { label: '', hinted: false, toldDrive: false, t: 0, club: true };
+    const carInfo = { label: '', hinted: false, toldDrive: false, toldBollards: false, t: 0, club: true };
     const carEntry = CAR_ENTRY.clone(), carExit = CAR_ENTRY.clone(); // ajustados pelas animações em setupCar
     const carInv = new THREE.Matrix4(), carWp = new THREE.Vector3();
     const nudgeCap = new Capsule();
@@ -1076,6 +1091,13 @@ const RomaFredGame = () => {
         player.yaw = car.state.yaw;
         player.vel.set(Math.sin(car.state.yaw) * sp, 0, Math.cos(car.state.yaw) * sp);
       } else if (player.mode === 'car') {
+        // fradinhos na entrada do calçadão: o carro não passa, ele tem que descer e seguir a pé
+        const ca = world.zones && world.zones.calcadao;
+        if (ca) {
+          const cp = car.state.pos, near = cp.x > ca.x - 9 && Math.abs(cp.z - ca.z) < 10;
+          if (near && !carInfo.toldBollards) { carInfo.toldBollards = true; toast('Calçadão: os fradinhos não deixam o carro passar. Desça (C) e siga a pé'); }
+          else if (cp.x < ca.x - 25) carInfo.toldBollards = false;
+        }
         let throttle = input.f - input.b, steer = input.l - input.r;
         if (input.stick.lengthSq() > 0.01) { throttle = -input.stick.y; steer = -input.stick.x; }
         const sp = car.drive(dt, { throttle, steer, maxSpeed: DRIVE_SPEED, octree: world.octree, limitOctree: world.limitOctree });
