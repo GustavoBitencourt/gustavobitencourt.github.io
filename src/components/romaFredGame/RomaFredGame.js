@@ -131,7 +131,7 @@ const RomaFredGame = () => {
     /* ── carregamento ── */
     const loader = new GLTFLoader();
     const progress = { mata: 0, char: 0, festa: 0, raptor: 0, trex: 0, inflavel: 0, carro: 0, copo: 0 };
-    const SIZE_HINT = { mata: 23843340, char: 17057072, festa: 21971364, raptor: 1502832, trex: 1515896, inflavel: 1099968, carro: 3246880, copo: 371660 };
+    const SIZE_HINT = { mata: 26654352, char: 17057072, festa: 21971364, raptor: 1502832, trex: 1515896, inflavel: 1099968, carro: 3246880, copo: 371660 };
     let progressKeys = ['mata', 'char', 'raptor', 'trex', 'inflavel', 'carro', 'copo'];
     function showProgress() {
       const loaded = progressKeys.reduce((s, k) => s + progress[k], 0);
@@ -160,6 +160,7 @@ const RomaFredGame = () => {
     const actions = {}, clips = {};
     const flames = []; const fireLights = [];
     const fountainJets = [], fountainPools = [];   // água do chafariz do calçadão (texturas correndo)
+    const barPeople = [];   // galera na frente do Bar do Zé: conversa balançando e toma uns goles
     let water = null; // rio interativo (water.js)
     let grass = null; // grama que se dobra (grass.js)
 
@@ -197,6 +198,11 @@ const RomaFredGame = () => {
       const colliders = [], limits = [];
       let waterMesh = null;
       env.traverse((o) => {
+        const pm = o.name && /^PessoaBar_(\d+)$/.exec(o.name);
+        if (pm) {
+          const arm = o.children.find((c) => /_Braco$/.test(c.name)) || null, k = Number(pm[1]);
+          barPeople.push({ body: o, arm, yaw: o.rotation.y, armX: arm ? arm.rotation.x : 0, seed: k * 1.913, period: 6.5 + (k * 2.37) % 4.5 });
+        }
         // Colisao_Limite: parede invisível só para o Romanele (os dinos passam)
         if (o.name && o.name.startsWith('Colisao')) { o.visible = false; if (o.isMesh) (o.name.startsWith('Colisao_Limite') ? limits : colliders).push(o); return; }
         // terreno/calçada/prédios visíveis que também são chão ou parede (com vários materiais o
@@ -231,7 +237,7 @@ const RomaFredGame = () => {
         name: 'mata', root: env, octree: buildOctree(env, colliders),
         limitOctree: limits.length ? buildOctree(env, limits) : null,
         markers: { SpawnPlayer: env.getObjectByName('SpawnPlayer') }, people: [], personObjs: [], mixer: null,
-        zones: { exitZ: zOf('SaidaMata', Infinity), asphaltZ: zOf('InicioAsfalto', Infinity), stadiumZ: zOf('RuaEstadio', Infinity), calcadao: posOf('Calcadao'), chafariz: posOf('Chafariz_Centro'), riverBox },
+        zones: { exitZ: zOf('SaidaMata', Infinity), asphaltZ: zOf('InicioAsfalto', Infinity), stadiumZ: zOf('RuaEstadio', Infinity), calcadao: posOf('Calcadao'), calcadaoFim: posOf('CalcadaoFim'), bar: posOf('BarDoZe'), bloquete: posOf('RuaBloquete'), chafariz: posOf('Chafariz_Centro'), riverBox },
       };
     }
 
@@ -911,12 +917,24 @@ const RomaFredGame = () => {
       renderer.toneMappingExposure = THREE.MathUtils.lerp(0.95, 1.25, depth);
       const zn = world.zones, rb = zn.riverBox;
       const inRiver = rb && p.z > rb.min.z && p.z < rb.max.z && p.y < rb.max.y + 0.1;
-      const ca = zn.calcadao;
-      setPlace(depth > 0.5 ? 'Caverna' : (ca && p.x > ca.x - 0.5 && Math.abs(p.z - ca.z) < 40) ? 'Calçadão' : (p.z > zn.stadiumZ - 7.5 && p.x > 2) ? 'Estádio Farroupilha' : p.z > zn.asphaltZ ? 'Cidade' : p.z > zn.exitZ ? 'Estrada'
+      const ca = zn.calcadao, cf = zn.calcadaoFim, bz = zn.bar, rbq = zn.bloquete;
+      const pastCalcadao = cf && p.x > cf.x && Math.abs(p.z - cf.z) < 140;
+      const bairro = pastCalcadao ? ((bz && Math.hypot(p.x - bz.x, p.z - bz.z) < 13) ? 'Bar do Zé' : (rbq && p.x > rbq.x - 5) ? 'Rua de bloquete' : 'Centro') : null;
+      setPlace(depth > 0.5 ? 'Caverna' : bairro ? bairro : (ca && p.x > ca.x - 0.5 && Math.abs(p.z - ca.z) < 40) ? 'Calçadão' : (p.z > zn.stadiumZ - 7.5 && p.x > 2) ? 'Estádio Farroupilha' : p.z > zn.asphaltZ ? 'Cidade' : p.z > zn.exitZ ? 'Estrada'
         : inRiver ? 'Rio' : (Math.hypot(p.x, p.z + 3) < 16 ? 'Clareira' : 'Mata'));
       // fogo tremulando
       for (const L of fireLights) L.intensity = L.userData.base * (0.82 + 0.12 * Math.sin(t * 11.3 + L.id) + 0.08 * Math.sin(t * 23.7 + L.id * 2.1));
       for (const f of flames) { f.scale.y = 1 + 0.08 * Math.sin(t * 13 + f.id); f.scale.x = 1 + 0.05 * Math.sin(t * 9.1 + f.id * 1.7); }
+      // galera do Bar do Zé: balança conversando e, de tempos em tempos, leva o copo à boca
+      if (barPeople.length && zn.bar && Math.hypot(p.x - zn.bar.x, p.z - zn.bar.z) < 90) {
+        for (const q of barPeople) {
+          q.body.rotation.y = q.yaw + 0.07 * Math.sin(t * 0.9 + q.seed) + 0.04 * Math.sin(t * 2.3 + q.seed * 2);
+          if (!q.arm) continue;
+          const c = ((t + q.seed * 3) % q.period) / q.period;   // 0..1 dentro do ciclo
+          const sip = THREE.MathUtils.smoothstep(c, 0.70, 0.78) * (1 - THREE.MathUtils.smoothstep(c, 0.90, 0.98));
+          q.arm.rotation.x = q.armX + 0.18 + 0.06 * Math.sin(t * 1.7 + q.seed) + 1.0 * sip;   // gesticula e bebe
+        }
+      }
       // chafariz: os filetes escorrem e o espelho d'água ondula devagar
       for (const m of fountainJets) if (m.map) m.map.offset.y = (m.map.offset.y - dt * 1.6) % 1;
       for (const m of fountainPools) if (m.map) { m.map.offset.x = (m.map.offset.x + dt * 0.035) % 1; m.map.offset.y = (m.map.offset.y + dt * 0.02) % 1; }
