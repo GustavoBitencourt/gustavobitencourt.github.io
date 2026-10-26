@@ -131,7 +131,7 @@ const RomaFredGame = () => {
     /* ── carregamento ── */
     const loader = new GLTFLoader();
     const progress = { mata: 0, char: 0, festa: 0, raptor: 0, trex: 0, inflavel: 0, carro: 0, copo: 0 };
-    const SIZE_HINT = { mata: 26654352, char: 17057072, festa: 21971364, raptor: 1502832, trex: 1515896, inflavel: 1099968, carro: 3246880, copo: 371660 };
+    const SIZE_HINT = { mata: 28697112, char: 17057072, festa: 21971364, raptor: 1502832, trex: 1515896, inflavel: 1099968, carro: 3246880, copo: 371660 };
     let progressKeys = ['mata', 'char', 'raptor', 'trex', 'inflavel', 'carro', 'copo'];
     function showProgress() {
       const loaded = progressKeys.reduce((s, k) => s + progress[k], 0);
@@ -198,10 +198,10 @@ const RomaFredGame = () => {
       const colliders = [], limits = [];
       let waterMesh = null;
       env.traverse((o) => {
-        const pm = o.name && /^PessoaBar_(\d+)$/.exec(o.name);
+        const pm = o.name && /^Pessoa(Bar|Parada)_(\d+)$/.exec(o.name);
         if (pm) {
-          const arm = o.children.find((c) => /_Braco$/.test(c.name)) || null, k = Number(pm[1]);
-          barPeople.push({ body: o, arm, yaw: o.rotation.y, armX: arm ? arm.rotation.x : 0, seed: k * 1.913, period: 6.5 + (k * 2.37) % 4.5 });
+          const arm = o.children.find((c) => /_Braco$/.test(c.name)) || null, k = Number(pm[2]) + (pm[1] === 'Parada' ? 40 : 0);
+          if (arm) barPeople.push({ body: o, arm, yaw: o.rotation.y, armX: arm ? arm.rotation.x : 0, seed: k * 1.913, period: 6.5 + (k * 2.37) % 4.5, phone: pm[1] === 'Parada' });
         }
         // Colisao_Limite: parede invisível só para o Romanele (os dinos passam)
         if (o.name && o.name.startsWith('Colisao')) { o.visible = false; if (o.isMesh) (o.name.startsWith('Colisao_Limite') ? limits : colliders).push(o); return; }
@@ -237,7 +237,7 @@ const RomaFredGame = () => {
         name: 'mata', root: env, octree: buildOctree(env, colliders),
         limitOctree: limits.length ? buildOctree(env, limits) : null,
         markers: { SpawnPlayer: env.getObjectByName('SpawnPlayer') }, people: [], personObjs: [], mixer: null,
-        zones: { exitZ: zOf('SaidaMata', Infinity), asphaltZ: zOf('InicioAsfalto', Infinity), stadiumZ: zOf('RuaEstadio', Infinity), calcadao: posOf('Calcadao'), calcadaoFim: posOf('CalcadaoFim'), bar: posOf('BarDoZe'), bloquete: posOf('RuaBloquete'), chafariz: posOf('Chafariz_Centro'), riverBox },
+        zones: { exitZ: zOf('SaidaMata', Infinity), asphaltZ: zOf('InicioAsfalto', Infinity), stadiumZ: zOf('RuaEstadio', Infinity), calcadao: posOf('Calcadao'), calcadaoFim: posOf('CalcadaoFim'), bar: posOf('BarDoZe'), bloquete: posOf('RuaBloquete'), xalassa: posOf('Xalassa'), parada: posOf('ParadaOnibus'), chafariz: posOf('Chafariz_Centro'), riverBox },
       };
     }
 
@@ -919,15 +919,24 @@ const RomaFredGame = () => {
       const inRiver = rb && p.z > rb.min.z && p.z < rb.max.z && p.y < rb.max.y + 0.1;
       const ca = zn.calcadao, cf = zn.calcadaoFim, bz = zn.bar, rbq = zn.bloquete;
       const pastCalcadao = cf && p.x > cf.x && Math.abs(p.z - cf.z) < 140;
-      const bairro = pastCalcadao ? ((bz && Math.hypot(p.x - bz.x, p.z - bz.z) < 13) ? 'Bar do Zé' : (rbq && p.x > rbq.x - 5) ? 'Rua de bloquete' : 'Centro') : null;
+      const xl = zn.xalassa, pd = zn.parada;
+      const bairro = !pastCalcadao ? null : (bz && Math.hypot(p.x - bz.x, p.z - bz.z) < 13) ? 'Bar do Zé'
+        : (xl && Math.hypot(p.x - xl.x, p.z - xl.z) < 11) ? 'Xalassa'
+        : (pd && Math.hypot(p.x - pd.x, p.z - pd.z) < 8) ? 'Parada de ônibus'
+        : (rbq && (p.x > rbq.x - 5 || p.z < rbq.z - 40)) ? 'Rua de bloquete' : 'Centro';
       setPlace(depth > 0.5 ? 'Caverna' : bairro ? bairro : (ca && p.x > ca.x - 0.5 && Math.abs(p.z - ca.z) < 40) ? 'Calçadão' : (p.z > zn.stadiumZ - 7.5 && p.x > 2) ? 'Estádio Farroupilha' : p.z > zn.asphaltZ ? 'Cidade' : p.z > zn.exitZ ? 'Estrada'
         : inRiver ? 'Rio' : (Math.hypot(p.x, p.z + 3) < 16 ? 'Clareira' : 'Mata'));
       // fogo tremulando
       for (const L of fireLights) L.intensity = L.userData.base * (0.82 + 0.12 * Math.sin(t * 11.3 + L.id) + 0.08 * Math.sin(t * 23.7 + L.id * 2.1));
       for (const f of flames) { f.scale.y = 1 + 0.08 * Math.sin(t * 13 + f.id); f.scale.x = 1 + 0.05 * Math.sin(t * 9.1 + f.id * 1.7); }
       // galera do Bar do Zé: balança conversando e, de tempos em tempos, leva o copo à boca
-      if (barPeople.length && zn.bar && Math.hypot(p.x - zn.bar.x, p.z - zn.bar.z) < 90) {
+      if (barPeople.length && zn.bar && p.x > zn.bar.x - 120) {
         for (const q of barPeople) {
+          if (q.phone) {   // parada de ônibus: olhando o celular, balançando de leve
+            q.body.rotation.y = q.yaw + 0.03 * Math.sin(t * 0.6 + q.seed);
+            if (q.arm) q.arm.rotation.x = q.armX + 0.42 + 0.05 * Math.sin(t * 0.9 + q.seed) + 0.03 * Math.sin(t * 3.1 + q.seed * 3);
+            continue;
+          }
           q.body.rotation.y = q.yaw + 0.07 * Math.sin(t * 0.9 + q.seed) + 0.04 * Math.sin(t * 2.3 + q.seed * 2);
           if (!q.arm) continue;
           const c = ((t + q.seed * 3) % q.period) / q.period;   // 0..1 dentro do ciclo
