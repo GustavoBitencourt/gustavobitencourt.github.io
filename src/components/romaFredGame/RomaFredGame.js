@@ -11,6 +11,7 @@ import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPa
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { createMusic } from './music.js';
 import { createDinoManager, combineDinoManagers, DINO_TYPES, DINO_BASES } from './dinos.js';
+import { createMinimap } from './minimap.js';
 import { createSfx } from './sfx.js';
 import { createWater } from './water.js';
 import { createGrass } from './grass.js';
@@ -33,7 +34,8 @@ const CUP_ICON = `${process.env.PUBLIC_URL || ''}/assets/ui/copo_kit.png`;
 /* Constantes (metros, segundos) */
 const WALK_SPEED = 1.25;      // velocidade para a qual o ciclo de andar foi feito
 const RUN_SPEED = 3.4;        // velocidade para a qual o ciclo de correr foi feito
-const DRIVE_SPEED = RUN_SPEED * 1.5; // no carro (sem chão e sem motor, só as pernas dele): 1,5× a corrida
+const DRIVE_DRAIN_M = 55;              // metros dirigidos para perder 1 de vida
+const DRIVE_SPEED = RUN_SPEED * 1.7; // no carro (sem chão e sem motor, só as pernas dele): 1,7× a corrida
 const GRAVITY = 16;
 const JUMP_VEL = 5.2;
 const RADIUS = 0.32;
@@ -131,7 +133,7 @@ const RomaFredGame = () => {
     /* ── carregamento ── */
     const loader = new GLTFLoader();
     const progress = { mata: 0, char: 0, festa: 0, raptor: 0, trex: 0, inflavel: 0, carro: 0, copo: 0 };
-    const SIZE_HINT = { mata: 28697112, char: 17057072, festa: 21971364, raptor: 1502832, trex: 1515896, inflavel: 1099968, carro: 3246880, copo: 371660 };
+    const SIZE_HINT = { mata: 28821736, char: 17057072, festa: 21971364, raptor: 1502832, trex: 1515896, inflavel: 1099968, carro: 3246880, copo: 371660 };
     let progressKeys = ['mata', 'char', 'raptor', 'trex', 'inflavel', 'carro', 'copo'];
     function showProgress() {
       const loaded = progressKeys.reduce((s, k) => s + progress[k], 0);
@@ -194,6 +196,7 @@ const RomaFredGame = () => {
       else if (e.type === 'fall') play3D('splashAgua', e.x, water.level, e.z, 1.3, 0.75);
     }
 
+    const maxAniso = Math.min(8, renderer.capabilities.getMaxAnisotropy ? renderer.capabilities.getMaxAnisotropy() : 1);
     function setupMata(gltf) {
       const env = gltf.scene; scene.add(env);
       const colliders = [], limits = [];
@@ -219,6 +222,9 @@ const RomaFredGame = () => {
           if (m && m.name === 'Agua') { m.depthWrite = false; m.roughness = 0.05; }
           if (m && m.name === 'Fogo') { m.depthWrite = false; m.blending = THREE.AdditiveBlending; flames.push(o); o.castShadow = false; }
           if (m && m.name === 'Pintura') { m.depthWrite = false; m.polygonOffset = true; m.polygonOffsetFactor = -2; }
+          // fachadas, letreiros e chão de textura fina tremiam de longe (moiré) e refletiam o céu: anisotrópico + fosco
+          if (m && m.map) { m.map.anisotropy = maxAniso; m.map.needsUpdate = true; }
+          if (m && /Fachada|Letreiro|BarDoZe|XalassaBairro|Bloquete|PisoCalcadao|Construcao/.test(m.name || '')) { m.roughness = Math.max(m.roughness ?? 1, 0.92); m.metalness = 0; }
           if (m && (m.name === 'AguaChafariz' || m.name === 'AguaChafarizLago')) {
             m.transparent = true; m.depthWrite = false; m.side = THREE.DoubleSide; o.castShadow = false; o.renderOrder = 2;
             if (m.map) { m.map.wrapS = m.map.wrapT = THREE.RepeatWrapping; m.map.needsUpdate = true; }
@@ -253,7 +259,6 @@ const RomaFredGame = () => {
           clubSound(true);
           downsTotal += 1;
           $('chip-dinos').innerHTML = `Dinos <b>${downsTotal} no chão</b>`;
-          toast(`${d.cfg.label} derrubado!`);
           cupFromDino(d); // +1 copo de kit voando da cabeça do dino
         },
         onPlayerHit: (dx, dz) => {
@@ -266,13 +271,11 @@ const RomaFredGame = () => {
           const el = $('hurt'); el.classList.remove('show'); void el.offsetWidth; el.classList.add('show');
           setHealth(health - 1, -1);              // cada golpe tira 1 de 10
           if (health <= 0) knockOut();
-          else toast(health <= 3 ? 'O Romanele está fraco! Beba um copo de kit (B)' : 'O dino pegou o Romanele!');
         },
       };
       // mata: vêm quando ele sai da caverna e ficam na borda da mata
       const mataDinos = createDinoManager({
         ...common, name: 'DinosMata', caveMouth, exitZ: worlds.mata.zones.exitZ, firstTypes: ['raptor', 'trex', 'inflavel'],
-        onWave: (n, count) => toast(n === 1 ? `Dinossauros vindo! (${count})` : `Onda ${n}: ${count} dinossauros`),
       });
       // calçadão: depois dos fradinhos (a pé), em volta do chafariz e pela rua até perto do Bar do Zé
       const cityDinos = createDinoManager({
@@ -288,9 +291,45 @@ const RomaFredGame = () => {
           floorY: [-0.3, 0.9],                               // só no chão (nem em telhado, nem em cima de banco alto)
           spineZ: 544.5,                                     // linha do meio do calçadão (para sair dos cantos da praça)
         },
-        onWave: (n, count) => toast(n === 1 ? `Dinossauros no calçadão! (${count})` : `Onda ${n}: ${count} dinossauros`),
       });
       dinos = combineDinoManagers([mataDinos, cityDinos]);
+    }
+
+    /* ── GPS: minimapa com a rota da caverna até a Xalassa ── */
+    // rota (x, z): reto pela estrada até a cidade, esquerda na rua do estádio, reto pelo calçadão e pela
+    // rua do Bar do Zé, esquerda na rua de bloquete e esquerda de novo na rua da Xalassa
+    const GPS_ROUTE = [[0, -13], [0, 133], [1.25, 149], [4.15, 169], [8.05, 190], [11.9, 211], [14.75, 232], [15.95, 253], [15.25, 273],
+      [12.65, 294], [8.95, 315], [5, 336], [1.8, 357], [0.15, 377], [0, 398], [0, 539], [226, 539], [240, 544.5], [457, 544.5], [457, 458], [432.3, 458]];
+    const minimap = createMinimap({
+      canvas: $('minimap'), imageUrl: `${process.env.PUBLIC_URL || ''}/assets/ui/minimapa.jpg`,
+      route: GPS_ROUTE, imageCenter: [210, 280], imageSpan: 780, destLabel: 'Xalassa',
+    });
+    let gpsTick = 0, gpsText = '';
+    function updateGps() {
+      if ((gpsTick = (gpsTick + 1) % 2) !== 0) return;          // meio quadro já basta
+      const cv = $('minimap'), dpr = Math.min(window.devicePixelRatio || 1, 2), want = Math.round(cv.clientWidth * dpr);
+      if (want > 0 && cv.width !== want) { cv.width = want; cv.height = want; }
+      const p = model.position;
+      const info = minimap.draw(p.x, p.z, player.yaw, cam.yaw, inCar() ? 1.1 : 1.7);
+      const m = Math.round(info.remaining), dist = m >= 1000 ? `${(m / 1000).toFixed(1).replace('.', ',')} km` : `${Math.max(0, Math.round(m / 5) * 5)} m`;
+      const turn = info.arrived ? 'Você chegou à Xalassa!'
+        : info.turn && info.turn.dist < 70 ? `Vire à ${info.turn.dir} em ${Math.max(5, Math.round(info.turn.dist / 5) * 5)} m` : 'Siga reto';
+      const txt = turn + '|' + dist;
+      if (txt !== gpsText) {
+        gpsText = txt;
+        $('gps-turn').textContent = turn;
+        $('gps-dist').textContent = info.arrived ? 'Entre pela porta grande aberta' : `Xalassa · ${dist}`;
+        $('gps').classList.toggle('turning', /^Vire/.test(turn));
+      }
+    }
+
+    /* ── porta grande da Xalassa (aberta): ao cruzar, vai para dentro da festa ── */
+    const XALASSA_DOOR = { x0: 427.2, x1: 428.95, z: 449.75 };   // vão da porta (o nicho vai até z 448,2)
+    let cameFromDoor = false;
+    function checkXalassaDoor() {
+      if (busy || player.mode !== 'play') return;
+      const p = model.position;
+      if (p.x > XALASSA_DOOR.x0 && p.x < XALASSA_DOOR.x1 && p.z < XALASSA_DOOR.z && p.z > 447.5) { cameFromDoor = true; goToFesta(); }
     }
 
     /* ── vida do Romanele: 10 golpes de dino e ele fica paralisado; cada copo de kit devolve 4 ── */
@@ -331,19 +370,26 @@ const RomaFredGame = () => {
       setState('Paralisado');
       root.classList.add('ko');
       if (dinos) dinos.setPlayerDown(true);
-      $('revive').hidden = cupCount > 0;
+      koNotice();
       toast(cupCount > 0 ? 'O Romanele não aguentou e ficou paralisado! Beba um copo de kit (B) para levantar'
         : 'O Romanele ficou paralisado e não tem copo de kit... Toque em Recomeçar');
     }
+    // aviso fixo enquanto ele está paralisado: "beba um copo" (tem copo) ou o botão Recomeçar (não tem)
+    function koNotice() {
+      const ko = player.mode === 'ko' || (player.mode === 'car' && health <= 0);
+      $('revive').hidden = !ko || cupCount > 0;
+      $('ko-msg').hidden = !ko || cupCount === 0;
+    }
     function getUp() {
-      player.mode = 'play';
+      if (!inCar()) player.mode = 'play';
       root.classList.remove('ko');
-      $('revive').hidden = true;
+      koNotice();
       if (dinos) { dinos.setPlayerDown(false); dinos.grace(2.5); }   // um respiro antes do próximo golpe
     }
     // sem copo de kit: recomeça com a vida cheia (no começo do calçadão se estava na cidade, senão na caverna)
     function revive() {
-      if (player.mode !== 'ko') return;
+      if (player.mode !== 'ko' && !(player.mode === 'car' && health <= 0)) return;
+      if (inCar()) leaveCarNow();
       const ca = world.zones && world.zones.calcadao, p = model.position;
       getUp();
       setHealth(MAX_HEALTH, 1);
@@ -425,6 +471,7 @@ const RomaFredGame = () => {
       if (car) car.setVisible(!festa);
       ambience.setActive(!festa);
       root.dataset.world = name;
+      if (!root.classList.contains('opts-open')) $('opts-toggle').textContent = festa ? 'Opções' : 'Animações';
       $('brand-where').textContent = festa ? 'na Xalassa' : 'na Mata';
       $('world').textContent = festa ? 'Voltar para a mata' : 'Ir para a Xalassa';
       exitViewer(); stopDance();
@@ -440,7 +487,8 @@ const RomaFredGame = () => {
       club: true, attacking: false, attackIndex: 0, queued: false, jumpTimer: -1, landing: 0,
       mode: 'play', current: null, stateLabel: 'Parado', dance: null, danceNext: 1, swingId: 0,
     };
-    const input = { f: 0, b: 0, l: 0, r: 0, walk: false, stick: new THREE.Vector2(), stickWalk: false };
+    const input = { f: 0, b: 0, l: 0, r: 0, walk: false, stick: new THREE.Vector2(), stickWalk: false, turbo: false };
+    const TURBO = 5;   // TESTE: segurando O ele anda 5x mais rápido (a pé e de carro) — remover na versão final
     const cam = { yaw: Math.PI, pitch: 0.32, dist: 4.4, target: new THREE.Vector3(), pos: new THREE.Vector3() };
     let partyClock = 0;
 
@@ -577,7 +625,7 @@ const RomaFredGame = () => {
       }
     }
     function enterViewer(name) {
-      if (inCar()) { toast('Saia do carro (C) para ver as animações'); return; }
+      if (inCar()) { toast('Saia do carro (E) para ver as animações'); return; }
       if (player.mode === 'drink') return;
       if (player.mode === 'ko') { toast('O Romanele está paralisado: beba um copo de kit (B)'); return; }
       player.mode = 'viewer'; player.attacking = false; player.queued = false; player.jumpTimer = -1; player.vel.set(0, 0, 0); player.dance = null;
@@ -601,9 +649,16 @@ const RomaFredGame = () => {
       $('anims-toggle').setAttribute('aria-expanded', String(!collapsed));
     });
     if (window.innerWidth < 900 || window.innerHeight < 640 || isTouch) $('anims-toggle').click();
+    // painéis da direita (animações / opções da festa) e dos comandos: escondidos, abrem no botão
+    const optsLabel = () => (world === worlds.festa ? 'Opções' : 'Animações');
     on($('opts-toggle'), 'click', () => {
       const open = root.classList.toggle('opts-open');
-      $('opts-toggle').setAttribute('aria-expanded', String(open)); $('opts-toggle').textContent = open ? 'Fechar' : 'Opções';
+      $('opts-toggle').setAttribute('aria-expanded', String(open)); $('opts-toggle').textContent = open ? 'Fechar' : optsLabel();
+    });
+    on($('keys-toggle'), 'click', () => {
+      const open = root.classList.toggle('keys-open');
+      $('keys-toggle').setAttribute('aria-expanded', String(open)); $('keys-toggle').textContent = open ? 'Fechar comandos' : 'Comandos';
+      renderer.domElement.focus();
     });
     const closeOpts = () => { if (root.classList.contains('opts-open')) $('opts-toggle').click(); };
 
@@ -679,7 +734,16 @@ const RomaFredGame = () => {
       if (busy || !started) return;
       closeOpts();
       if (player.mode === 'ko') { toast('O Romanele está paralisado: beba um copo de kit (B)'); return; }
-      if (world === worlds.festa) { setWorld('mata', 'SpawnPlayer'); toast('De volta à mata'); }
+      if (world === worlds.festa) {
+        setWorld('mata', 'SpawnPlayer');
+        if (cameFromDoor) {
+          // sai pela mesma porta, já na calçada, de frente para a rua
+          cameFromDoor = false;
+          player.capsule.start.set(428.1, 0.33 + RADIUS + 0.05, 452.2); player.capsule.end.set(428.1, 0.33 + HEIGHT - RADIUS + 0.05, 452.2);
+          player.vel.set(0, 0, 0); player.yaw = 0; cam.yaw = Math.PI;
+          toast('De volta à rua da Xalassa');
+        } else toast('De volta à mata');
+      }
       else goToFesta();
       renderer.domElement.focus();
     });
@@ -691,13 +755,14 @@ const RomaFredGame = () => {
       if (e.target.closest && e.target.closest('button')) { if (e.code === 'Space' || e.code === 'Enter') return; }
       if (keyMap[e.code]) { input[keyMap[e.code]] = 1; if (player.mode === 'viewer') exitViewer(); e.preventDefault(); }
       if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') input.walk = true;
+      if (e.code === 'KeyO') input.turbo = true;   // TESTE
       if (e.code === 'Space') { jump(); e.preventDefault(); }
       if (e.code === 'KeyF') attack();
       if (e.repeat) return;
       if (e.code === 'KeyQ') setClub(!player.club);
-      if (e.code === 'KeyC') toggleCar();
+      if (e.code === 'KeyC') toggleCar();   // (C continua funcionando)
       if (e.code === 'KeyB') drink();
-      if (e.code === 'KeyE') startDance(0);
+      if (e.code === 'KeyE') { if (inCar() || nearCar()) toggleCar(); else startDance(0); }
       if (e.code === 'Digit1') startDance(1);
       if (e.code === 'Digit2') startDance(2);
       if (e.code === 'Digit3') startDance(3);
@@ -705,8 +770,9 @@ const RomaFredGame = () => {
     on(window, 'keyup', (e) => {
       if (keyMap[e.code]) input[keyMap[e.code]] = 0;
       if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') input.walk = false;
+      if (e.code === 'KeyO') input.turbo = false;  // TESTE
     });
-    on(window, 'blur', () => { input.f = input.b = input.l = input.r = 0; input.walk = false; });
+    on(window, 'blur', () => { input.f = input.b = input.l = input.r = 0; input.walk = false; input.turbo = false; });
 
     const canvas = renderer.domElement;
 
@@ -768,7 +834,7 @@ const RomaFredGame = () => {
         const r = stick.getBoundingClientRect(); const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
         let x = (e.clientX - cx) / (r.width / 2), y = (e.clientY - cy) / (r.height / 2);
         const l = Math.hypot(x, y); if (l > 1) { x /= l; y /= l; }
-        input.stick.set(x, y); knob.style.transform = `translate(${x * 38}px, ${y * 38}px)`;
+        input.stick.set(x, y); const travel = (r.width - knob.offsetWidth) / 2; knob.style.transform = `translate(${x * travel}px, ${y * travel}px)`;
         if (player.mode === 'viewer' && Math.hypot(x, y) > 0.3) exitViewer();
       };
       on(stick, 'pointerdown', (e) => { sid = e.pointerId; stick.setPointerCapture(sid); move(e); });
@@ -833,6 +899,7 @@ const RomaFredGame = () => {
         // W anda para a frente dele, S dá ré (caminhando de costas); mirando, sempre caminha
         wish.set(Math.sin(player.yaw) * iz, 0, Math.cos(player.yaw) * iz);
         target = locked || iz === 0 ? 0 : (iz < 0 || aiming || !running ? WALK_SPEED : RUN_SPEED);
+        if (input.turbo) target *= TURBO;   // TESTE
       } else {
         // celular: direção a partir do yaw da câmera (como antes)
         const fwdX = -Math.sin(cam.yaw), fwdZ = -Math.cos(cam.yaw);
@@ -840,6 +907,7 @@ const RomaFredGame = () => {
         wish.set(fwdX * iz + rgtX * ix, 0, fwdZ * iz + rgtZ * ix);
         if (wish.lengthSq() > 1e-6) wish.normalize();
         target = locked ? 0 : mag * (running ? RUN_SPEED : WALK_SPEED);
+        if (input.turbo) target *= TURBO;   // TESTE
       }
 
       const hv = tmp.set(player.vel.x, 0, player.vel.z);
@@ -1188,12 +1256,16 @@ const RomaFredGame = () => {
       play('Carro_Entrar', { fade: 0, once: true, timeScale: 1.1 });
       car.play('Porta_Entrar', { once: true, timeScale: 1.1, fade: 0.1 });
       setState('Entrando no carro');
+      // a porta bate perto do fim da animação de entrar
+      const dur = clips.Carro_Entrar ? clips.Carro_Entrar.duration / 1.1 : 1.6;
+      clearTimeout(carInfo.doorTimer);
+      carInfo.doorTimer = setTimeout(() => { if (!disposed && inCar()) sfx.play('portaCarro'); }, dur * 0.82 * 1000);
     }
     function finishEnter() {
       player.mode = 'car'; camBlend = 0.8;
       play('Carro_Parado', { fade: 0.2 }); car.play('Parado', { fade: 0.2 });
       setState('No carro');
-      if (!carInfo.toldDrive) { carInfo.toldDrive = true; toast('W/S: pernas pra frente e pra trás · A/D: volante · C: sair'); }
+      if (!carInfo.toldDrive) { carInfo.toldDrive = true; toast('W/S: pernas pra frente e pra trás · A/D: volante · E: sair'); }
     }
     function updateCarMode(dt) {
       if (player.mode === 'car-approach') { updateApproach(dt); return; }
@@ -1214,12 +1286,22 @@ const RomaFredGame = () => {
         const ca = world.zones && world.zones.calcadao;
         if (ca) {
           const cp = car.state.pos, near = cp.x > ca.x - 9 && Math.abs(cp.z - ca.z) < 10;
-          if (near && !carInfo.toldBollards) { carInfo.toldBollards = true; toast('Calçadão: os fradinhos não deixam o carro passar. Desça (C) e siga a pé'); }
+          if (near && !carInfo.toldBollards) { carInfo.toldBollards = true; toast('Calçadão: os fradinhos não deixam o carro passar. Desça (E) e siga a pé'); }
           else if (cp.x < ca.x - 25) carInfo.toldBollards = false;
         }
         let throttle = input.f - input.b, steer = input.l - input.r;
         if (input.stick.lengthSq() > 0.01) { throttle = -input.stick.y; steer = -input.stick.x; }
-        const sp = car.drive(dt, { throttle, steer, maxSpeed: DRIVE_SPEED, octree: world.octree, limitOctree: world.limitOctree });
+        if (health <= 0) { throttle = 0; steer = 0; }   // sem vida: as pernas não empurram mais o carro
+        const sp = car.drive(dt, { throttle, steer, maxSpeed: DRIVE_SPEED * (input.turbo ? TURBO : 1), octree: world.octree, limitOctree: world.limitOctree });
+        if (health > 0 && world === worlds.mata) {
+          carInfo.tired = (carInfo.tired || 0) + Math.abs(sp) * dt;
+          if (carInfo.tired >= DRIVE_DRAIN_M) {
+            carInfo.tired -= DRIVE_DRAIN_M;
+            setHealth(health - 1, -1);
+            if (!carInfo.toldTired) { carInfo.toldTired = true; toast('Empurrar o carro com as pernas cansa: a vida cai aos poucos. Beba o kit (B)'); }
+            if (health <= 0) { root.classList.add('ko'); koNotice(); setState('Sem vida'); }
+          }
+        }
         const s = Math.abs(sp);
         if (s > 0.25) {
           // as pernas correm no ritmo das rodas (o ciclo foi feito para 5,1 m/s)
@@ -1243,6 +1325,9 @@ const RomaFredGame = () => {
       play('Carro_Sair', { fade: 0.25, once: true, timeScale: 1.1 });
       car.play('Porta_Sair', { once: true, timeScale: 1.1, fade: 0.15 });
       setState('Saindo do carro');
+      const dur = clips.Carro_Sair ? clips.Carro_Sair.duration / 1.1 : 1.6;
+      clearTimeout(carInfo.doorTimer);
+      carInfo.doorTimer = setTimeout(() => { if (!disposed) sfx.play('portaCarro', { volume: 0.75 }); }, dur * 0.9 * 1000);
     }
     function restoreClub() { player.club = carInfo.club; if (club) club.visible = player.club; }
     function finishExit() {
@@ -1276,7 +1361,7 @@ const RomaFredGame = () => {
         carInfo.label = label;
         const b = $('t-car'); b.classList.toggle('show', !!label); if (label) b.textContent = label;
       }
-      if (near && !carInfo.hinted) { carInfo.hinted = true; toast(isTouch ? 'Toque em CARRO para entrar' : 'Aperte C para entrar no carro'); }
+      if (near && !carInfo.hinted) { carInfo.hinted = true; toast(isTouch ? 'Toque em CARRO para entrar' : 'Aperte E para entrar no carro'); }
     }
 
     /* ── copo de kit: cada dino derrubado vale um copo; com B ele vira o copo e joga no chão ── */
@@ -1289,6 +1374,7 @@ const RomaFredGame = () => {
       box.setAttribute('aria-label', `${cupCount} ${cupCount === 1 ? 'copo' : 'copos'} de kit`);
       if (dir) { box.classList.remove('bump-up', 'bump-down'); void box.offsetWidth; box.classList.add(dir > 0 ? 'bump-up' : 'bump-down'); }
       $('t-drink').classList.toggle('off', cupCount === 0);
+      if (player.mode === 'ko') koNotice();   // chegou um copo com ele paralisado: troca o aviso
     }
     function setupCopos(gltf) {
       copos = createCopos({ model, gltf });
@@ -1339,10 +1425,10 @@ const RomaFredGame = () => {
       if ((player.mode !== 'play' && !ko) || player.attacking || player.jumpTimer >= 0 || (!player.onFloor && !ko)) return;
       if (cupCount <= 0) { toast(ko ? 'Sem copo de kit: toque em Recomeçar' : 'Derrube um dinossauro para ganhar um copo de kit'); return; }
       stopDance();
-      if (ko) $('revive').hidden = true;
       setCupCount(cupCount - 1, -1);              // pegou o copo: o contador desce 1
       if (club) club.visible = false;             // a mão direita segura o copo
       player.mode = 'drink'; player.vel.x = 0; player.vel.z = 0;
+      koNotice();                                 // some o aviso: ele já está bebendo
       copos.setHeld(true);
       play('Beber', { fade: 0.15, once: true });
       copos.scheduleDrinkSounds();
@@ -1358,7 +1444,7 @@ const RomaFredGame = () => {
     function drinkHeal() {
       const wasKo = root.classList.contains('ko');
       setHealth(health + CUP_HEAL, 1);
-      if (wasKo) { getUp(); toast(health >= MAX_HEALTH ? 'O Romanele levantou com a vida cheia!' : 'O Romanele levantou! Beba mais copos de kit para encher a vida'); }
+      if (wasKo) { getUp(); toast(inCar() ? 'Deu pra continuar! Beba mais kit quando a vida baixar' : health >= MAX_HEALTH ? 'O Romanele levantou com a vida cheia!' : 'O Romanele levantou! Beba mais copos de kit para encher a vida'); }
       else toast(health >= MAX_HEALTH ? 'Vida cheia!' : 'O kit deu uma força: vida subiu');
     }
     function finishDrink() {
@@ -1369,7 +1455,7 @@ const RomaFredGame = () => {
     }
     function cancelDrink() {
       copos.cancelSounds(); endDrink();
-      if (health <= 0) { player.mode = 'ko'; koPose(); setState('Paralisado'); $('revive').hidden = cupCount > 0; }
+      if (health <= 0) { player.mode = 'ko'; koPose(); setState('Paralisado'); koNotice(); }
     }
 
     /* ── beber no carro: se estiver andando ele freia sozinho e depois bebe sentado ── */
@@ -1503,6 +1589,7 @@ const RomaFredGame = () => {
       updateCamera(dt);
       const festa = world === worlds.festa;
       if (festa) updateFesta(); else updateMata(t, dt);
+      if (!festa && started) { updateGps(); checkXalassaDoor(); }
       if (!festa && started && dinos) {
         const a = player.current, clipName = a ? a.getClip().name : '';
         const swing = player.attacking && clipName.startsWith('Ataque')
@@ -1645,9 +1732,9 @@ const RomaFredGame = () => {
         <div className="k"><kbd>Botão direito</kbd></div><span>mirar (segurar)</span>
         <div className="k"><kbd>Shift</kbd></div><span>caminhar (segurar)</span>
         <div className="k"><kbd>Espaço</kbd></div><span>pular</span>
-        <div className="k"><kbd>E</kbd><kbd>1</kbd><kbd>2</kbd><kbd>3</kbd></div><span>dançar (no ritmo da festa)</span>
+        <div className="k"><kbd>1</kbd><kbd>2</kbd><kbd>3</kbd></div><span>dançar (no ritmo da festa; E também, longe do carro)</span>
         <div className="k"><kbd>Q</kbd></div><span>pegar / guardar bastão</span>
-        <div className="k only-mata"><kbd>C</kbd></div><span className="only-mata">entrar / sair do carro (na estrada)</span>
+        <div className="k only-mata"><kbd>E</kbd></div><span className="only-mata">entrar / sair do carro (na estrada)</span>
         <div className="k"><kbd>B</kbd></div><span>beber um copo de kit (recupera vida)</span>
         <div className="k"><kbd>Clique</kbd><kbd>F</kbd></div><span>atacar (com bastão)</span>
         <div className="k"><kbd>Roda</kbd></div><span>aproximar câmera</span>
@@ -1656,7 +1743,13 @@ const RomaFredGame = () => {
 
       <div className="hud" id="rf-topright">
         <button className="btn" id="rf-world" type="button">Ir para a Xalassa</button>
-        <button className="btn ghost" id="rf-opts-toggle" type="button" aria-expanded="false" aria-controls="rf-side">Opções</button>
+        <button className="btn ghost" id="rf-keys-toggle" type="button" aria-expanded="false" aria-controls="rf-keys">Comandos</button>
+        <button className="btn ghost" id="rf-opts-toggle" type="button" aria-expanded="false" aria-controls="rf-side">Animações</button>
+      </div>
+
+      <div className="hud only-mata" id="rf-gps">
+        <div className="panel" id="rf-gps-txt" role="status" aria-live="polite"><b id="rf-gps-turn">Siga reto</b><small id="rf-gps-dist">Xalassa</small></div>
+        <canvas id="rf-minimap" width="220" height="220" aria-label="Minimapa com a rota do GPS até a Xalassa" />
       </div>
 
       <aside className="hud" id="rf-side" aria-label="Opções">
@@ -1685,6 +1778,10 @@ const RomaFredGame = () => {
       <div id="rf-crosshair" aria-hidden="true" />
       <div className="hud panel" id="rf-toast" role="status" aria-live="polite" />
       <div id="rf-hurt" aria-hidden="true" />
+      <div className="hud panel" id="rf-ko-msg" role="alert" hidden>
+        <b>O Romanele está sem vida!</b>
+        <span>Beba copos de kit para subir a vida: aperte <kbd>B</kbd><em> ou toque em BEBER</em></span>
+      </div>
       <button className="btn hud-btn" id="rf-revive" type="button" hidden>Recomeçar</button>
 
       <div className="hud" id="rf-touch" aria-hidden="true">

@@ -90,7 +90,7 @@
 #rf-world { font-family: var(--font-display); font-weight: 400; font-size: 15px; letter-spacing: 0.02em; padding: 10px 16px; border-radius: 10px; color: #160a1c; background: linear-gradient(135deg, #ff4fb8, #b65cff); box-shadow: 0 0 18px rgba(255, 79, 184, .5); transition: transform .15s, box-shadow .15s; }
 #rf-world:hover { transform: scale(1.04); box-shadow: 0 0 26px rgba(255, 79, 184, .75); }
 .rf-root[data-world="festa"] #rf-world { color: #1b1714; background: linear-gradient(135deg, #e8904f, #8aa65a); box-shadow: 0 4px 14px rgba(0,0,0,.4); }
-#rf-opts-toggle { display: none; }
+#rf-opts-toggle { display: inline-block; }
 
 /* coluna da direita: opções da festa + animações */
 #rf-side { right: max(16px, env(safe-area-inset-right, 0px)); top: calc(68px + env(safe-area-inset-top, 0px)); width: 262px; max-height: calc(100% - 82px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)); display: flex; flex-direction: column; gap: 8px; }
@@ -198,3 +198,45 @@
 .rf-root.ko::after { content: ""; position: absolute; inset: 0; z-index: 4; pointer-events: none; background: radial-gradient(ellipse at center, transparent 40%, rgba(150, 10, 10, 0.5) 100%); }
 #rf-revive { position: absolute; z-index: 6; left: 50%; bottom: calc(30% + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); font-size: 16px; padding: 12px 22px; pointer-events: auto; box-shadow: 0 6px 18px rgba(0,0,0,.5); }
 @media (prefers-reduced-motion: reduce) { #rf-vida.hit, #rf-vida.heal .fill, #rf-vida .heart { animation: none !important; } #rf-vida .trail, #rf-vida .fill { transition: none; } }
+
+/* painéis escondidos: animações (direita) e comandos (embaixo) só aparecem pelos botões */
+#rf-side { display: none; }
+.rf-root.opts-open #rf-side { display: flex; }
+#rf-keys { display: none; }
+.rf-root.keys-open #rf-keys { display: grid; left: calc(max(16px, env(safe-area-inset-left, 0px)) + 236px); }
+
+/* GPS: minimapa redondo embaixo à esquerda (estilo GTA) com a instrução da rota em cima */
+#rf-gps { left: max(16px, env(safe-area-inset-left, 0px)); bottom: calc(16px + env(safe-area-inset-bottom, 0px)); width: 220px; display: grid; gap: 6px; justify-items: center; }
+#rf-minimap { position: static !important; inset: auto; z-index: auto; width: 220px; height: 220px; border-radius: 50%; display: block; box-shadow: 0 6px 18px rgba(0,0,0,.55); background: #1f2a21; }
+#rf-gps-txt { display: grid; justify-items: center; gap: 1px; padding: 5px 12px; border-radius: 999px; max-width: 100%; text-align: center; }
+#rf-gps-txt b { font-size: 13px; color: var(--bone); letter-spacing: .01em; }
+#rf-gps-txt small { font-size: 11px; color: var(--muted); font-weight: 600; }
+#rf-gps.turning #rf-gps-txt { border-color: #c45cff; box-shadow: 0 0 0 1px #c45cff inset; }
+#rf-gps.turning #rf-gps-txt b { color: #e3b6ff; }
+
+/* aviso fixo quando ele fica sem vida e ainda tem copo de kit */
+#rf-ko-msg { left: 50%; top: 42%; transform: translate(-50%, -50%); z-index: 6; display: grid; gap: 4px; justify-items: center; text-align: center; padding: 12px 18px; border-color: rgba(255, 90, 74, .6); animation: rf-ko-pulse 1.4s ease-in-out infinite; max-width: calc(100vw - 32px); }
+#rf-ko-msg b { font-family: var(--font-display); font-weight: 400; font-size: 18px; color: #ff8a7a; }
+#rf-ko-msg span { font-size: 14px; color: var(--bone); }
+#rf-ko-msg em { font-style: normal; display: none; }
+@keyframes rf-ko-pulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(255, 90, 74, .0); } 50% { box-shadow: 0 0 22px 2px rgba(255, 90, 74, .45); } }
+@media (prefers-reduced-motion: reduce) { #rf-ko-msg { animation: none; } }
+
+/* celular: mesmo layout, botões e direcional maiores; minimapa menor no canto de cima à direita */
+@media (pointer: coarse) {
+  #rf-keys-toggle { display: none; }
+  #rf-ko-msg em { display: inline; }
+  #rf-ko-msg kbd { display: none; }
+  #rf-tbtns { grid-template-columns: repeat(3, 76px); gap: 12px; }
+  #rf-tbtns button { width: 76px; height: 76px; font-size: 12px; }
+  #rf-stick { width: 168px; height: 168px; }
+  #rf-knob { width: 70px; height: 70px; margin: -35px 0 0 -35px; }
+  #rf-gps { left: auto; right: max(12px, env(safe-area-inset-right, 0px)); bottom: auto; top: calc(58px + env(safe-area-inset-top, 0px)); width: 132px; }
+  #rf-minimap { width: 132px; height: 132px; order: 1; }
+  #rf-gps-txt { order: 2; padding: 3px 8px; }
+  #rf-gps-txt b { font-size: 11px; }
+  #rf-gps-txt small { font-size: 10px; }
+}
+
+/* sem os chips (estado, bastão, local, dinos) embaixo do título */
+#rf-brand .chips { display: none; }

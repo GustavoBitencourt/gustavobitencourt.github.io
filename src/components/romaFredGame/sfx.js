@@ -19,6 +19,7 @@ const GROUPS = {
   dano: { files: range(6).map((n) => `dano/dano_${n}.wav`), volume: 0.9, pitch: 0.04 },
   passoDino: { files: range(8).map((n) => `passo_dino/passo_dino_${n}.wav`), volume: 0.8, pitch: 0.08 },
   rugido: { files: range(7).map((n) => `rugido_dino/rugido_dino_${n}.wav`), volume: 1, pitch: 0.06 },
+  portaCarro: { files: range(2).map((n) => `carro/porta_carro_${n}.wav`), volume: 0.85, pitch: 0.05 },
 };
 
 export function createSfx() {
