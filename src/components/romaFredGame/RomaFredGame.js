@@ -10,7 +10,7 @@ import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { createMusic } from './music.js';
-import { createDinoManager, DINO_TYPES } from './dinos.js';
+import { createDinoManager, combineDinoManagers, DINO_TYPES, DINO_BASES } from './dinos.js';
 import { createSfx } from './sfx.js';
 import { createWater } from './water.js';
 import { createGrass } from './grass.js';
@@ -181,9 +181,10 @@ const RomaFredGame = () => {
     const DINO_VOICE = { trex: { rate: 0.86, step: 1.15 }, raptor: { rate: 1.12, step: 0.7 }, inflavel: { rate: 1.22, step: 0.55 } };
     function dinoSound(kind, d, strength = 1) {
       if (world !== worlds.mata) return;
-      const v = DINO_VOICE[d.type] || { rate: 1, step: 1 }, p = d.obj.position;
-      if (kind === 'rugido') play3D('rugido', p.x, p.y + 1.2, p.z, 1.15, v.rate, 13);
-      else if (kind === 'passo') play3D('passoDino', p.x, p.y, p.z, v.step * (0.6 + 0.5 * strength), v.rate, 8);
+      const v = DINO_VOICE[d.cfg.base || d.type] || { rate: 1, step: 1 }, p = d.obj.position;
+      const s = d.cfg.scale || 1, rate = v.rate / Math.sqrt(s);   // os pequenos mais agudos, os grandes mais graves
+      if (kind === 'rugido') play3D('rugido', p.x, p.y + 1.2, p.z, 1.15, rate, 13);
+      else if (kind === 'passo') play3D('passoDino', p.x, p.y, p.z, v.step * s * (0.6 + 0.5 * strength), rate, 8);
     }
     // eventos de água dos dinossauros (os do Romanele seguem a animação dele)
     function waterSound(e) {
@@ -245,28 +246,117 @@ const RomaFredGame = () => {
     function setupDinos(templates) {
       const caveMouth = new THREE.Vector3();
       worlds.mata.root.getObjectByName('EntradaCaverna').getWorldPosition(caveMouth);
-      dinos = createDinoManager({
-        scene, templates, caveMouth, exitZ: worlds.mata.zones.exitZ,
-        onWave: (n, count) => toast(n === 1 ? `Dinossauros vindo! (${count})` : `Onda ${n}: ${count} dinossauros`),
+      let downsTotal = 0;
+      const common = {
+        scene, templates, onSound: dinoSound,
         onDown: (count, d) => {
           clubSound(true);
-          $('chip-dinos').innerHTML = `Dinos <b>${count} no chão</b>`;
+          downsTotal += 1;
+          $('chip-dinos').innerHTML = `Dinos <b>${downsTotal} no chão</b>`;
           toast(`${d.cfg.label} derrubado!`);
           cupFromDino(d); // +1 copo de kit voando da cabeça do dino
         },
-        onSound: dinoSound,
         onPlayerHit: (dx, dz) => {
-          if (inCar()) return; // dentro do carro a mordida não empurra
+          if (inCar() || player.mode === 'ko') return; // dentro do carro a mordida não pega
           sfx.play('dano');    // grito de dor (sorteia entre as variações)
           // empurrão da mordida / rabada
           stopDance();
           player.vel.x += dx * 3.2; player.vel.z += dz * 3.2;
           if (player.onFloor) { player.vel.y = 2; player.onFloor = false; player.airTime = 0.01; }
           const el = $('hurt'); el.classList.remove('show'); void el.offsetWidth; el.classList.add('show');
-          toast('O dino pegou o Romanele!');
+          setHealth(health - 1, -1);              // cada golpe tira 1 de 10
+          if (health <= 0) knockOut();
+          else toast(health <= 3 ? 'O Romanele está fraco! Beba um copo de kit (B)' : 'O dino pegou o Romanele!');
         },
+      };
+      // mata: vêm quando ele sai da caverna e ficam na borda da mata
+      const mataDinos = createDinoManager({
+        ...common, name: 'DinosMata', caveMouth, exitZ: worlds.mata.zones.exitZ, firstTypes: ['raptor', 'trex', 'inflavel'],
+        onWave: (n, count) => toast(n === 1 ? `Dinossauros vindo! (${count})` : `Onda ${n}: ${count} dinossauros`),
       });
+      // calçadão: depois dos fradinhos (a pé), em volta do chafariz e pela rua até perto do Bar do Zé
+      const cityDinos = createDinoManager({
+        ...common, name: 'DinosCalcadao', firstTypes: ['raptorRoxo', 'trexFilhote', 'inflavelAzul'],
+        arena: {
+          rects: [
+            { x0: 240.5, x1: 337.5, z0: 538.2, z1: 550.9 },   // calçadão (os retângulos se sobrepõem um pouco)
+            { x0: 262.5, x1: 295.5, z0: 527.8, z1: 561.2 },   // praça do chafariz
+            { x0: 335.5, x1: 349.2, z0: 530.6, z1: 558.4 },   // rua que corta o calçadão
+            { x0: 347.5, x1: 432.0, z0: 538.6, z1: 550.4 },   // rua até perto do Bar do Zé
+          ],
+          avoid: [{ x: 279, z: 544.5, r: 8 }],               // não nascem dentro do chafariz
+          floorY: [-0.3, 0.9],                               // só no chão (nem em telhado, nem em cima de banco alto)
+          spineZ: 544.5,                                     // linha do meio do calçadão (para sair dos cantos da praça)
+        },
+        onWave: (n, count) => toast(n === 1 ? `Dinossauros no calçadão! (${count})` : `Onda ${n}: ${count} dinossauros`),
+      });
+      dinos = combineDinoManagers([mataDinos, cityDinos]);
     }
+
+    /* ── vida do Romanele: 10 golpes de dino e ele fica paralisado; cada copo de kit devolve 4 ── */
+    const MAX_HEALTH = 10, CUP_HEAL = 4;
+    let health = MAX_HEALTH, healthTrail = null;
+    function setHealth(v, dir = 0) {
+      health = THREE.MathUtils.clamp(Math.round(v), 0, MAX_HEALTH);
+      const el = $('vida'), pct = (health / MAX_HEALTH) * 100;
+      $('vida-fill').style.width = `${pct}%`;
+      el.dataset.level = health <= 3 ? 'low' : health <= 6 ? 'mid' : 'high';
+      el.setAttribute('aria-valuenow', String(health));
+      // rastro claro que desce depois (mostra quanto perdeu) ou sobe junto (quando cura)
+      clearTimeout(healthTrail);
+      if (dir < 0) healthTrail = setTimeout(() => { if (!disposed) $('vida-trail').style.width = `${pct}%`; }, 420);
+      else $('vida-trail').style.width = `${pct}%`;
+      if (dir) { el.classList.remove('hit', 'heal'); void el.offsetWidth; el.classList.add(dir < 0 ? 'hit' : 'heal'); }
+    }
+    // pose de paralisado: agachado no fundo da aterrissagem (quadril mais baixo do clipe), parado
+    const koTimes = {};
+    function koPose() {
+      const name = clipFor('PuloAterrissagem'), a = actions[name];
+      if (!a) { play(clipFor('Parado'), { fade: 0.3 }); return; }
+      if (koTimes[name] === undefined) {
+        const clip = a.getClip(); let tMin = clip.duration * 0.4;
+        const tr = hips && clip.tracks.find((t) => t.name === `${hips.name}.position`);
+        if (tr) { let yMin = Infinity; for (let i = 0; i < tr.times.length; i++) { const y = tr.values[i * 3 + 1]; if (y < yMin) { yMin = y; tMin = tr.times[i]; } } }
+        koTimes[name] = tMin;
+      }
+      play(name, { fade: 0.25, once: true });
+      a.time = koTimes[name]; a.paused = true;
+    }
+    function knockOut() {
+      if (player.mode === 'drink') cancelDrink();
+      exitViewer(); stopDance();
+      player.mode = 'ko'; player.attacking = false; player.queued = false; player.jumpTimer = -1; player.landing = 0;
+      player.vel.x = 0; player.vel.z = 0;
+      koPose();
+      setState('Paralisado');
+      root.classList.add('ko');
+      if (dinos) dinos.setPlayerDown(true);
+      $('revive').hidden = cupCount > 0;
+      toast(cupCount > 0 ? 'O Romanele não aguentou e ficou paralisado! Beba um copo de kit (B) para levantar'
+        : 'O Romanele ficou paralisado e não tem copo de kit... Toque em Recomeçar');
+    }
+    function getUp() {
+      player.mode = 'play';
+      root.classList.remove('ko');
+      $('revive').hidden = true;
+      if (dinos) { dinos.setPlayerDown(false); dinos.grace(2.5); }   // um respiro antes do próximo golpe
+    }
+    // sem copo de kit: recomeça com a vida cheia (no começo do calçadão se estava na cidade, senão na caverna)
+    function revive() {
+      if (player.mode !== 'ko') return;
+      const ca = world.zones && world.zones.calcadao, p = model.position;
+      getUp();
+      setHealth(MAX_HEALTH, 1);
+      if (dinos) dinos.reset();
+      if (ca && p.x > ca.x - 30) {
+        player.capsule.start.set(ca.x - 6, ca.y + RADIUS + 0.4, ca.z);
+        player.capsule.end.set(ca.x - 6, ca.y + HEIGHT - RADIUS + 0.4, ca.z);
+        player.vel.set(0, 0, 0); player.yaw = Math.PI / 2; cam.yaw = player.yaw + Math.PI;
+      } else placeAt('SpawnPlayer');
+      play(clipFor('Parado'), { fade: 0.3 }); setState('Parado');
+      toast('O Romanele levantou com a vida cheia');
+    }
+    on($('revive'), 'click', () => { revive(); renderer.domElement.focus(); });
 
     function setupFesta(gltf) {
       const party = gltf.scene; party.visible = false; scene.add(party);
@@ -406,7 +496,7 @@ const RomaFredGame = () => {
     function stopDance() { player.dance = null; }
 
     function setClub(isOn, announce = true) {
-      if (inCar() || player.mode === 'drink') return; // no carro (ou bebendo) o bastão fica guardado
+      if (inCar() || player.mode === 'drink' || player.mode === 'ko') return; // no carro, bebendo ou paralisado o bastão fica como está
       player.club = isOn; if (club) club.visible = isOn;
       $('chip-club').className = 'chip' + (isOn ? '' : ' off');
       $('chip-club').innerHTML = `Bastão <b>${isOn ? 'Na mão' : 'Guardado'}</b>`;
@@ -489,6 +579,7 @@ const RomaFredGame = () => {
     function enterViewer(name) {
       if (inCar()) { toast('Saia do carro (C) para ver as animações'); return; }
       if (player.mode === 'drink') return;
+      if (player.mode === 'ko') { toast('O Romanele está paralisado: beba um copo de kit (B)'); return; }
       player.mode = 'viewer'; player.attacking = false; player.queued = false; player.jumpTimer = -1; player.vel.set(0, 0, 0); player.dance = null;
       setClub(name.endsWith('ComBastao'), false);
       const a = play(name, { fade: 0.2 });
@@ -587,6 +678,7 @@ const RomaFredGame = () => {
     on($('world'), 'click', () => {
       if (busy || !started) return;
       closeOpts();
+      if (player.mode === 'ko') { toast('O Romanele está paralisado: beba um copo de kit (B)'); return; }
       if (world === worlds.festa) { setWorld('mata', 'SpawnPlayer'); toast('De volta à mata'); }
       else goToFesta();
       renderer.domElement.focus();
@@ -1243,9 +1335,11 @@ const RomaFredGame = () => {
       if (!started || busy || !copos || !copos.clip) return;
       if (player.mode === 'car') { carDrink(); return; }
       if (player.mode === 'viewer') exitViewer();
-      if (player.mode !== 'play' || player.attacking || player.jumpTimer >= 0 || !player.onFloor) return;
-      if (cupCount <= 0) { toast('Derrube um dinossauro para ganhar um copo de kit'); return; }
+      const ko = player.mode === 'ko';            // paralisado ainda consegue beber
+      if ((player.mode !== 'play' && !ko) || player.attacking || player.jumpTimer >= 0 || (!player.onFloor && !ko)) return;
+      if (cupCount <= 0) { toast(ko ? 'Sem copo de kit: toque em Recomeçar' : 'Derrube um dinossauro para ganhar um copo de kit'); return; }
       stopDance();
+      if (ko) $('revive').hidden = true;
       setCupCount(cupCount - 1, -1);              // pegou o copo: o contador desce 1
       if (club) club.visible = false;             // a mão direita segura o copo
       player.mode = 'drink'; player.vel.x = 0; player.vel.z = 0;
@@ -1260,12 +1354,23 @@ const RomaFredGame = () => {
       if (club) club.visible = player.club;
       setState('Parado');
     }
+    // terminou o copo: +4 de vida; se estava paralisado, levanta
+    function drinkHeal() {
+      const wasKo = root.classList.contains('ko');
+      setHealth(health + CUP_HEAL, 1);
+      if (wasKo) { getUp(); toast(health >= MAX_HEALTH ? 'O Romanele levantou com a vida cheia!' : 'O Romanele levantou! Beba mais copos de kit para encher a vida'); }
+      else toast(health >= MAX_HEALTH ? 'Vida cheia!' : 'O kit deu uma força: vida subiu');
+    }
     function finishDrink() {
       copos.dropOnGround(world.root, world.octree);   // o copo fica largado no chão
       endDrink();
+      drinkHeal();
       play(clipFor('Parado'), { fade: 0.3 });
     }
-    function cancelDrink() { copos.cancelSounds(); endDrink(); }
+    function cancelDrink() {
+      copos.cancelSounds(); endDrink();
+      if (health <= 0) { player.mode = 'ko'; koPose(); setState('Paralisado'); $('revive').hidden = cupCount > 0; }
+    }
 
     /* ── beber no carro: se estiver andando ele freia sozinho e depois bebe sentado ── */
     function carDrink() {
@@ -1302,6 +1407,7 @@ const RomaFredGame = () => {
       player.mode = 'car';
       play('Carro_Parado', { fade: 0.45 });
       setState('No carro');
+      if (dropped) drinkHeal();
     }
 
     /* ── loop ── */
@@ -1443,7 +1549,7 @@ const RomaFredGame = () => {
 
     (async () => {
       try {
-        const dinoKeys = Object.keys(DINO_TYPES);
+        const dinoKeys = DINO_BASES;   // as variações usam o mesmo arquivo do dino base
         const [mataGltf, charGltf, carGltf, copoGltf, ...dinoGltfs] = await Promise.all([
           loadGLB(MATA_PATH, 'mata'), loadGLB(CHAR_PATH, 'char'), loadGLB(CAR_PATH, 'carro'), loadGLB(COPO_PATH, 'copo'),
           ...dinoKeys.map((k) => loadGLB(`${MODELS}/${DINO_TYPES[k].file}`, k)),
@@ -1522,6 +1628,10 @@ const RomaFredGame = () => {
           <span className="chip beat only-festa" id="rf-chip-beat"><i />120 BPM</span>
           <span className="chip only-mata" id="rf-chip-dinos">Dinos <b>0 no chão</b></span>
         </div>
+        <div className="panel only-mata" id="rf-vida" role="meter" aria-label="Vida do Romanele" aria-valuemin="0" aria-valuemax="10" aria-valuenow="10" data-level="high" title="Vida: cada golpe de dino tira um pedaço, cada copo de kit devolve">
+          <svg className="heart" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-7.5-4.6-9.6-9.2C.9 8.4 3 4.5 6.7 4.5c2.1 0 3.6 1.1 4.3 2.4h2c.7-1.3 2.2-2.4 4.3-2.4 3.7 0 5.8 3.9 4.3 7.3C19.5 16.4 12 21 12 21z" /></svg>
+          <div className="bar"><i id="rf-vida-trail" className="trail" /><i id="rf-vida-fill" className="fill" /></div>
+        </div>
         <div className="panel empty" id="rf-copos" role="status" aria-label="0 copos de kit" title="Copos de kit: derrube dinossauros para ganhar, B para beber">
           <img id="rf-copos-ico" src={`${process.env.PUBLIC_URL || ''}/assets/ui/copo_kit.png`} alt="" />
           <div className="txt"><b id="rf-copos-n">0</b><small>copos de kit</small></div>
@@ -1538,7 +1648,7 @@ const RomaFredGame = () => {
         <div className="k"><kbd>E</kbd><kbd>1</kbd><kbd>2</kbd><kbd>3</kbd></div><span>dançar (no ritmo da festa)</span>
         <div className="k"><kbd>Q</kbd></div><span>pegar / guardar bastão</span>
         <div className="k only-mata"><kbd>C</kbd></div><span className="only-mata">entrar / sair do carro (na estrada)</span>
-        <div className="k"><kbd>B</kbd></div><span>beber um copo de kit</span>
+        <div className="k"><kbd>B</kbd></div><span>beber um copo de kit (recupera vida)</span>
         <div className="k"><kbd>Clique</kbd><kbd>F</kbd></div><span>atacar (com bastão)</span>
         <div className="k"><kbd>Roda</kbd></div><span>aproximar câmera</span>
         <div className="k"><kbd>Esc</kbd></div><span>soltar o mouse</span>
@@ -1575,6 +1685,7 @@ const RomaFredGame = () => {
       <div id="rf-crosshair" aria-hidden="true" />
       <div className="hud panel" id="rf-toast" role="status" aria-live="polite" />
       <div id="rf-hurt" aria-hidden="true" />
+      <button className="btn hud-btn" id="rf-revive" type="button" hidden>Recomeçar</button>
 
       <div className="hud" id="rf-touch" aria-hidden="true">
         <div id="rf-stick"><div id="rf-knob" /></div>

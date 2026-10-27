@@ -8,6 +8,9 @@ import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
   dentro, ficam esperando na boca da caverna, rugindo. Também não saem da mata: depois que ele
   passa da saída (marcador SaidaMata) não vêm mais ondas e os que estavam atrás dele param na borda.
 
+  O mesmo gerenciador também cuida de uma "arena" na cidade (o calçadão até perto do Bar do Zé),
+  e há variações dos três modelos (cor, tamanho e velocidade diferentes) em DINO_TYPES.
+
   Todos os GLBs têm os mesmos clipes: Parado, Andar, Correr, Pular, Rugir, Atacar, Atacar2,
   TomarDano, Cair, Cair2, CairTras. As locomoções ficam no lugar; quem move é o código.
 */
@@ -35,18 +38,69 @@ export const DINO_TYPES = {
     file: 'dino_trex_inflavel.glb', label: 'T-Rex inflável',
     run: 2.8, hop: 2.3, walk: 1.25, bite: 1.45, gait: 'Pular', near: 'Andar',
   },
+  /* variações: mesmo esqueleto e animações de um dos três, com outra cor (giro de matiz no corpo),
+     outro tamanho, outra camisa no montador e outro jeito de correr */
+  raptorRoxo: {
+    base: 'raptor', label: 'Raptor roxo', look: { hue: 2.3, sat: 1.15, val: 0.95, shirt: 0x3a2a52 }, scale: 0.92,
+    run: 4.1, hop: 2.7, walk: 1.55, bite: 1.7, gait: 'Correr', near: 'Pular',
+  },
+  raptorFogo: {
+    base: 'raptor', label: 'Raptor de fogo', look: { hue: -1.9, sat: 1.35, val: 1.05, shirt: 0x1e1e1e }, scale: 1.06,
+    run: 3.9, hop: 2.9, walk: 1.45, bite: 1.85, gait: 'Pular', near: 'Pular',
+  },
+  trexFilhote: {
+    base: 'trex', label: 'T-Rex filhote', look: { hue: 0.9, sat: 1.1, val: 1.15, shirt: 0xf2c94c }, scale: 0.66,
+    run: 3.9, hop: 2.6, walk: 1.7, bite: 1.35, gait: 'Correr', near: 'Pular',
+  },
+  trexAlbino: {
+    base: 'trex', label: 'T-Rex albino', look: { hue: 0, sat: 0.12, val: 1.5, shirt: 0x8a1f1f }, scale: 1.2,
+    run: 2.7, hop: 2.0, walk: 1.2, bite: 2.1, gait: 'Correr', near: 'Andar',
+  },
+  inflavelAzul: {
+    base: 'inflavel', label: 'T-Rex inflável azul', look: { hue: 2.9, sat: 1.1, val: 1.0 }, scale: 1.0,
+    run: 3.1, hop: 2.5, walk: 1.3, bite: 1.45, gait: 'Pular', near: 'Pular',
+  },
 };
+// tipos com arquivo próprio (os que precisam ser baixados)
+export const DINO_BASES = Object.keys(DINO_TYPES).filter((k) => !DINO_TYPES[k].base);
+
+// cor das variações: gira a matiz das cores de vértice do corpo (espaço YIQ) e ajusta saturação/brilho
+const HUE_GLSL = `
+  { const mat3 toYIQ = mat3(0.299, 0.596, 0.211, 0.587, -0.274, -0.523, 0.114, -0.322, 0.312);
+    const mat3 toRGB = mat3(1.0, 1.0, 1.0, 0.956, -0.272, -1.106, 0.621, -0.647, 1.703);
+    vec3 yiq = toYIQ * diffuseColor.rgb;
+    float h = atan(yiq.z, yiq.y) + uHue, ch = length(yiq.yz) * uSat;
+    diffuseColor.rgb = max(toRGB * vec3(yiq.x * uVal, ch * cos(h), ch * sin(h)), vec3(0.0)); }`;
+function variantMaterial(m, look) {
+  const n = m.clone();
+  if (look.shirt !== undefined && m.name === 'Rider_Camisa') n.color.setHex(look.shirt);
+  if (/_Inflavel$/.test(m.name)) {
+    const u = { uHue: { value: look.hue || 0 }, uSat: { value: look.sat ?? 1 }, uVal: { value: look.val ?? 1 } };
+    n.onBeforeCompile = (sh) => {
+      Object.assign(sh.uniforms, u);
+      sh.fragmentShader = 'uniform float uHue;\nuniform float uSat;\nuniform float uVal;\n'
+        + sh.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>\n${HUE_GLSL}`);
+    };
+    n.customProgramCacheKey = () => 'dino-hue';
+  }
+  return n;
+}
 
 const rand = (a, b) => a + Math.random() * (b - a);
 const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
 const wrapAngle = (a) => Math.atan2(Math.sin(a), Math.cos(a));
 
-export function createDinoManager({ scene, templates, caveMouth, exitZ = Infinity, onPlayerHit, onDown, onWave, onSound }) {
+/*
+  arena (opcional): em vez da mata com a caverna, uma área da cidade feita de retângulos {x0,x1,z0,z1}.
+  Os dinos aparecem quando o Romanele entra nela, não saem dela, e se ele sai ficam na borda rugindo.
+*/
+export function createDinoManager({ scene, templates, caveMouth = null, exitZ = Infinity, arena = null, types = null, firstTypes = null, name = 'Dinos', onPlayerHit, onDown, onWave, onSound }) {
   const group = new THREE.Group();
-  group.name = 'Dinos';
+  group.name = name;
   scene.add(group);
 
-  const boundaryZ = caveMouth.z + OUTSIDE_MARGIN;
+  const typeKeys = types || Object.keys(DINO_TYPES);
+  const boundaryZ = caveMouth ? caveMouth.z + OUTSIDE_MARGIN : -Infinity;
   const dinos = [];
   let wave = 0;
   let nextWaveIn = 0;
@@ -54,14 +108,42 @@ export function createDinoManager({ scene, templates, caveMouth, exitZ = Infinit
   let downs = 0;
   let lastSwingHit = -1;
   let invulnerable = 0;
+  let playerDown = false;   // Romanele paralisado (sem vida): os dinos param de atacar e ficam rodeando
 
   const tmp = new THREE.Vector3();
   const ray = new THREE.Ray();
   const down = new THREE.Vector3(0, -1, 0);
 
-  const inCaveArea = (x, z) => z < boundaryZ && Math.abs(x - caveMouth.x) < CAVE_HALF_W;
+  const inCaveArea = (x, z) => !!caveMouth && z < boundaryZ && Math.abs(x - caveMouth.x) < CAVE_HALF_W;
   const EXIT_STOP = 3;         // param a 3 m antes da saída da mata
-  const leftForest = (z) => z > exitZ - 1;
+  const leftForest = (pl) => (arena ? !arenaInside(pl.x, pl.z) : pl.z > exitZ - 1);
+
+  /* ── arena da cidade ── */
+  function arenaInside(x, z, m = 0) {
+    return arena.rects.some((r) => x >= r.x0 + m && x <= r.x1 - m && z >= r.z0 + m && z <= r.z1 - m);
+  }
+  function arenaClamp(x, z, out, m = 0.3) {
+    let best = null, bd = Infinity;
+    for (const r of arena.rects) {
+      const cx = THREE.MathUtils.clamp(x, r.x0 + m, r.x1 - m), cz = THREE.MathUtils.clamp(z, r.z0 + m, r.z1 - m);
+      const dd = (cx - x) ** 2 + (cz - z) ** 2;
+      if (dd < bd) { bd = dd; best = [cx, cz]; }
+    }
+    out.x = best[0]; out.z = best[1]; return bd;
+  }
+  const arenaArea = arena ? arena.rects.map((r) => (r.x1 - r.x0) * (r.z1 - r.z0)) : [];
+  function arenaSpawnPoint(player, minD) {
+    const tot = arenaArea.reduce((a, b) => a + b, 0);
+    let k = Math.random() * tot, i = 0;
+    while (k > arenaArea[i] && i < arenaArea.length - 1) { k -= arenaArea[i]; i += 1; }
+    const r = arena.rects[i];
+    const x = rand(r.x0 + 1, r.x1 - 1), z = rand(r.z0 + 1, r.z1 - 1);
+    const dist = Math.hypot(x - player.x, z - player.z);
+    if (dist < minD || dist > 32) return null;
+    if (arena.avoid && arena.avoid.some((a) => Math.hypot(x - a.x, z - a.z) < a.r)) return null;
+    return { x, z };
+  }
+  const edgeTmp = { x: 0, z: 0 };
 
   /* ── criação ── */
   // o GLTFLoader tira o ponto do nome dos ossos ("foot.L" vira "footL")
@@ -74,20 +156,44 @@ export function createDinoManager({ scene, templates, caveMouth, exitZ = Infinit
     return hit ? hit.position.y : null;
   }
 
+  // materiais das variações (um jogo por tipo, compartilhado entre os dinos daquele tipo)
+  const lookCache = {};
+  function dress(obj, type) {
+    const look = DINO_TYPES[type].look; if (!look) return;
+    const cache = lookCache[type] || (lookCache[type] = new Map());
+    obj.traverse((o) => {
+      if (!o.isMesh) return;
+      const swap = (m) => { if (!cache.has(m)) cache.set(m, variantMaterial(m, look)); return cache.get(m); };
+      o.material = Array.isArray(o.material) ? o.material.map(swap) : swap(o.material);
+    });
+  }
+
   function spawn(type, octree, player) {
-    const tpl = templates[type];
-    for (let tries = 0; tries < 12; tries++) {
-      // em leque na frente da caverna, entre 16 e 24 m do Romanele
-      const ang = rand(-1.25, 1.25);
-      const dist = rand(16, 24);
-      const x = THREE.MathUtils.clamp(player.x + Math.sin(ang) * dist, -26, 26);
-      const z = THREE.MathUtils.clamp(player.z + Math.cos(ang) * dist, boundaryZ + 3, exitZ - EXIT_STOP - 4);
-      if (inCaveArea(x, z)) continue;
+    const cfg = DINO_TYPES[type];
+    const tpl = templates[type] || templates[cfg.base];
+    if (!tpl) return null;
+    for (let tries = 0; tries < (arena ? 40 : 12); tries++) {
+      let x, z;
+      if (arena) {
+        // em qualquer ponto da área, entre 12 e 32 m do Romanele (se não achar, aceita mais perto)
+        const s = arenaSpawnPoint(player, tries < 30 ? 12 : 7); if (!s) continue;
+        x = s.x; z = s.z;
+      } else {
+        // em leque na frente da caverna, entre 16 e 24 m do Romanele
+        const ang = rand(-1.25, 1.25);
+        const dist = rand(16, 24);
+        x = THREE.MathUtils.clamp(player.x + Math.sin(ang) * dist, -26, 26);
+        z = THREE.MathUtils.clamp(player.z + Math.cos(ang) * dist, boundaryZ + 3, exitZ - EXIT_STOP - 4);
+        if (inCaveArea(x, z)) continue;
+      }
       const y = groundAt(octree, x, z);
-      if (y === null || y > player.y + 4 || y < player.y - 4) continue;
+      if (y === null) continue;
+      if (arena ? (y < arena.floorY[0] || y > arena.floorY[1]) : (y > player.y + 4 || y < player.y - 4)) continue;
 
       const obj = SkeletonUtils.clone(tpl.scene);
       obj.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; o.frustumCulled = false; } });
+      dress(obj, type);
+      obj.scale.setScalar(cfg.scale || 1);
       obj.position.set(x, y, z);
       group.add(obj);
 
@@ -116,8 +222,9 @@ export function createDinoManager({ scene, templates, caveMouth, exitZ = Infinit
   function startWave(octree, player) {
     wave += 1;
     const count = Math.min(2 + wave, 7);
-    const types = Object.keys(DINO_TYPES);
-    for (let i = 0; i < count; i++) spawn(i < types.length ? types[i] : pick(types), octree, player);
+    // primeira onda: os da lista inicial (os três clássicos na mata); depois, sorteio entre todos os tipos
+    const first = wave === 1 && firstTypes ? firstTypes : [];
+    for (let i = 0; i < count; i++) spawn(i < first.length ? first[i] : pick(typeKeys), octree, player);
     onWave && onWave(wave, count);
   }
 
@@ -234,7 +341,7 @@ export function createDinoManager({ scene, templates, caveMouth, exitZ = Infinit
     }
     if (hit && Math.abs(d.obj.position.y - player.y) < 1.5) {
       d.attackHit = true;
-      if (invulnerable > 0) return;
+      if (invulnerable > 0 || playerDown) return;
       invulnerable = 1.2; // um tempinho sem levar outro golpe
       onPlayerHit && onPlayerHit(dx / Math.max(dist, 1e-3), dz / Math.max(dist, 1e-3), d);
     }
@@ -245,12 +352,14 @@ export function createDinoManager({ scene, templates, caveMouth, exitZ = Infinit
     d.vel.x = Math.sin(d.yaw) * d.speed;
     d.vel.z = Math.cos(d.yaw) * d.speed;
     if (!d.onFloor) d.vel.y -= GRAVITY * dt; else d.vel.y = Math.max(d.vel.y, 0);
+    const x0 = d.capsule.start.x, z0 = d.capsule.start.z;
     d.capsule.translate(tmp.copy(d.vel).multiplyScalar(dt));
     d.onFloor = false;
     for (let i = 0; i < 3; i++) {
       const hit = octree.capsuleIntersect(d.capsule);
       if (!hit) break;
       if (hit.normal.y > 0.5) d.onFloor = true;
+      if (hit.normal.y < -0.5) d.vel.y = Math.min(d.vel.y, 0);   // bateu a cabeça em algo: para de subir
       d.capsule.translate(hit.normal.multiplyScalar(hit.depth));
     }
     if (!d.onFloor) {
@@ -259,10 +368,18 @@ export function createDinoManager({ scene, templates, caveMouth, exitZ = Infinit
       const h = octree.rayIntersect(ray);
       if (h && h.distance < BODY_R + 0.35) { d.capsule.translate(tmp.set(0, -(h.distance - BODY_R), 0)); d.onFloor = true; }
     }
-    // não entra na caverna
     const c = d.capsule.start;
-    if (inCaveArea(c.x, c.z - 0.3)) d.capsule.translate(tmp.set(0, 0, boundaryZ + 0.3 - c.z));
-    if (c.z > exitZ - EXIT_STOP + 0.5) d.capsule.translate(tmp.set(0, 0, exitZ - EXIT_STOP + 0.5 - c.z));
+    // quanto andou de verdade neste passo (o "cérebro" usa para saber se empacou)
+    if (!d.lastMove) d.lastMove = { x: 0, z: 0 };
+    d.lastMove.x = c.x - x0; d.lastMove.z = c.z - z0;
+    if (arena) {
+      // não sai da área da cidade
+      if (arenaClamp(c.x, c.z, edgeTmp) > 1e-6) d.capsule.translate(tmp.set(edgeTmp.x - c.x, 0, edgeTmp.z - c.z));
+    } else {
+      // não entra na caverna
+      if (inCaveArea(c.x, c.z - 0.3)) d.capsule.translate(tmp.set(0, 0, boundaryZ + 0.3 - c.z));
+      if (c.z > exitZ - EXIT_STOP + 0.5) d.capsule.translate(tmp.set(0, 0, exitZ - EXIT_STOP + 0.5 - c.z));
+    }
     if (c.y < -20) { const g = groundAt(octree, c.x, c.z) || 0; d.capsule.translate(tmp.set(0, g + BODY_R - c.y, 0)); }
   }
 
@@ -336,14 +453,28 @@ export function createDinoManager({ scene, templates, caveMouth, exitZ = Infinit
       case 'chase': {
         // alvo: o Romanele; se ele está na caverna, a borda dela
         let tx = player.x, tz = player.z;
-        const gone = leftForest(player.z);
+        const gone = leftForest(player);
         if (!playerOutside) {
           tx = THREE.MathUtils.clamp(player.x, caveMouth.x - CAVE_HALF_W + 1.5, caveMouth.x + CAVE_HALF_W - 1.5);
           tz = boundaryZ + 0.6;
+        } else if (gone && arena) {
+          // ele saiu da área: vão até a borda mais perto dele (cada um num ponto) e ficam rugindo ali
+          if (d.edgeOff === undefined) d.edgeOff = [rand(-3.5, 3.5), rand(-3.5, 3.5)];
+          arenaClamp(player.x + d.edgeOff[0], player.z + d.edgeOff[1], edgeTmp, 0.8);
+          tx = edgeTmp.x; tz = edgeTmp.z;
         } else if (gone) {
           // ele saiu da mata: vão até a borda e ficam rugindo ali
           tx = THREE.MathUtils.clamp(p.x, player.x - 6, player.x + 6);
           tz = exitZ - EXIT_STOP;
+        }
+        // Romanele paralisado: chegam perto, param em volta dele e rugem (não atacam mais)
+        if (playerDown && playerOutside && !gone && distP < 4.2) {
+          d.state = 'wait'; d.speed = 0;
+          turnTo(d, player.x, player.z, dt, 2.5);
+          play(d, 'Parado', { fade: 0.3 });
+          d.roarIn -= dt;
+          if (d.roarIn <= 0) { d.roarIn = rand(3, 7); d.state = 'waitRoar'; play(d, 'Rugir', { fade: 0.2, once: true }); }
+          break;
         }
         // um dino ataca por vez; os outros rodeiam a uns 3,5 m esperando a vez
         const someoneAttacking = dinos.some((o) => o !== d && o.state === 'attack');
@@ -351,14 +482,53 @@ export function createDinoManager({ scene, templates, caveMouth, exitZ = Infinit
           d.state = 'circle'; d.timer = rand(0.8, 1.6); d.circleDir = Math.random() < 0.5 ? -1 : 1;
           break;
         }
-        const distT = Math.hypot(tx - p.x, tz - p.z);
+        let distT = Math.hypot(tx - p.x, tz - p.z);
+        let detour = false;
+        if (arena && distT > 3) {
+          // na cidade: contorna o chafariz pela praça quando ele está entre o dino e o alvo
+          for (const a of arena.avoid || []) {
+            const rn = a.r - 1.5;
+            if (Math.abs(p.z - a.z) < rn + 1 && Math.abs(p.x - a.x) < rn + 5 && Math.sign(tx - a.x) !== Math.sign(p.x - a.x) && Math.abs(tx - a.x) > 2) {
+              const side = Math.sign(p.z - a.z) || (d.obj.id % 2 ? 1 : -1);
+              tx = a.x; tz = a.z + side * (rn + 2); detour = true; break;
+            }
+          }
+          // se o caminho reto sai da área (ex.: canto da praça), entra primeiro na faixa do calçadão
+          const sx = p.x + (tx - p.x) / distT * 1.6, sz = p.z + (tz - p.z) / distT * 1.6;
+          if (!detour && arena.spineZ !== undefined && !arenaInside(sx, sz, 0.4)) {
+            tx = p.x + Math.sign(tx - p.x) * 2.5; tz = THREE.MathUtils.clamp(p.z, arena.spineZ - 4.5, arena.spineZ + 4.5); detour = true;
+          }
+          if (detour) distT = Math.hypot(tx - p.x, tz - p.z) + 4;
+        }
+        // não chega mais perto do alvo (empacou em fradinho, banco, tronco): dá um pulinho por cima
+        // (quanto o último passo dele andou na direção do alvo; não depende do alvo estar fugindo)
+        const along = distT > 0.5 && d.lastMove ? (d.lastMove.x * (tx - p.x) + d.lastMove.z * (tz - p.z)) / Math.hypot(tx - p.x, tz - p.z) : Infinity;
+        if (d.state === 'chase' && d.speed > 1 && d.onFloor && along < d.speed * dt * 0.25) d.stuckT = (d.stuckT || 0) + dt;
+        else d.stuckT = Math.max(0, (d.stuckT || 0) - dt);
+        if (d.stuckT > 0.6) {
+          // primeira vez ali: pulinho; se continua no mesmo lugar, recua para o lado por um tempinho
+          d.stuckT = 0;
+          const same = d.stuckAt && Math.hypot(p.x - d.stuckAt.x, p.z - d.stuckAt.z) < 0.8;
+          d.stuckAt = { x: p.x, z: p.z };
+          if (!same) { d.vel.y = 8.2; d.onFloor = false; d.yaw += rand(-0.5, 0.5); }
+          else {
+            d.unstickT = rand(1.0, 1.6);
+            const side = Math.random() < 0.5 ? -1 : 1, back = Math.atan2(tx - p.x, tz - p.z) + Math.PI + side * 0.9;
+            d.unstickTo = arena && arena.spineZ !== undefined
+              ? { x: p.x - Math.sign(tx - p.x) * 1.5, z: arena.spineZ + rand(-2.5, 2.5) }
+              : { x: p.x + Math.sin(back) * 3, z: p.z + Math.cos(back) * 3 };
+          }
+        }
+        if (d.unstickT > 0) {
+          d.unstickT -= dt; tx = d.unstickTo.x; tz = d.unstickTo.z; distT = Math.hypot(tx - p.x, tz - p.z) + 4;
+        }
         const off = turnTo(d, tx, tz, dt, d.state === 'wait' ? 2.5 : 4);
-        if (distP < d.cfg.bite && off < 0.6 && !someoneAttacking && !gone) {
+        if (distP < d.cfg.bite && off < 0.6 && !someoneAttacking && !gone && !playerDown) {
           d.state = 'attack'; d.attackHit = false; d.speed = 0;
           play(d, Math.random() < 0.6 ? 'Atacar' : 'Atacar2', { fade: 0.12, once: true });
           break;
         }
-        if ((!playerOutside || gone) && (distT < 1.2 || (gone && p.z > exitZ - EXIT_STOP - 0.5))) {
+        if ((!playerOutside || gone) && (distT < 1.2 || (gone && (arena ? distT < 2.5 : p.z > exitZ - EXIT_STOP - 0.5)))) {
           // esperando na boca da caverna: olha para ele e ruge de vez em quando
           d.state = 'wait'; d.speed = 0;
           turnTo(d, player.x, player.z, dt, 2.5);
@@ -406,7 +576,7 @@ export function createDinoManager({ scene, templates, caveMouth, exitZ = Infinit
   /* ── API ── */
   function update(dt, { octree, player, swing }) {
     const playerOutside = !inCaveArea(player.x, player.z);
-    const gone = leftForest(player.z);
+    const gone = leftForest(player);
     if (!active && playerOutside && !gone) { active = true; startWave(octree, player); }
     invulnerable = Math.max(0, invulnerable - dt);
 
@@ -442,7 +612,7 @@ export function createDinoManager({ scene, templates, caveMouth, exitZ = Infinit
   }
 
   // mira automática da bastada: direção do dino vivo mais próximo à frente (até ±100°, 3 m)
-  function aim(px, pz, yaw, maxDeg = 100) {
+  function aim(px, pz, yaw, maxDeg = 100, out = null) {
     let best = null, bestD = 3;
     for (const d of dinos) {
       if (!isAlive(d) || d.state === 'delay') continue;
@@ -452,6 +622,7 @@ export function createDinoManager({ scene, templates, caveMouth, exitZ = Infinit
       if (Math.abs(wrapAngle(ang - yaw)) > THREE.MathUtils.degToRad(maxDeg)) continue;
       best = ang; bestD = dist;
     }
+    if (out) out.dist = bestD;
     return best;
   }
 
@@ -469,9 +640,36 @@ export function createDinoManager({ scene, templates, caveMouth, exitZ = Infinit
   return {
     group, update, reset, aim, touches,
     setVisible(v) { group.visible = v; },
+    setPlayerDown(v) { playerDown = !!v; },
+    grace(s) { invulnerable = Math.max(invulnerable, s); },     // tempinho sem levar golpe (ao levantar)
     get downs() { return downs; },
     get wave() { return wave; },
     get alive() { return dinos.filter(isAlive).length; },
     get list() { return dinos; },
+  };
+}
+
+// vários grupos de dinos (mata e calçadão) com a mesma interface de um só
+export function combineDinoManagers(managers) {
+  const info = { dist: 0 };
+  return {
+    managers,
+    update(dt, args) { for (const m of managers) m.update(dt, args); },
+    reset() { for (const m of managers) m.reset(); },
+    setVisible(v) { for (const m of managers) m.setVisible(v); },
+    setPlayerDown(v) { for (const m of managers) m.setPlayerDown(v); },
+    grace(s) { for (const m of managers) m.grace(s); },
+    aim(px, pz, yaw, maxDeg = 100) {
+      let best = null, bestD = Infinity;
+      for (const m of managers) {
+        const a = m.aim(px, pz, yaw, maxDeg, info);
+        if (a !== null && info.dist < bestD) { best = a; bestD = info.dist; }
+      }
+      return best;
+    },
+    touches(px, py, pz, yaw) { return managers.some((m) => m.touches(px, py, pz, yaw)); },
+    get downs() { return managers.reduce((s, m) => s + m.downs, 0); },
+    get alive() { return managers.reduce((s, m) => s + m.alive, 0); },
+    get list() { return managers.length === 1 ? managers[0].list : managers.flatMap((m) => m.list); },
   };
 }

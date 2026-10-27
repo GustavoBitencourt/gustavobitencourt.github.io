@@ -175,3 +175,26 @@
   #rf-toast { top: calc(150px + env(safe-area-inset-top, 0px)); }
 }
 @media (prefers-reduced-motion: reduce) { .rf-root .bar i, #rf-toast, .rf-root .chip.beat i { transition: none; } }
+
+/* vida do Romanele: barrinha (10 golpes) com rastro claro do que perdeu; pisca quando está fraca */
+#rf-vida { display: flex; align-items: center; gap: 8px; padding: 6px 10px 6px 8px; border-radius: 999px; width: min(250px, calc(100vw - 32px)); --vida: #7bd148; }
+#rf-vida[data-level="mid"] { --vida: #f2c14e; }
+#rf-vida[data-level="low"] { --vida: #ff5a4a; }
+#rf-vida .heart { width: 20px; height: 20px; flex: none; fill: var(--vida); filter: drop-shadow(0 1px 2px rgba(0,0,0,.6)); transition: fill .3s; }
+#rf-vida .bar { position: relative; flex: 1; height: 12px; border-radius: 999px; background: rgba(0,0,0,.45); box-shadow: inset 0 1px 2px rgba(0,0,0,.6); overflow: hidden;
+  /* marquinhas dos 10 pedaços */
+  background-image: repeating-linear-gradient(90deg, transparent 0 calc(10% - 1px), rgba(255,255,255,.08) calc(10% - 1px) 10%); }
+#rf-vida .bar i { position: absolute; left: 0; top: 0; bottom: 0; width: 100%; border-radius: inherit; }
+#rf-vida .trail { background: rgba(255, 240, 220, .75); transition: width .6s ease-in; }
+#rf-vida .fill { background: linear-gradient(180deg, color-mix(in srgb, var(--vida) 70%, white), var(--vida) 55%, color-mix(in srgb, var(--vida) 75%, black)); transition: width .25s ease-out, background-color .3s; }
+#rf-vida.hit { animation: rf-vida-hit .45s ease-out; }
+#rf-vida.heal .fill { animation: rf-vida-heal .7s ease-out; }
+#rf-vida[data-level="low"] .heart { animation: rf-vida-beat .9s ease-in-out infinite; }
+@keyframes rf-vida-hit { 0% { transform: none; } 20% { transform: translateX(-4px); } 45% { transform: translateX(4px); } 70% { transform: translateX(-2px); } 100% { transform: none; } }
+@keyframes rf-vida-heal { 0% { filter: brightness(1.9); } 100% { filter: none; } }
+@keyframes rf-vida-beat { 0%, 100% { transform: scale(1); } 40% { transform: scale(1.25); } }
+/* paralisado: a cena perde a cor e fica com a borda vermelha; botão Recomeçar quando não tem copo */
+.rf-root.ko #rf-stage canvas { filter: grayscale(.75) brightness(.8); transition: filter .6s; }
+.rf-root.ko::after { content: ""; position: absolute; inset: 0; z-index: 4; pointer-events: none; background: radial-gradient(ellipse at center, transparent 40%, rgba(150, 10, 10, 0.5) 100%); }
+#rf-revive { position: absolute; z-index: 6; left: 50%; bottom: calc(30% + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); font-size: 16px; padding: 12px 22px; pointer-events: auto; box-shadow: 0 6px 18px rgba(0,0,0,.5); }
+@media (prefers-reduced-motion: reduce) { #rf-vida.hit, #rf-vida.heal .fill, #rf-vida .heart { animation: none !important; } #rf-vida .trail, #rf-vida .fill { transition: none; } }
