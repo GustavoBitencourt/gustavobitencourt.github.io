@@ -240,3 +240,10 @@
 
 /* sem os chips (estado, bastão, local, dinos) embaixo do título */
 #rf-brand .chips { display: none; }
+
+/* sem o botão "Ir para a Xalassa" na mata (entra pela porta); na festa continua "Voltar para a mata" */
+.rf-root[data-world="mata"] #rf-world { display: none; }
+/* objetivo na tela de carregar, antes do Jogar */
+#rf-objetivo { display: grid; gap: 6px; margin: 4px 0 14px; color: var(--muted); font-size: 14px; line-height: 1.45; text-align: center; max-width: 420px; }
+#rf-objetivo p { margin: 0; }
+#rf-objetivo b { color: var(--ochre-hi); font-size: 16px; }

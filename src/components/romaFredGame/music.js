@@ -15,7 +15,7 @@ export function createMusic(SPB) {
     tStart: 0, pBase: 0, loopStart: 0, loopEnd: 0,
     init() {
       const C = this.ctx = new (window.AudioContext || window.webkitAudioContext)();
-      this.out = C.createGain(); this.out.gain.value = 0.8;
+      this.out = C.createGain(); this.out.gain.value = 0.55;
       this.out.connect(C.destination);
     },
     // baixa e decodifica a música (dá para chamar antes, enquanto a festa carrega)

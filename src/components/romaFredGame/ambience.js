@@ -8,7 +8,7 @@
   O jogo chama update(dt, { mata, rio, estrada, cidade }) com pesos de 0 a 1.
 */
 
-const LEVEL = 0.18;   // volume geral do ambiente (baixo, para ficar de fundo sob os passos e golpes)
+const LEVEL = 0.13;   // volume geral do ambiente (baixo, para ficar de fundo sob os passos e golpes)
 
 export function createAmbience() {
   const Ctx = window.AudioContext || window.webkitAudioContext;

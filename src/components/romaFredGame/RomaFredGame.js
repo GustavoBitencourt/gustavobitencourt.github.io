@@ -1,5 +1,4 @@
 import React, { useEffect, useRef } from 'react';
-import { Link } from 'react-router-dom';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { Octree } from 'three/examples/jsm/math/Octree.js';
@@ -324,7 +323,7 @@ const RomaFredGame = () => {
     }
 
     /* ── porta grande da Xalassa (aberta): ao cruzar, vai para dentro da festa ── */
-    const XALASSA_DOOR = { x0: 427.2, x1: 428.95, z: 449.75 };   // vão da porta (o nicho vai até z 448,2)
+    const XALASSA_DOOR = { x0: 435.55, x1: 437.3, z: 449.75 };   // vão da porta da direita (o nicho vai até z 448,2)
     let cameFromDoor = false;
     function checkXalassaDoor() {
       if (busy || player.mode !== 'play') return;
@@ -394,6 +393,7 @@ const RomaFredGame = () => {
       getUp();
       setHealth(MAX_HEALTH, 1);
       if (dinos) dinos.reset();
+      if (car && carStart) { car.park(worlds.mata.octree, carStart.x, carStart.z, carStart.yaw); car.play('Parado', { fade: 0 }); carInfo.tired = 0; }
       if (ca && p.x > ca.x - 30) {
         player.capsule.start.set(ca.x - 6, ca.y + RADIUS + 0.4, ca.z);
         player.capsule.end.set(ca.x - 6, ca.y + HEIGHT - RADIUS + 0.4, ca.z);
@@ -472,7 +472,7 @@ const RomaFredGame = () => {
       ambience.setActive(!festa);
       root.dataset.world = name;
       if (!root.classList.contains('opts-open')) $('opts-toggle').textContent = festa ? 'Opções' : 'Animações';
-      $('brand-where').textContent = festa ? 'na Xalassa' : 'na Mata';
+      $('brand-where').textContent = festa ? 'na Xalassa' : 'indo na Xalassa';
       $('world').textContent = festa ? 'Voltar para a mata' : 'Ir para a Xalassa';
       exitViewer(); stopDance();
       player.attacking = false; player.queued = false; player.jumpTimer = -1; player.landing = 0;
@@ -707,7 +707,7 @@ const RomaFredGame = () => {
         progressKeys = ['festa'];
         $('loadtitle').innerHTML = 'Indo para a <span>Xalassa</span>';
         $('loadcopy').textContent = 'Carregando a balada à fantasia: 339 pessoas dançando, DJ, luzes e dois andares. São cerca de 22 MB.';
-        $('loadcopy').hidden = false; $('loadprog').hidden = false; $('play').hidden = true; $('back').hidden = true;
+        $('loadcopy').hidden = false; $('loadprog').hidden = false; $('play').hidden = true; $('objetivo').hidden = true;
         $('loading').classList.add('festa-load'); $('loading').hidden = false;
         showProgress();
         try {
@@ -739,7 +739,7 @@ const RomaFredGame = () => {
         if (cameFromDoor) {
           // sai pela mesma porta, já na calçada, de frente para a rua
           cameFromDoor = false;
-          player.capsule.start.set(428.1, 0.33 + RADIUS + 0.05, 452.2); player.capsule.end.set(428.1, 0.33 + HEIGHT - RADIUS + 0.05, 452.2);
+          player.capsule.start.set(436.4, 0.33 + RADIUS + 0.05, 452.2); player.capsule.end.set(436.4, 0.33 + HEIGHT - RADIUS + 0.05, 452.2);
           player.vel.set(0, 0, 0); player.yaw = 0; cam.yaw = Math.PI;
           toast('De volta à rua da Xalassa');
         } else toast('De volta à mata');
@@ -1165,13 +1165,15 @@ const RomaFredGame = () => {
     const carInv = new THREE.Matrix4(), carWp = new THREE.Vector3();
     const nudgeCap = new Capsule();
     function inCar() { return player.mode.startsWith('car'); }
+    let carStart = null;   // onde o carro fica no começo (o Recomeçar devolve ele para lá)
     function setupCar(gltf) {
       car = createCar({ scene, gltf });
       // clipes do Romanele (entrar, sair, parado e dirigindo) tocam no mixer dele
       for (const c of Object.values(car.romClips)) { clips[c.name] = c; actions[c.name] = mixer.clipAction(c); }
       // estacionado no começo da estrada de chão, logo depois do rio e da saída da mata
       const zn = worlds.mata.zones;
-      car.park(worlds.mata.octree, 2.4, Number.isFinite(zn.exitZ) ? zn.exitZ + 14 : 163, 0);
+      carStart = { x: 2.4, z: Number.isFinite(zn.exitZ) ? zn.exitZ + 14 : 163, yaw: 0 };
+      car.park(worlds.mata.octree, carStart.x, carStart.z, carStart.yaw);
       // onde o corpo dele realmente está no 1º quadro de "entrar" e no último de "sair"
       // (relativo ao banco), para trocar de animação sem o corpo pular
       const stand = measureHips('Parado_SemBastao', false);
@@ -1653,6 +1655,7 @@ const RomaFredGame = () => {
         renderer.setAnimationLoop(frame);
         $('loadcopy').hidden = true;
         $('loadprog').hidden = true;
+        $('objetivo').hidden = false;
         $('play').hidden = false;
         $('play').focus();
       } catch (err) {
@@ -1695,19 +1698,22 @@ const RomaFredGame = () => {
 
       <div id="rf-loading" role="status" aria-live="polite">
         <div className="card">
-          <h1 id="rf-loadtitle">Romanele <span>na Mata</span></h1>
+          <h1 id="rf-loadtitle">Romanele <span>indo na Xalassa</span></h1>
           <p id="rf-loadcopy">Carregando o personagem riggado, a mata com a caverna, os dinossauros e o carro de pedra. São cerca de 38&nbsp;MB.</p>
           <div id="rf-loadprog">
             <div className="bar" aria-hidden="true"><i id="rf-loadbar" /></div>
             <div id="rf-loadtxt">0%</div>
           </div>
+          <div id="rf-objetivo" hidden>
+            <p><b>Objetivo: chegar na Xalassa.</b></p>
+            <p>Saia da caverna, pegue o carro na estrada e siga a rota roxa do GPS no mapinha até a porta aberta da Xalassa. Cuidado com os dinossauros: derrube eles com o bastão para ganhar copos de kit e beba (B) para recuperar a vida.</p>
+          </div>
           <button id="rf-play" type="button" hidden>Jogar</button>
-          <Link to="/" id="rf-back" className="rf-back">← Voltar ao portfólio</Link>
         </div>
       </div>
 
       <div className="hud" id="rf-brand">
-        <h1>Romanele <span id="rf-brand-where">na Mata</span></h1>
+        <h1>Romanele <span id="rf-brand-where">indo na Xalassa</span></h1>
         <div className="chips">
           <span className="chip" id="rf-chip-state">Estado <b>Parado</b></span>
           <span className="chip" id="rf-chip-club">Bastão <b>Na mão</b></span>
