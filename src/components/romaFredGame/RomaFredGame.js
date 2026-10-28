@@ -132,7 +132,7 @@ const RomaFredGame = () => {
     /* ── carregamento ── */
     const loader = new GLTFLoader();
     const progress = { mata: 0, char: 0, festa: 0, raptor: 0, trex: 0, inflavel: 0, carro: 0, copo: 0 };
-    const SIZE_HINT = { mata: 28821736, char: 17057072, festa: 22558256, raptor: 1502832, trex: 1515896, inflavel: 1099968, carro: 3246880, copo: 371660 };
+    const SIZE_HINT = { mata: 28821736, char: 17057072, festa: 22597776, raptor: 1502832, trex: 1515896, inflavel: 1099968, carro: 3246880, copo: 371660 };
     let progressKeys = ['mata', 'char', 'raptor', 'trex', 'inflavel', 'carro', 'copo'];
     function showProgress() {
       const loaded = progressKeys.reduce((s, k) => s + progress[k], 0);
@@ -1128,7 +1128,7 @@ const RomaFredGame = () => {
 
     // festa: pessoas entre a câmera e o Romanele somem para ele não sumir na multidão
     function areaOf(p) {
-      if (p.y > 3.6) return p.x < -12.4 && Math.abs(p.z) < 3.8 ? 'Bar do camarote' : 'Camarote';
+      if (p.y > 3.6) return p.x < -12.3 && Math.abs(p.z) < 3.8 ? 'Bar do camarote' : 'Camarote';
       if (p.x < -9.9 && (p.z > 11.3 || (p.x < -14.3 && p.z > 8.3))) return 'Escada';
       if (p.x > -10.7 && p.x < -5.7 && p.z > 10.8) return 'Entrada';
       if (p.x < -11.6 && Math.abs(p.z) < 5.6) return 'Bar';
