@@ -140,7 +140,7 @@ const RomaFredGame = () => {
       const total = progressKeys.reduce((s, k) => s + SIZE_HINT[k], 0);
       const p = Math.min(100, Math.round(loaded / total * 100));
       $('loadbar').style.width = p + '%';
-      $('loadtxt').textContent = `${p}% · ${(loaded / 1e6).toFixed(1)} de ${(total / 1e6).toFixed(1)} MB`;
+      $('loadprog').setAttribute('aria-valuenow', String(p));
     }
     function loadGLB(url, key) {
       return loader.loadAsync(url, (xhr) => {
@@ -729,9 +729,9 @@ const RomaFredGame = () => {
       if (!worlds.festa) {
         busy = true;
         progressKeys = ['festa'];
-        $('loadtitle').innerHTML = 'Indo para a <span>Xalassa</span>';
-        $('loadcopy').textContent = 'Carregando a balada à fantasia: 339 pessoas dançando, DJ, luzes e dois andares. São cerca de 22 MB.';
-        $('loadcopy').hidden = false; $('loadprog').hidden = false; $('play').hidden = true; $('objetivo').hidden = true;
+        // na entrada da festa: só a barrinha de carregamento, por cima do jogo
+        $('loadtitle').hidden = true; $('loadtxt').textContent = '';
+        $('loadprog').hidden = false; $('play').hidden = true; $('objetivo').hidden = true;
         $('loading').classList.add('festa-load'); $('loading').hidden = false;
         showProgress();
         try {
@@ -752,7 +752,8 @@ const RomaFredGame = () => {
       }
       setWorld('festa', 'SpawnPlayer');
       if (!music.on) toggleMusic(true);   // o som da festa já entra tocando (dá para desligar no painel)
-      toast('Bem-vindo à Xalassa! Aperte E para dançar');
+      if (worlds.festa.friends) worlds.festa.friends.onEnter();   // "Encontre o Fernando"
+      toast('Bem-vindo à Xalassa!');
     }
     on($('world'), 'click', () => {
       if (busy || !started) return;
@@ -1681,7 +1682,6 @@ const RomaFredGame = () => {
         play(clipFor('Parado'), { fade: 0 });
         if (dinos && dinos.prewarm) dinos.prewarm(renderer, camera);   // shaders dos dinos prontos antes das ondas
         renderer.setAnimationLoop(frame);
-        $('loadcopy').hidden = true;
         $('loadprog').hidden = true;
         $('objetivo').hidden = false;
         $('play').hidden = false;
@@ -1727,10 +1727,9 @@ const RomaFredGame = () => {
       <div id="rf-loading" role="status" aria-live="polite">
         <div className="card">
           <h1 id="rf-loadtitle">Romanele <span>indo na Xalassa</span></h1>
-          <p id="rf-loadcopy">Carregando o personagem riggado, a mata com a caverna, os dinossauros e o carro de pedra. São cerca de 38&nbsp;MB.</p>
-          <div id="rf-loadprog">
+          <div id="rf-loadprog" role="progressbar" aria-label="Carregando" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
             <div className="bar" aria-hidden="true"><i id="rf-loadbar" /></div>
-            <div id="rf-loadtxt">0%</div>
+            <div id="rf-loadtxt" />
           </div>
           <div id="rf-objetivo" hidden>
             <p><b>Objetivo: chegar na Xalassa.</b></p>

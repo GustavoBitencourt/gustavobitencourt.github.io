@@ -1,7 +1,7 @@
 /*
   Os amigos do Romanele no 2º andar da Xalassa.
 
-  Eles esperam parados na frente do último camarote (o do lado do palco). O médico da peste fica no
+  Eles esperam parados na frente do último camarote (o do lado do palco). O Fernando (médico da peste) fica no
   cantinho com uma luz no chão na frente dele. Quando o Romanele pisa na luz, o médico diz "Comprei um
   camarote para nós!", a turma entra no camarote e começa a dançar, e o jogo pede para o Romanele dançar
   também. Quando ele dança: "Parabéns, você chegou na Xalassa". Depois a festa continua livre e os
@@ -19,8 +19,8 @@ const FLOOR = 4.0;
 // quem é quem (pela fantasia gravada no GLB) e para onde cada um vai dentro do camarote
 const FRIENDS = [
   { fantasia: 'ninja', spot: [8.95, -9.95] },
-  { fantasia: 'amigo_camisa_vermelha', spot: [6.1, -9.15] },
-  { fantasia: 'amigo_camisa_verde', spot: [8.3, -9.25] },
+  { fantasia: 'amigo_camisa_vermelha', spot: [6.1, -9.15], cap: 0xd8262b },
+  { fantasia: 'amigo_camisa_verde', spot: [8.3, -9.25], cap: 0x2f9e44 },
   { fantasia: 'cavernosa_oculos', spot: [6.3, -10.05] },
   { fantasia: 'medico_da_peste', spot: [7.15, -9.95], host: true },
 ];
@@ -111,6 +111,42 @@ export function createFriends({ party, animations, scene, people, personObjs, is
     f.current = null;
   }
   const host = friends.find((f) => f.cfg.host);
+
+  // bonezinho (vermelho no de camisa vermelha, verde no de camisa verde), preso no osso da cabeça
+  for (const f of friends) {
+    if (!f.cfg.cap) continue;
+    const head = party.getObjectByName(`${f.prefix}Head`);
+    if (!head) continue;
+    f.root.updateMatrixWorld(true);
+    const rootInv = f.root.matrixWorld.clone().invert();
+    const hp = new THREE.Vector3(); head.getWorldPosition(hp); hp.applyMatrix4(rootInv);
+    // topo e largura da cabeça a partir da malha (pose de descanso, no espaço do próprio boneco)
+    let top = -Infinity, rad = 0.09;
+    f.root.traverse((o) => {
+      if (!o.isSkinnedMesh) return;
+      const pos = o.geometry.attributes.position;
+      for (let i = 0; i < pos.count; i++) {
+        const y = pos.getY(i);
+        if (y > top) top = y;
+        if (y > hp.y + 0.05 && y < hp.y + 0.16) rad = Math.max(rad, Math.abs(pos.getX(i) - hp.x));
+      }
+    });
+    if (!Number.isFinite(top)) top = hp.y + 0.2;
+    rad = Math.min(rad, 0.14);
+    const mat = new THREE.MeshStandardMaterial({ color: f.cfg.cap, roughness: 0.6, metalness: 0 });
+    const cap = new THREE.Group(); cap.name = `${f.prefix}Chapeuzinho`;
+    const r = rad * 1.06;
+    const dome = new THREE.Mesh(new THREE.SphereGeometry(r, 24, 12, 0, Math.PI * 2, 0, Math.PI / 2), mat);
+    dome.scale.y = 0.72;
+    const brim = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.95, r * 0.95, 0.012, 24, 1, false, -Math.PI / 2, Math.PI), mat);
+    brim.scale.z = 1.25; brim.position.set(0, 0.006, r * 0.42);
+    const button = new THREE.Mesh(new THREE.SphereGeometry(0.012, 8, 6), mat);
+    button.position.y = r * 0.72;
+    cap.add(dome, brim, button);
+    cap.position.set(0, top - hp.y - r * 0.42, 0.005);
+    cap.rotation.x = -0.12;   // um pouco inclinado para trás, como boné
+    head.add(cap);
+  }
 
   function play(f, name, fade = 0.35, time = null) {
     const next = f.acts[name] || f.acts.parado; if (!next || f.current === next) return;
@@ -205,7 +241,7 @@ export function createFriends({ party, animations, scene, people, personObjs, is
     if (stage === 'esperando') {
       if (playerPos && Math.abs(playerPos.y - FLOOR) < 1 && Math.hypot(playerPos.x - MARK[0], playerPos.z - MARK[1]) < TRIGGER_R) {
         go('falou'); markGroup.visible = false;
-        ui.say('Médico da Peste', 'Comprei um camarote para nós!');
+        ui.mission(null); ui.say('Fernando', 'Comprei um camarote para nós!');
       }
     } else if (stage === 'falou') {
       if (stageT > 2.6) { go('andando'); startWalk(); }
@@ -229,8 +265,10 @@ export function createFriends({ party, animations, scene, people, personObjs, is
     }
   }
 
+  function onEnter() { if (stage === 'esperando') ui.mission('Encontre o <b>Fernando</b>'); }
+
   return {
-    partyClips, update,
+    partyClips, update, onEnter,
     get stage() { return stage; },
     get lockInput() { return stage === 'parabens' && stageT < 3.5; },
     hasFriends: friends.length > 0,
