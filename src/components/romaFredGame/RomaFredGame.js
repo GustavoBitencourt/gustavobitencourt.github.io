@@ -17,6 +17,7 @@ import { createGrass } from './grass.js';
 import { createAmbience } from './ambience.js';
 import { createCar, CAR_ANCHOR, CAR_ENTRY } from './car.js';
 import { createCopos, flyCupIcon } from './copos.js';
+import { createFriends } from './amigos.js';
 import './RomaFredGame.css';
 
 const MODELS = `${process.env.PUBLIC_URL || ''}/assets/models`;
@@ -132,7 +133,7 @@ const RomaFredGame = () => {
     /* ── carregamento ── */
     const loader = new GLTFLoader();
     const progress = { mata: 0, char: 0, festa: 0, raptor: 0, trex: 0, inflavel: 0, carro: 0, copo: 0 };
-    const SIZE_HINT = { mata: 28821736, char: 17057072, festa: 22597776, raptor: 1502832, trex: 1515896, inflavel: 1099968, carro: 3246880, copo: 371660 };
+    const SIZE_HINT = { mata: 28821736, char: 17057072, festa: 22637248, raptor: 1502832, trex: 1515896, inflavel: 1099968, carro: 3246880, copo: 371660 };
     let progressKeys = ['mata', 'char', 'raptor', 'trex', 'inflavel', 'carro', 'copo'];
     function showProgress() {
       const loaded = progressKeys.reduce((s, k) => s + progress[k], 0);
@@ -404,6 +405,27 @@ const RomaFredGame = () => {
     }
     on($('revive'), 'click', () => { revive(); renderer.domElement.focus(); });
 
+    /* ── fim do jogo no camarote: balão do médico, missão de dançar e parabéns ── */
+    const friendsUi = {
+      say(name, text) {
+        const el = $('fala');
+        if (!name) { el.classList.remove('show'); return; }
+        $('fala-nome').textContent = name; $('fala-txt').textContent = text; el.classList.add('show');
+      },
+      place(x, y) {
+        const el = $('fala');
+        if (x === null) { el.style.left = '50%'; el.style.top = '30%'; return; }
+        const W = window.innerWidth, H = window.innerHeight;
+        el.style.left = `${THREE.MathUtils.clamp((x * 0.5 + 0.5) * W, 120, W - 120)}px`;
+        el.style.top = `${THREE.MathUtils.clamp((-y * 0.5 + 0.5) * H, 90, H - 60)}px`;
+      },
+      mission(html) { const el = $('missao'); if (html) el.innerHTML = html; el.hidden = !html; },
+      finish(show) {
+        const el = $('fim');
+        if (show) { el.hidden = false; void el.offsetWidth; el.classList.add('show'); }
+        else { el.classList.remove('show'); setTimeout(() => { el.hidden = true; }, 700); }
+      },
+    };
     function setupFesta(gltf) {
       const party = gltf.scene; party.visible = false; scene.add(party);
       const colliders = [], markers = {}, people = [], personObjs = [];
@@ -422,12 +444,14 @@ const RomaFredGame = () => {
       });
       const octree = buildOctree(party, colliders);
       const partyMixer = new THREE.AnimationMixer(party);
-      for (const c of gltf.animations) partyMixer.clipAction(c).play();
+      // os amigos do Romanele saem das animações da festa: eles esperam parados e só dançam no camarote
+      const friends = createFriends({ party, animations: gltf.animations, people, personObjs, isTouch, ui: friendsUi });
+      for (const c of friends.partyClips) partyMixer.clipAction(c).play();
       partyMixer.update(0.001);
       party.updateMatrixWorld(true);
       // dançarinos com esqueleto: limites a partir da pose atual, com folga para os braços erguidos
       party.traverse((o) => { if (o.isSkinnedMesh) { o.computeBoundingSphere(); o.boundingSphere.radius = o.boundingSphere.radius * 1.5 + 0.3; } });
-      worlds.festa = { name: 'festa', root: party, octree, markers, people, personObjs, mixer: partyMixer };
+      worlds.festa = { name: 'festa', root: party, octree, markers, people, personObjs, mixer: partyMixer, friends };
     }
 
     function buildOctree(env, colliders) {
@@ -1581,6 +1605,7 @@ const RomaFredGame = () => {
       const t = timer.getElapsed();
       stepParty(dt);
       const steps = 4;
+      if (world.friends && world.friends.lockInput) { input.f = input.b = input.l = input.r = 0; input.stick.set(0, 0); }
       if (inCar()) updateCarMode(dt);
       else for (let i = 0; i < steps; i++) updatePlayer(dt / steps);
       updateAnimation();
@@ -1592,6 +1617,7 @@ const RomaFredGame = () => {
       updateCamera(dt);
       const festa = world === worlds.festa;
       if (festa) updateFesta(); else updateMata(t, dt);
+      if (festa && world.friends) world.friends.update(dt, { playerPos: model.position, playerDancing: !!player.dance, camera, partyClock });
       if (!festa && started) { updateGps(); checkXalassaDoor(); }
       if (!festa && started && dinos) {
         const a = player.current, clipName = a ? a.getClip().name : '';
@@ -1653,6 +1679,7 @@ const RomaFredGame = () => {
         setClub(true, false);
         setWorld('mata', 'SpawnPlayer');
         play(clipFor('Parado'), { fade: 0 });
+        if (dinos && dinos.prewarm) dinos.prewarm(renderer, camera);   // shaders dos dinos prontos antes das ondas
         renderer.setAnimationLoop(frame);
         $('loadcopy').hidden = true;
         $('loadprog').hidden = true;
@@ -1785,6 +1812,15 @@ const RomaFredGame = () => {
       <div id="rf-crosshair" aria-hidden="true" />
       <div className="hud panel" id="rf-toast" role="status" aria-live="polite" />
       <div id="rf-hurt" aria-hidden="true" />
+      <div className="hud panel" id="rf-fala" role="status" aria-live="polite"><b id="rf-fala-nome" /><span id="rf-fala-txt" /></div>
+      <div className="hud panel" id="rf-missao" role="status" aria-live="polite" hidden />
+      <div className="hud" id="rf-fim" role="alert" hidden>
+        <div className="panel">
+          <small>Parabéns!</small>
+          <h2>Você chegou na Xalassa</h2>
+          <b>Jogo concluído</b>
+        </div>
+      </div>
       <div className="hud panel" id="rf-ko-msg" role="alert" hidden>
         <b>O Romanele está sem vida!</b>
         <span>Beba copos de kit para subir a vida: aperte <kbd>B</kbd><em> ou toque em BEBER</em></span>

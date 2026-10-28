@@ -86,6 +86,7 @@ function variantMaterial(m, look) {
   return n;
 }
 
+const LOOK_CACHE = {};
 const rand = (a, b) => a + Math.random() * (b - a);
 const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
 const wrapAngle = (a) => Math.atan2(Math.sin(a), Math.cos(a));
@@ -109,6 +110,7 @@ export function createDinoManager({ scene, templates, caveMouth = null, exitZ = 
   let lastSwingHit = -1;
   let invulnerable = 0;
   let playerDown = false;   // Romanele paralisado (sem vida): os dinos param de atacar e ficam rodeando
+  const pending = [];       // dinos da onda que ainda vão nascer (um por quadro, para não travar)
 
   const tmp = new THREE.Vector3();
   const ray = new THREE.Ray();
@@ -156,11 +158,10 @@ export function createDinoManager({ scene, templates, caveMouth = null, exitZ = 
     return hit ? hit.position.y : null;
   }
 
-  // materiais das variações (um jogo por tipo, compartilhado entre os dinos daquele tipo)
-  const lookCache = {};
+  // materiais das variações (um jogo por tipo, compartilhado entre os dinos daquele tipo e entre a mata e a cidade)
   function dress(obj, type) {
     const look = DINO_TYPES[type].look; if (!look) return;
-    const cache = lookCache[type] || (lookCache[type] = new Map());
+    const cache = LOOK_CACHE[type] || (LOOK_CACHE[type] = new Map());
     obj.traverse((o) => {
       if (!o.isMesh) return;
       const swap = (m) => { if (!cache.has(m)) cache.set(m, variantMaterial(m, look)); return cache.get(m); };
@@ -224,7 +225,7 @@ export function createDinoManager({ scene, templates, caveMouth = null, exitZ = 
     const count = Math.min(2 + wave, 7);
     // primeira onda: os da lista inicial (os três clássicos na mata); depois, sorteio entre todos os tipos
     const first = wave === 1 && firstTypes ? firstTypes : [];
-    for (let i = 0; i < count; i++) spawn(i < first.length ? first[i] : pick(typeKeys), octree, player);
+    for (let i = 0; i < count; i++) pending.push(i < first.length ? first[i] : pick(typeKeys));
     onWave && onWave(wave, count);
   }
 
@@ -579,6 +580,7 @@ export function createDinoManager({ scene, templates, caveMouth = null, exitZ = 
     const gone = leftForest(player);
     if (!active && playerOutside && !gone) { active = true; startWave(octree, player); }
     invulnerable = Math.max(0, invulnerable - dt);
+    if (pending.length) spawn(pending.shift(), octree, player);   // um por quadro: sem travadinha na onda nova
 
     checkClub(player, swing);
 
@@ -600,7 +602,7 @@ export function createDinoManager({ scene, templates, caveMouth = null, exitZ = 
     }
 
     // próxima onda quando todos caíram (só se ele estiver fora da caverna)
-    if (active && !dinos.some(isAlive)) {
+    if (active && !pending.length && !dinos.some(isAlive)) {
       nextWaveIn -= dt;
       if (nextWaveIn <= 0 && playerOutside && !gone) { nextWaveIn = 5; startWave(octree, player); }
     } else nextWaveIn = 5;
@@ -608,7 +610,7 @@ export function createDinoManager({ scene, templates, caveMouth = null, exitZ = 
 
   function reset() {
     for (const d of dinos) { group.remove(d.obj); d.mixer.stopAllAction(); d.mixer.uncacheRoot(d.obj); }
-    dinos.length = 0; wave = 0; active = false; nextWaveIn = 0; lastSwingHit = -1; invulnerable = 0;
+    dinos.length = 0; pending.length = 0; wave = 0; active = false; nextWaveIn = 0; lastSwingHit = -1; invulnerable = 0;
   }
 
   // mira automática da bastada: direção do dino vivo mais próximo à frente (até ±100°, 3 m)
@@ -637,8 +639,27 @@ export function createDinoManager({ scene, templates, caveMouth = null, exitZ = 
     });
   }
 
+  // aquece: monta um de cada tipo na frente da câmera e desenha um quadro, para os shaders e texturas
+  // ficarem prontos no carregamento (senão a primeira aparição de cada tipo dá uma travadinha)
+  function prewarm(renderer, camera) {
+    const tmpObjs = [], wasVisible = group.visible;
+    const fwd = new THREE.Vector3(); camera.getWorldDirection(fwd);
+    typeKeys.forEach((type, i) => {
+      const cfg = DINO_TYPES[type]; const tpl = templates[type] || templates[cfg.base]; if (!tpl) return;
+      const obj = SkeletonUtils.clone(tpl.scene);
+      obj.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; o.frustumCulled = false; } });
+      dress(obj, type); obj.scale.setScalar(cfg.scale || 1);
+      obj.position.copy(camera.position).addScaledVector(fwd, 8).add(new THREE.Vector3((i - typeKeys.length / 2) * 0.6, -1, 0));
+      group.add(obj); tmpObjs.push(obj);
+    });
+    group.visible = true;
+    renderer.render(scene, camera);
+    for (const o of tmpObjs) group.remove(o);
+    group.visible = wasVisible;
+  }
+
   return {
-    group, update, reset, aim, touches,
+    group, update, reset, aim, touches, prewarm,
     setVisible(v) { group.visible = v; },
     setPlayerDown(v) { playerDown = !!v; },
     grace(s) { invulnerable = Math.max(invulnerable, s); },     // tempinho sem levar golpe (ao levantar)
@@ -656,6 +677,7 @@ export function combineDinoManagers(managers) {
     managers,
     update(dt, args) { for (const m of managers) m.update(dt, args); },
     reset() { for (const m of managers) m.reset(); },
+    prewarm(renderer, camera) { for (const m of managers) m.prewarm(renderer, camera); },
     setVisible(v) { for (const m of managers) m.setVisible(v); },
     setPlayerDown(v) { for (const m of managers) m.setPlayerDown(v); },
     grace(s) { for (const m of managers) m.grace(s); },

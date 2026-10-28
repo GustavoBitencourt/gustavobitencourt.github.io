@@ -247,3 +247,27 @@
 #rf-objetivo { display: grid; gap: 6px; margin: 4px 0 14px; color: var(--muted); font-size: 14px; line-height: 1.45; text-align: center; max-width: 420px; }
 #rf-objetivo p { margin: 0; }
 #rf-objetivo b { color: var(--ochre-hi); font-size: 16px; }
+
+/* ── fim do jogo no camarote ── */
+/* balão do médico da peste (preso em cima da cabeça dele) */
+#rf-fala { left: 50%; top: 30%; transform: translate(-50%, -100%) scale(.9); display: grid; gap: 2px; padding: 9px 14px 10px; max-width: min(320px, calc(100vw - 32px)); border-color: rgba(255, 95, 215, .55); opacity: 0; transition: opacity .25s, transform .25s; pointer-events: none; z-index: 6; }
+#rf-fala.show { opacity: 1; transform: translate(-50%, -100%) scale(1); }
+#rf-fala::after { content: ""; position: absolute; left: 50%; bottom: -8px; width: 14px; height: 14px; background: var(--panel-solid); border-right: 1px solid rgba(255, 95, 215, .55); border-bottom: 1px solid rgba(255, 95, 215, .55); transform: translateX(-50%) rotate(45deg); }
+#rf-fala-nome { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: #ff8ee6; }
+#rf-fala-txt { font-size: 16px; font-weight: 700; color: var(--bone); }
+/* missão: dançar */
+#rf-missao { left: 50%; top: calc(76px + env(safe-area-inset-top, 0px)); transform: translateX(-50%); padding: 10px 16px; font-size: 15px; text-align: center; border-color: rgba(255, 95, 215, .6); max-width: calc(100vw - 32px); z-index: 6; animation: rf-missao-pulse 1.6s ease-in-out infinite; }
+#rf-missao b { color: #ff8ee6; }
+#rf-missao kbd { font-family: var(--font-key); font-size: 12px; padding: 1px 6px; border: 1px solid var(--line); border-radius: 5px; background: rgba(0, 0, 0, .35); }
+@keyframes rf-missao-pulse { 50% { box-shadow: 0 0 0 4px rgba(255, 95, 215, .18); } }
+/* parabéns */
+#rf-fim { inset: 0; display: grid; place-items: center; background: radial-gradient(circle at 50% 45%, rgba(255, 80, 210, .25), rgba(10, 6, 14, .55) 70%); opacity: 0; transition: opacity .6s; pointer-events: none; z-index: 8; }
+#rf-fim.show { opacity: 1; }
+#rf-fim .panel { display: grid; gap: 8px; justify-items: center; text-align: center; padding: 22px 30px 24px; border-color: rgba(255, 95, 215, .6); max-width: calc(100vw - 32px); transform: scale(.92); transition: transform .6s; }
+#rf-fim.show .panel { transform: scale(1); }
+#rf-fim small { font-size: 13px; letter-spacing: .14em; text-transform: uppercase; color: #ff8ee6; }
+#rf-fim h2 { margin: 0; font-family: var(--font-display); font-size: clamp(22px, 5vw, 34px); line-height: 1.15; color: var(--bone); }
+#rf-fim b { font-size: 16px; color: var(--ochre-hi); }
+.rf-root[data-world="mata"] #rf-fala, .rf-root[data-world="mata"] #rf-missao, .rf-root[data-world="mata"] #rf-fim { display: none; }
+@media (max-width: 700px) { #rf-missao { top: calc(150px + env(safe-area-inset-top, 0px)); font-size: 14px; } }
+@media (prefers-reduced-motion: reduce) { #rf-missao { animation: none; } #rf-fim, #rf-fim .panel, #rf-fala { transition: none; } }
