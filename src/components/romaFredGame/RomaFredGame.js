@@ -285,14 +285,24 @@ const RomaFredGame = () => {
             { x0: 240.5, x1: 337.5, z0: 538.2, z1: 550.9 },   // calçadão (os retângulos se sobrepõem um pouco)
             { x0: 262.5, x1: 295.5, z0: 527.8, z1: 561.2 },   // praça do chafariz
             { x0: 335.5, x1: 349.2, z0: 530.6, z1: 558.4 },   // rua que corta o calçadão
-            { x0: 347.5, x1: 432.0, z0: 538.6, z1: 550.4 },   // rua até perto do Bar do Zé
+            { x0: 347.5, x1: 424.0, z0: 538.6, z1: 550.4 },   // rua até perto do Bar do Zé
           ],
           avoid: [{ x: 279, z: 544.5, r: 8 }],               // não nascem dentro do chafariz
           floorY: [-0.3, 0.9],                               // só no chão (nem em telhado, nem em cima de banco alto)
           spineZ: 544.5,                                     // linha do meio do calçadão (para sair dos cantos da praça)
         },
       });
-      dinos = combineDinoManagers([mataDinos, cityDinos]);
+      // uma última onda na frente do Bar do Zé, até a esquina (depois da esquina não passam)
+      const barDinos = createDinoManager({
+        ...common, name: 'DinosBarDoZe', firstTypes: ['trexAlbino', 'raptorFogo', 'raptorRoxo', 'inflavelAzul'],
+        maxWaves: 1, waveSize: 4,
+        arena: {
+          rects: [{ x0: 423.0, x1: 455.0, z0: 538.6, z1: 549.8 }],
+          floorY: [-0.3, 0.9],
+          spineZ: 544.5,
+        },
+      });
+      dinos = combineDinoManagers([mataDinos, cityDinos, barDinos]);
     }
 
     /* ── GPS: minimapa com a rota da caverna até a Xalassa ── */
@@ -497,7 +507,6 @@ const RomaFredGame = () => {
       root.dataset.world = name;
       if (!root.classList.contains('opts-open')) $('opts-toggle').textContent = festa ? 'Opções' : 'Animações';
       $('brand-where').textContent = festa ? 'na Xalassa' : 'indo na Xalassa';
-      $('world').textContent = festa ? 'Voltar para a mata' : 'Ir para a Xalassa';
       exitViewer(); stopDance();
       player.attacking = false; player.queued = false; player.jumpTimer = -1; player.landing = 0;
       placeAt(markerName);
@@ -755,23 +764,19 @@ const RomaFredGame = () => {
       if (worlds.festa.friends) worlds.festa.friends.onEnter();   // "Encontre o Fernando"
       toast('Bem-vindo à Xalassa!');
     }
-    on($('world'), 'click', () => {
-      if (busy || !started) return;
-      closeOpts();
-      if (player.mode === 'ko') { toast('O Romanele está paralisado: beba um copo de kit (B)'); return; }
-      if (world === worlds.festa) {
-        setWorld('mata', 'SpawnPlayer');
-        if (cameFromDoor) {
-          // sai pela mesma porta, já na calçada, de frente para a rua
-          cameFromDoor = false;
-          player.capsule.start.set(436.4, 0.33 + RADIUS + 0.05, 452.2); player.capsule.end.set(436.4, 0.33 + HEIGHT - RADIUS + 0.05, 452.2);
-          player.vel.set(0, 0, 0); player.yaw = 0; cam.yaw = Math.PI;
-          toast('De volta à rua da Xalassa');
-        } else toast('De volta à mata');
-      }
-      else goToFesta();
-      renderer.domElement.focus();
-    });
+    // sair da Xalassa: só pela porta de entrada, por dentro (vira a calçada da porta grande, de frente para a rua)
+    function leaveFesta() {
+      setWorld('mata', 'SpawnPlayer');
+      cameFromDoor = false;
+      player.capsule.start.set(436.4, 0.33 + RADIUS + 0.05, 452.2); player.capsule.end.set(436.4, 0.33 + HEIGHT - RADIUS + 0.05, 452.2);
+      player.vel.set(0, 0, 0); player.yaw = 0; cam.yaw = Math.PI;
+      toast('De volta à rua da Xalassa');
+    }
+    function checkFestaExit() {
+      if (busy || player.mode !== 'play') return;
+      const p = model.position;   // antessala da porta (a porta fica na parede de baixo, à esquerda do meio)
+      if (p.x > -10.4 && p.x < -6.0 && p.z > 14.0 && p.y < 1) leaveFesta();
+    }
 
     /* ── entrada ── */
     const keyMap = { KeyW: 'f', ArrowUp: 'f', KeyS: 'b', ArrowDown: 'b', KeyA: 'l', ArrowLeft: 'l', KeyD: 'r', ArrowRight: 'r' };
@@ -1550,6 +1555,11 @@ const RomaFredGame = () => {
     const clubRay = new THREE.Ray();
 
     // passos: toca quando o pé desce e encosta no chão (segue a animação, andando ou correndo)
+    // piso duro (asfalto da cidade, calçadas e o chão da Xalassa) ou terra e grama da mata e da estrada
+    function onHardFloor() {
+      if (world === worlds.festa) return true;
+      const zn = world.zones; return !!zn && model.position.z > zn.asphaltZ;
+    }
     function updateFootsteps(dt) {
       if (!feet.length || !feet[0].bone) return;
       const speed = Math.hypot(player.vel.x, player.vel.z);
@@ -1557,7 +1567,9 @@ const RomaFredGame = () => {
       for (const f of feet) {
         f.bone.getWorldPosition(footPos);
         const h = footPos.y - model.position.y;
-        if (player.onFloor) f.minH = Math.min(f.minH, h);   // altura do tornozelo com o pé apoiado
+        // altura do tornozelo com o pé apoiado: mínimo que "esquece" devagar (se ficar baixo demais, por
+        // exemplo depois do carro ou de cair, os passos voltavam a nunca tocar)
+        if (player.onFloor && player.mode === 'play' && !player.dance) f.minH = Math.min(h, f.minH + dt * 0.12);
         f.cool -= dt;
         if (h > f.minH + 0.09) f.armed = true;
         else if (f.armed && h < f.minH + 0.035) {
@@ -1566,6 +1578,7 @@ const RomaFredGame = () => {
             f.cool = 0.18;
             const running = speed > 2.15;
             if (inWater()) sfx.play('passoAgua', { volume: running ? 1 : 0.7, rate: running ? 1.05 : 0.95 });
+            else if (onHardFloor()) sfx.play('passoAsfalto', { volume: running ? 0.95 : 0.6, rate: running ? 1.05 : 1 });
             else sfx.play('passo', { volume: running ? 1 : 0.6, rate: running ? 1.05 : 1 });
           }
         }
@@ -1620,6 +1633,7 @@ const RomaFredGame = () => {
       if (festa) updateFesta(); else updateMata(t, dt);
       if (festa && world.friends) world.friends.update(dt, { playerPos: model.position, playerDancing: !!player.dance, camera, partyClock });
       if (!festa && started) { updateGps(); checkXalassaDoor(); }
+      if (festa && started) checkFestaExit();
       if (!festa && started && dinos) {
         const a = player.current, clipName = a ? a.getClip().name : '';
         const swing = player.attacking && clipName.startsWith('Ataque')
@@ -1775,7 +1789,6 @@ const RomaFredGame = () => {
       </div>
 
       <div className="hud" id="rf-topright">
-        <button className="btn" id="rf-world" type="button">Ir para a Xalassa</button>
         <button className="btn ghost" id="rf-keys-toggle" type="button" aria-expanded="false" aria-controls="rf-keys">Comandos</button>
         <button className="btn ghost" id="rf-opts-toggle" type="button" aria-expanded="false" aria-controls="rf-side">Animações</button>
       </div>

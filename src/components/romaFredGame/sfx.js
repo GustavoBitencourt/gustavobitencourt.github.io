@@ -10,6 +10,7 @@ const range = (n) => Array.from({ length: n }, (_, i) => String(i + 1).padStart(
 
 const GROUPS = {
   passo: { files: range(8).map((n) => `passo/passo_${n}.wav`), volume: 0.45, pitch: 0.08 },
+  passoAsfalto: { files: range(6).map((n) => `passo_asfalto/passo_asfalto_${n}.wav`), volume: 0.5, pitch: 0.07 },
   salto: { files: range(5).map((n) => `saltos_quedas/salto_${n}.wav`), volume: 0.7, pitch: 0.05 },
   queda: { files: range(5).map((n) => `saltos_quedas/queda_${n}.wav`), volume: 0.75, pitch: 0.05 },
   tacoHit: { files: range(7).map((n) => `taco_hit/taco_hit_${n}.wav`), volume: 0.9, pitch: 0.06 },

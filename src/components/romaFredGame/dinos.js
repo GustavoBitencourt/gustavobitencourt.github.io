@@ -95,7 +95,7 @@ const wrapAngle = (a) => Math.atan2(Math.sin(a), Math.cos(a));
   arena (opcional): em vez da mata com a caverna, uma área da cidade feita de retângulos {x0,x1,z0,z1}.
   Os dinos aparecem quando o Romanele entra nela, não saem dela, e se ele sai ficam na borda rugindo.
 */
-export function createDinoManager({ scene, templates, caveMouth = null, exitZ = Infinity, arena = null, types = null, firstTypes = null, name = 'Dinos', onPlayerHit, onDown, onWave, onSound }) {
+export function createDinoManager({ scene, templates, caveMouth = null, exitZ = Infinity, arena = null, types = null, firstTypes = null, name = 'Dinos', maxWaves = Infinity, waveSize = null, onPlayerHit, onDown, onWave, onSound }) {
   const group = new THREE.Group();
   group.name = name;
   scene.add(group);
@@ -222,7 +222,7 @@ export function createDinoManager({ scene, templates, caveMouth = null, exitZ = 
 
   function startWave(octree, player) {
     wave += 1;
-    const count = Math.min(2 + wave, 7);
+    const count = waveSize || Math.min(2 + wave, 7);
     // primeira onda: os da lista inicial (os três clássicos na mata); depois, sorteio entre todos os tipos
     const first = wave === 1 && firstTypes ? firstTypes : [];
     for (let i = 0; i < count; i++) pending.push(i < first.length ? first[i] : pick(typeKeys));
@@ -604,7 +604,7 @@ export function createDinoManager({ scene, templates, caveMouth = null, exitZ = 
     // próxima onda quando todos caíram (só se ele estiver fora da caverna)
     if (active && !pending.length && !dinos.some(isAlive)) {
       nextWaveIn -= dt;
-      if (nextWaveIn <= 0 && playerOutside && !gone) { nextWaveIn = 5; startWave(octree, player); }
+      if (nextWaveIn <= 0 && playerOutside && !gone && wave < maxWaves) { nextWaveIn = 5; startWave(octree, player); }
     } else nextWaveIn = 5;
   }
 
