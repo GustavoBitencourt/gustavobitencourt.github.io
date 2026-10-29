@@ -273,3 +273,17 @@
 .rf-root[data-world="mata"] #rf-fala, .rf-root[data-world="mata"] #rf-missao, .rf-root[data-world="mata"] #rf-fim { display: none; }
 @media (max-width: 700px) { #rf-missao { top: calc(150px + env(safe-area-inset-top, 0px)); font-size: 14px; } }
 @media (prefers-reduced-motion: reduce) { #rf-missao { animation: none; } #rf-fim, #rf-fim .panel, #rf-fala { transition: none; } }
+
+/* ── volume da música da Xalassa ── */
+#rf-vol-wrap { position: relative; display: flex; }
+#rf-vol-toggle { display: inline-grid; place-items: center; padding: 6px 9px; }
+#rf-vol-toggle svg { width: 20px; height: 20px; display: block; }
+#rf-vol-toggle .x { display: none; }
+#rf-vol-toggle.mudo .onda { display: none; }
+#rf-vol-toggle.mudo .x { display: inline; }
+#rf-vol { position: absolute; top: calc(100% + 8px); right: 0; display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 10px; padding: 10px 12px; width: 240px; max-width: calc(100vw - 32px); }
+#rf-vol label { font-size: 12px; color: var(--muted); }
+#rf-vol span { font-family: var(--font-key); font-size: 12px; color: var(--muted); min-width: 4ch; text-align: right; font-variant-numeric: tabular-nums; }
+#rf-vol input[type="range"] { width: 100%; accent-color: #ff4fb8; touch-action: pan-x; }
+#rf-topright { z-index: 7; }   /* a barrinha de volume abre por cima do aviso de missão */
+#rf-vol { background: var(--panel-solid); }

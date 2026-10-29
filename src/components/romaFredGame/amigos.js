@@ -112,7 +112,7 @@ export function createFriends({ party, animations, scene, people, personObjs, is
   }
   const host = friends.find((f) => f.cfg.host);
 
-  // bonezinho (vermelho no de camisa vermelha, verde no de camisa verde), preso no osso da cabeça
+  // bonezinho (vermelho no de camisa vermelha, verde no de camisa verde) e bigode, presos no osso da cabeça
   for (const f of friends) {
     if (!f.cfg.cap) continue;
     const head = party.getObjectByName(`${f.prefix}Head`);
@@ -146,6 +146,29 @@ export function createFriends({ party, animations, scene, people, personObjs, is
     cap.position.set(0, top - hp.y - r * 0.42, 0.005);
     cap.rotation.x = -0.12;   // um pouco inclinado para trás, como boné
     head.add(cap);
+
+    // bigode: duas pontas logo abaixo do nariz, um pouco caídas para os lados
+    const MY = 0.083;   // altura do bigode acima do osso da cabeça (o nariz fica em ~0,10–0,12)
+    let faceZ = -Infinity;
+    f.root.traverse((o) => {
+      if (!o.isSkinnedMesh) return;
+      const pos = o.geometry.attributes.position;
+      for (let i = 0; i < pos.count; i++) {
+        if (Math.abs(pos.getX(i) - hp.x) < 0.03 && Math.abs(pos.getY(i) - (hp.y + MY)) < 0.012) faceZ = Math.max(faceZ, pos.getZ(i));
+      }
+    });
+    if (!Number.isFinite(faceZ)) faceZ = hp.z + 0.1;
+    const hairMat = new THREE.MeshStandardMaterial({ color: 0x2a170c, roughness: 0.85, metalness: 0 });
+    const stache = new THREE.Group(); stache.name = `${f.prefix}Bigode`;
+    for (const side of [-1, 1]) {
+      const lobe = new THREE.Mesh(new THREE.SphereGeometry(1, 14, 8), hairMat);
+      lobe.scale.set(0.033, 0.011, 0.012);
+      lobe.position.set(side * 0.024, 0, -0.006);
+      lobe.rotation.set(0, side * 0.38, -side * 0.32);
+      stache.add(lobe);
+    }
+    stache.position.set(0, MY, faceZ - hp.z + 0.004);
+    head.add(stache);
   }
 
   function play(f, name, fade = 0.35, time = null) {

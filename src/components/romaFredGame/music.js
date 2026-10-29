@@ -11,11 +11,11 @@ const SONG_BEATS = 256;   // 2:02,88 = 256 tempos exatos (o loop fecha no compas
 export function createMusic(SPB) {
   const rate = (SPB * SONG_BPM) / 60;   // segundos da festa por segundo da música
   return {
-    ctx: null, on: false, playing: false, buffer: null, loading: null, src: null,
+    ctx: null, on: false, playing: false, buffer: null, loading: null, src: null, vol: 1,
     tStart: 0, pBase: 0, loopStart: 0, loopEnd: 0,
     init() {
       const C = this.ctx = new (window.AudioContext || window.webkitAudioContext)();
-      this.out = C.createGain(); this.out.gain.value = 0.55;
+      this.out = C.createGain(); this.out.gain.value = 0.55 * this.vol;
       this.out.connect(C.destination);
     },
     // baixa e decodifica a música (dá para chamar antes, enquanto a festa carrega)
@@ -66,6 +66,11 @@ export function createMusic(SPB) {
     partyTime() {
       if (!this.playing) return null;
       return this.pBase + (this.ctx.currentTime - this.tStart) * rate;
+    },
+    // volume da música (0 a 1; 1 = o volume normal da festa)
+    setVolume(v) {
+      this.vol = Math.min(1, Math.max(0, v));
+      if (this.out) this.out.gain.setTargetAtTime(0.55 * this.vol, this.ctx.currentTime, 0.05);
     },
     dispose() { this.stop(); if (this.ctx) this.ctx.close(); this.ctx = null; },
   };

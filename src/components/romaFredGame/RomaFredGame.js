@@ -726,6 +726,27 @@ const RomaFredGame = () => {
       }
     }
     on($('music'), 'click', () => toggleMusic());
+
+    /* ── volume da música da Xalassa: ícone de som com uma barrinha ── */
+    function showVolume(v) {
+      const pct = Math.round(v * 100);
+      $('vol-range').value = String(pct); $('vol-pct').textContent = `${pct}%`;
+      $('vol-toggle').classList.toggle('mudo', pct === 0);
+      $('vol-toggle').setAttribute('aria-label', pct === 0 ? 'Volume da música: mudo' : `Volume da música: ${pct}%`);
+    }
+    try { const saved = parseFloat(localStorage.getItem('rf-volume-musica')); if (Number.isFinite(saved)) music.setVolume(saved); } catch (e) { /* sem armazenamento */ }
+    showVolume(music.vol);
+    on($('vol-toggle'), 'click', () => {
+      const open = $('vol').hidden;
+      $('vol').hidden = !open; $('vol-toggle').setAttribute('aria-expanded', String(open));
+      if (open) $('vol-range').focus();
+    });
+    on($('vol-range'), 'input', () => {
+      const v = Number($('vol-range').value) / 100;
+      music.setVolume(v); showVolume(v);
+      if (v > 0 && !music.on && world === worlds.festa) toggleMusic(true);
+      try { localStorage.setItem('rf-volume-musica', String(v)); } catch (e) { /* sem armazenamento */ }
+    });
     on($('bloom'), 'click', () => {
       useBloom = !useBloom; $('bloom').setAttribute('aria-pressed', String(useBloom));
       toast(useBloom ? 'Brilho das luzes ligado' : 'Brilho desligado (mais leve)');
@@ -782,6 +803,7 @@ const RomaFredGame = () => {
     const keyMap = { KeyW: 'f', ArrowUp: 'f', KeyS: 'b', ArrowDown: 'b', KeyA: 'l', ArrowLeft: 'l', KeyD: 'r', ArrowRight: 'r' };
     on(window, 'keydown', (e) => {
       if (!started || busy) return;
+      if (e.target.tagName === 'INPUT') return;   // a barrinha de volume usa as setas
       if (e.target.closest && e.target.closest('button')) { if (e.code === 'Space' || e.code === 'Enter') return; }
       if (keyMap[e.code]) { input[keyMap[e.code]] = 1; if (player.mode === 'viewer') exitViewer(); e.preventDefault(); }
       if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') input.walk = true;
@@ -1605,8 +1627,13 @@ const RomaFredGame = () => {
       return false;
     }
     function clubSound(hit) {
-      if (swingSound.done || swingSound.id !== player.swingId) return;
-      swingSound.done = true;
+      if (swingSound.id !== player.swingId) return;
+      if (swingSound.done) {
+        // o "vento" já tocou, mas o dino entrou no golpe logo depois e caiu: ainda toca a pancada (uma vez)
+        if (hit && !swingSound.hit) { swingSound.hit = true; sfx.play('tacoHit'); }
+        return;
+      }
+      swingSound.done = true; swingSound.hit = hit;
       sfx.play(hit ? 'tacoHit' : 'tacoSwosh');
     }
     function updateSwingSound() {
@@ -1789,6 +1816,20 @@ const RomaFredGame = () => {
       </div>
 
       <div className="hud" id="rf-topright">
+        <div className="only-festa" id="rf-vol-wrap">
+          <button className="btn ghost" id="rf-vol-toggle" type="button" aria-expanded="false" aria-controls="rf-vol" aria-label="Volume da música">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M4 9h4l5-4v14l-5-4H4z" fill="currentColor" />
+              <path className="onda" d="M16 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+              <path className="x" d="M16.5 9.5l5 5m0-5l-5 5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+            </svg>
+          </button>
+          <div className="panel" id="rf-vol" hidden>
+            <label htmlFor="rf-vol-range">Música</label>
+            <input id="rf-vol-range" type="range" min="0" max="100" step="1" defaultValue="100" />
+            <span id="rf-vol-pct">100%</span>
+          </div>
+        </div>
         <button className="btn ghost" id="rf-keys-toggle" type="button" aria-expanded="false" aria-controls="rf-keys">Comandos</button>
         <button className="btn ghost" id="rf-opts-toggle" type="button" aria-expanded="false" aria-controls="rf-side">Animações</button>
       </div>
