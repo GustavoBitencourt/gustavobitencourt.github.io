@@ -784,7 +784,7 @@ const Pong = () => {
 
       <div className="pong-game-wrapper">
         <div
-          className="pong-frame"
+          className={`pong-frame ${overlay && phase !== 'countdown' ? 'has-panel' : ''}`}
           ref={frameRef}
           onPointerDown={handlePointer}
           onPointerMove={handlePointer}
@@ -794,7 +794,7 @@ const Pong = () => {
           <canvas ref={canvasRef} width={CANVAS_WIDTH} height={CANVAS_HEIGHT} className="pong-canvas" />
           {overlay && (
             <div
-              className={`game-overlay ${phase === 'countdown' ? 'transparent' : ''}`}
+              className={`pong-overlay ${phase === 'countdown' ? 'transparent' : ''}`}
               onPointerDown={(e) => e.stopPropagation()}
             >
               {overlay}

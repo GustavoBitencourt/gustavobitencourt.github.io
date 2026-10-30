@@ -109,7 +109,7 @@
   background: #1a1a1a;
 }
 
-.game-overlay {
+.pong-overlay {
   position: absolute;
   inset: 0;
   background: rgba(0, 0, 0, 0.85);
@@ -122,7 +122,7 @@
   overflow-y: auto;
 }
 
-.game-overlay.transparent {
+.pong-overlay.transparent {
   background: rgba(0, 0, 0, 0.25);
   pointer-events: none;
 }
@@ -131,11 +131,11 @@
   width: 100%;
   max-width: 520px;
   text-align: center;
-  animation: fadeIn 0.3s ease-in;
+  animation: pong-fade-in 0.3s ease-in;
   max-height: 100%;
 }
 
-@keyframes fadeIn {
+@keyframes pong-fade-in {
   from {
     opacity: 0;
     transform: scale(0.9);
@@ -495,5 +495,37 @@
   .pong-rules li {
     font-size: 0.8rem;
     margin-bottom: 6px;
+  }
+}
+
+/* Com menus abertos, o quadro pode crescer além de 2:1 para caber o conteúdo (celular) */
+.pong-frame.has-panel {
+  min-height: 320px;
+  background: #1a1a1a;
+}
+
+.pong-frame.has-panel .pong-canvas {
+  object-fit: contain;
+}
+
+@media (max-width: 480px) {
+  .pong-score {
+    flex-wrap: nowrap;
+    gap: 10px;
+  }
+
+  .player-score {
+    flex: 1;
+    min-width: 0;
+    padding: 8px 10px;
+  }
+
+  .separator {
+    font-size: 1.1rem;
+  }
+
+  .pong-room {
+    gap: 8px;
+    padding: 8px;
   }
 }
