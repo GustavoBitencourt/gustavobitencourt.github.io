@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { fetchSteam } from './steamProxy';
 
 const SteamMarketSearch = () => {
   
@@ -115,9 +116,10 @@ const SteamMarketSearch = () => {
       // Usando API gratuita de câmbio
       const exchangeUrl = 'https://api.exchangerate-api.com/v4/latest/USD';
       
+      // A API de câmbio já libera CORS: chamar direto primeiro
       const proxies = [
-        `https://api.allorigins.win/get?url=${encodeURIComponent(exchangeUrl)}`,
-        exchangeUrl // Tentar direto também
+        exchangeUrl,
+        `https://api.allorigins.win/get?url=${encodeURIComponent(exchangeUrl)}`
       ];
       
       for (let i = 0; i < proxies.length; i++) {
@@ -174,44 +176,7 @@ const SteamMarketSearch = () => {
       const fetchPage = async (startIndex) => {
         const searchUrl = `https://steamcommunity.com/market/search/render/?query=${encodeURIComponent(searchTerm)}&start=${startIndex}&count=9&search_descriptions=0&sort_column=popular&sort_dir=desc&appid=730&norender=1`;
         
-        // Sistema de proxies
-        const proxies = [
-          `https://api.allorigins.win/get?url=${encodeURIComponent(searchUrl)}`,
-          `https://cors-anywhere.herokuapp.com/${searchUrl}`,
-          `https://corsproxy.io/?${encodeURIComponent(searchUrl)}`
-        ];
-        
-        for (let i = 0; i < proxies.length; i++) {
-          try {
-            
-            const response = await fetch(proxies[i], {
-              headers: {
-                'Accept': 'application/json',
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-              }
-            });
-            
-            if (!response.ok) {
-              throw new Error(`Proxy ${i + 1} retornou: ${response.status}`);
-            }
-            
-            const data = await response.json();
-            
-            // AllOrigins wrapper
-            if (data.contents) {
-              return JSON.parse(data.contents);
-            } else {
-              // Direct proxy response
-              return data;
-            }
-            
-          } catch (proxyError) {
-            if (i === proxies.length - 1) {
-              throw proxyError;
-            }
-            continue;
-          }
-        }
+        return fetchSteam(searchUrl);
       };
 
       // Buscar 4 páginas para obter 36 resultados (9 x 4) - otimizado para performance
@@ -308,50 +273,7 @@ const SteamMarketSearch = () => {
       // Buscar diretamente da Steam Community Market
       const marketUrl = `https://steamcommunity.com/market/priceoverview/?currency=1&appid=730&market_hash_name=${encodeURIComponent(itemName)}`;
       
-      // Sistema de proxies (mesmo que funciona no inventário)
-      const proxies = [
-        `https://api.allorigins.win/get?url=${encodeURIComponent(marketUrl)}`,
-        `https://cors-anywhere.herokuapp.com/${marketUrl}`,
-        `https://corsproxy.io/?${encodeURIComponent(marketUrl)}`
-      ];
-      
-      let priceData = null;
-      let lastError = null;
-      
-      for (let i = 0; i < proxies.length; i++) {
-        try {
-          const response = await fetch(proxies[i], {
-            headers: {
-              'Accept': 'application/json',
-              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-            }
-          });
-          
-          if (!response.ok) {
-            throw new Error(`Proxy ${i + 1} retornou: ${response.status} ${response.statusText}`);
-          }
-          
-          const data = await response.json();
-          
-          // AllOrigins wrapper
-          if (data.contents) {
-            priceData = JSON.parse(data.contents);
-          } else {
-            // Direct proxy response
-            priceData = data;
-          }
-          
-          break;
-          
-        } catch (proxyError) {
-          lastError = proxyError;
-          continue;
-        }
-      }
-      
-      if (!priceData) {
-        throw new Error(`Todos os proxies falharam. Último erro: ${lastError?.message}`);
-      }
+      const priceData = await fetchSteam(marketUrl);
       
       if (!priceData.success || !priceData.lowest_price) {
         throw new Error(`Item "${itemName}" não encontrado no mercado Steam`);

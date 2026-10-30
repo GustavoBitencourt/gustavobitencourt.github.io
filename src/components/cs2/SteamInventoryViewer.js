@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
+import { fetchSteam } from './steamProxy';
 
 const SteamInventoryViewer = ({ steamId, vanityUrl }) => {
   const [items, setItems] = useState([]);
@@ -89,7 +90,7 @@ const SteamInventoryViewer = ({ steamId, vanityUrl }) => {
           } catch (error) {
             resolve();
           }
-        }, index * 500); // 500ms de delay entre cada busca
+        }, index * 50); // O ritmo real é controlado pela fila em steamProxy.js
       });
     });
     
@@ -160,48 +161,13 @@ const SteamInventoryViewer = ({ steamId, vanityUrl }) => {
     
     // Marcar como sendo buscado
     setFetchingItems(prev => new Set(prev).add(itemName));
-    
+    let rateLimited = false;
+
     try {
       
       const marketUrl = `https://steamcommunity.com/market/priceoverview/?currency=1&appid=730&market_hash_name=${encodeURIComponent(itemName)}`;
       
-      // Sistema de proxies (mesmo que funciona no SteamMarketSearch)
-      const proxies = [
-        `https://api.allorigins.win/get?url=${encodeURIComponent(marketUrl)}`,
-        `https://cors-anywhere.herokuapp.com/${marketUrl}`,
-        `https://corsproxy.io/?${encodeURIComponent(marketUrl)}`
-      ];
-      
-      let priceData = null;
-      
-      for (let i = 0; i < proxies.length; i++) {
-        try {
-          const response = await fetch(proxies[i], {
-            headers: {
-              'Accept': 'application/json',
-              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-            }
-          });
-          
-          if (!response.ok) continue;
-          
-          const data = await response.json();
-          
-          // AllOrigins wrapper
-          if (data.contents) {
-            priceData = JSON.parse(data.contents);
-          } else {
-            priceData = data;
-          }
-          
-          if (priceData && priceData.success) {
-            break;
-          }
-          
-        } catch (proxyError) {
-          continue;
-        }
-      }
+      const priceData = await fetchSteam(marketUrl);
       
       if (priceData && priceData.success) {
         // Usar lowest_price como prioridade
@@ -231,10 +197,11 @@ const SteamInventoryViewer = ({ steamId, vanityUrl }) => {
       }
       
     } catch (error) {
-      // Silenciosamente ignorar erros
+      // Limite da Steam (429): não marcar como tentado, para poder buscar de novo depois
+      rateLimited = error.status === 429;
     } finally {
       // Marcar como tentado e remover do conjunto de busca
-      setAttemptedItems(prev => new Set(prev).add(itemName));
+      if (!rateLimited) setAttemptedItems(prev => new Set(prev).add(itemName));
       setFetchingItems(prev => {
         const newSet = new Set(prev);
         newSet.delete(itemName);
@@ -308,15 +275,9 @@ const SteamInventoryViewer = ({ steamId, vanityUrl }) => {
           try {
             // Método direto via XML (mais confiável)
             const profileXmlUrl = `https://steamcommunity.com/id/${vanityUrl}?xml=1`;
-            const profileResponse = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(profileXmlUrl)}`);
-            
-            if (!profileResponse.ok) {
-              throw new Error(`Erro ao buscar perfil XML: ${profileResponse.status}`);
-            }
-            
-            const data = await profileResponse.json();
+            const profileXml = await fetchSteam(profileXmlUrl, { as: 'text' });
             const parser = new DOMParser();
-            const xmlDoc = parser.parseFromString(data.contents, "text/xml");
+            const xmlDoc = parser.parseFromString(profileXml, "text/xml");
             
             const steamId64Element = xmlDoc.getElementsByTagName("steamID64")[0];
             const personaNameElement = xmlDoc.getElementsByTagName("steamID")[0];
@@ -347,51 +308,10 @@ const SteamInventoryViewer = ({ steamId, vanityUrl }) => {
         const inventoryUrl = `https://steamcommunity.com/inventory/${resolvedSteamId}/730/2?l=english&count=100`;
 
         
-        let inventoryData;
-        
-        // Tentar múltiplos proxies
-        const proxies = [
-          `https://api.allorigins.win/get?url=${encodeURIComponent(inventoryUrl)}`,
-          `https://cors-anywhere.herokuapp.com/${inventoryUrl}`,
-          `https://corsproxy.io/?${encodeURIComponent(inventoryUrl)}`
-        ];
-        
-        let lastError = null;
-        
-        for (let i = 0; i < proxies.length; i++) {
-          try {
+        const inventoryData = await fetchSteam(inventoryUrl);
 
-            
-            const inventoryResponse = await fetch(proxies[i]);
-            
-            if (!inventoryResponse.ok) {
-              throw new Error(`Proxy ${i + 1} retornou: ${inventoryResponse.status}`);
-            }
-            
-            const data = await inventoryResponse.json();
-            
-            // AllOrigins wrapper
-            if (data.contents) {
-              inventoryData = JSON.parse(data.contents);
-            } else if (data.success !== undefined) {
-              // Resposta direta da Steam
-              inventoryData = data;
-            } else {
-              throw new Error(`Formato de resposta desconhecido do proxy ${i + 1}`);
-            }
-            
-
-            break;
-            
-          } catch (proxyError) {
-
-            lastError = proxyError;
-            continue;
-          }
-        }
-        
         if (!inventoryData) {
-          throw new Error(`Todos os proxies falharam. Último erro: ${lastError?.message}`);
+          throw new Error('Inventário privado ou indisponível');
         }
         
 
