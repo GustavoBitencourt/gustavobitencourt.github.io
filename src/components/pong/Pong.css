@@ -78,51 +78,67 @@
 }
 
 .pong-game-wrapper {
-  position: relative;
-  margin-bottom: 30px;
+  margin-bottom: 20px;
   display: flex;
   justify-content: center;
-  align-items: center;
   width: 100%;
 }
 
-.pong-canvas {
+/* Quadro com proporção fixa 2:1 que escala com a tela */
+.pong-frame {
+  position: relative;
+  width: min(100%, 800px, calc((100vh - 230px) * 2));
+  min-width: min(100%, 300px);
+  aspect-ratio: 2 / 1;
   border: 3px solid #ffd700;
-  background: #1a1a1a;
-  display: block;
+  border-radius: 6px;
   box-shadow: 0 0 30px rgba(255, 215, 0, 0.3);
-  max-width: 100%;
-  width: 800px;
-  height: 400px;
+  overflow: hidden;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  box-sizing: border-box;
+}
+
+/* Sobrescreve a regra global "canvas { position: absolute }" do App.css */
+.pong-frame .pong-canvas {
+  position: static;
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: #1a1a1a;
 }
 
 .game-overlay {
   position: absolute;
-  top: 0;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 100%;
-  max-width: 800px;
-  height: 400px;
+  inset: 0;
   background: rgba(0, 0, 0, 0.85);
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 3px;
-  z-index: 100;
+  z-index: 2;
+  padding: 12px;
+  box-sizing: border-box;
+  overflow-y: auto;
 }
 
-.start-screen,
-.game-over-screen {
+.game-overlay.transparent {
+  background: rgba(0, 0, 0, 0.25);
+  pointer-events: none;
+}
+
+.pong-panel {
+  width: 100%;
+  max-width: 520px;
   text-align: center;
   animation: fadeIn 0.3s ease-in;
-  padding: 20px;
+  max-height: 100%;
 }
 
 @keyframes fadeIn {
   from {
     opacity: 0;
-    transform: scale(0.8);
+    transform: scale(0.9);
   }
   to {
     opacity: 1;
@@ -130,45 +146,180 @@
   }
 }
 
-.start-screen h2,
-.game-over-screen h2 {
-  font-size: 2rem;
+.pong-panel h2 {
+  font-size: clamp(1.2rem, 3.5vw, 2rem);
   color: #ffd700;
-  margin: 0 0 15px 0;
+  margin: 0 0 10px 0;
   text-shadow: 0 0 10px rgba(255, 215, 0, 0.5);
 }
 
-.start-screen p,
-.game-over-screen p {
-  font-size: 0.95rem;
+.pong-panel p {
+  font-size: clamp(0.75rem, 1.8vw, 0.95rem);
   color: #ccc;
-  margin: 8px 0;
+  margin: 6px 0;
 }
 
-.start-button,
-.restart-button {
-  background: linear-gradient(135deg, #ffd700 0%, #ffed4e 100%);
-  color: #000;
+.pong-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: center;
+  margin-top: 14px;
+}
+
+.pong-btn {
   border: none;
-  padding: 12px 30px;
-  font-size: 1rem;
+  padding: 11px 22px;
+  font-size: clamp(0.8rem, 1.8vw, 1rem);
   font-weight: bold;
   border-radius: 6px;
   cursor: pointer;
-  transition: all 0.3s ease;
-  margin-top: 15px;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
   font-family: "Fira Code", monospace;
+  color: #000;
+  background: linear-gradient(135deg, #ffd700 0%, #ffed4e 100%);
 }
 
-.start-button:hover,
-.restart-button:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 8px 20px rgba(255, 215, 0, 0.4);
+.pong-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(255, 215, 0, 0.35);
 }
 
-.start-button:active,
-.restart-button:active {
-  transform: translateY(-1px);
+.pong-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.pong-btn.secondary {
+  background: linear-gradient(135deg, #00ffcc 0%, #4dfcdc 100%);
+}
+
+.pong-btn.secondary:hover:not(:disabled) {
+  box-shadow: 0 8px 20px rgba(0, 255, 204, 0.35);
+}
+
+.pong-btn.ghost {
+  background: transparent;
+  color: #ffd700;
+  border: 2px solid rgba(255, 215, 0, 0.6);
+}
+
+.pong-btn.small {
+  padding: 7px 14px;
+  font-size: 0.8rem;
+}
+
+.pong-muted {
+  color: #999 !important;
+}
+
+.pong-notice {
+  color: #ff6b9d !important;
+}
+
+.pong-room-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 150px;
+  overflow-y: auto;
+  margin: 8px 0;
+  text-align: left;
+}
+
+.pong-room {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  border: 1px solid rgba(0, 255, 204, 0.4);
+  border-radius: 6px;
+  background: rgba(0, 255, 204, 0.06);
+}
+
+.pong-room.full {
+  border-color: rgba(255, 107, 157, 0.4);
+  background: rgba(255, 107, 157, 0.06);
+}
+
+.pong-room-name {
+  color: #fff;
+  font-weight: bold;
+  font-size: 0.9rem;
+}
+
+.pong-room-players {
+  color: #00ffcc;
+  font-size: 0.8rem;
+}
+
+.pong-room.full .pong-room-players {
+  color: #ff6b9d;
+}
+
+.pong-waiting {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: #00ffcc !important;
+}
+
+.pong-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #00ffcc;
+  animation: pong-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes pong-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.3; transform: scale(0.7); }
+}
+
+.pong-share {
+  display: flex;
+  gap: 8px;
+  margin: 8px auto 12px;
+  max-width: 460px;
+}
+
+.pong-share input {
+  flex: 1;
+  min-width: 0;
+  padding: 7px 10px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 215, 0, 0.5);
+  background: rgba(255, 255, 255, 0.06);
+  color: #fff;
+  font-family: "Fira Code", monospace;
+  font-size: 0.75rem;
+}
+
+.pong-countdown {
+  font-size: clamp(3rem, 12vw, 7rem);
+  font-weight: bold;
+  color: #ffd700;
+  text-shadow: 0 0 30px rgba(255, 215, 0, 0.7);
+  animation: pong-count 0.8s ease-out;
+}
+
+@keyframes pong-count {
+  from { transform: scale(1.8); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+.pong-online-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin: -6px 0 20px;
+  color: #ccc;
+  font-size: 0.85rem;
 }
 
 .pong-instructions {
@@ -276,18 +427,6 @@
   color: #ffd700;
 }
 
-@media (max-width: 1024px) {
-  .pong-canvas {
-    width: 600px;
-    height: 300px;
-  }
-
-  .game-overlay {
-    max-width: 600px;
-    height: 300px;
-  }
-}
-
 @media (max-width: 768px) {
   .pong-container {
     padding: 15px;
@@ -315,15 +454,7 @@
     font-size: 1.5rem;
   }
 
-  .pong-canvas {
-    width: 400px;
-    height: 200px;
-  }
 
-  .game-overlay {
-    max-width: 400px;
-    height: 200px;
-  }
 
   .start-screen h2,
   .game-over-screen h2 {
