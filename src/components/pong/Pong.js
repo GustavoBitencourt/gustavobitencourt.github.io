@@ -2,148 +2,31 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { hostRoom, hostNewRoom, claimListingSlot, openGuestPeer, listRooms, roomPeerId, CODE_PATTERN } from './pongNet';
 import { playSound, unlockAudio, getVolume, setVolume } from './pongSound';
+import {
+  COLORS,
+  COLOR_NAMES,
+  WIN_OPTIONS,
+  DEFAULT_WIN,
+  SERVE_DELAY_FRAMES,
+  canvasSize,
+  createGameState,
+  stepGame,
+  drawGame,
+  packState,
+  applyPacked,
+  hexTouchToTarget
+} from './pongPhysics';
 import './Pong.css';
 
-const CANVAS_WIDTH = 800;
-const CANVAS_HEIGHT = 400;
-const PADDLE_WIDTH = 10;
-const PADDLE_HEIGHT = 80;
-const BALL_SIZE = 8;
-const PADDLE_SPEED = 6;
-const BALL_SPEED = 5;
-const MAX_BALL_SPEED = 15;
-const SERVE_SPEED = 2.2; // saque lento até o primeiro toque numa raquete
-const WIN_OPTIONS = [3, 5, 10];
-const DEFAULT_WIN = 5;
 const JOIN_TIMEOUT = 12000;
 const HEARTBEAT_TIMEOUT = 6000;
-const SERVE_DELAY_FRAMES = 60; // 1 s de pausa após cada gol (loop a 60 FPS)
 const NAME_MAX = 16;
 const NAME_KEY = 'pong-player-name';
+const PLAYER_OPTIONS = [2, 3];
 
 const cleanName = (value) => String(value || '').replace(/\s+/g, ' ').trim().slice(0, NAME_MAX);
-
-const serveBall = (dir) => ({
-  x: CANVAS_WIDTH / 2,
-  y: CANVAS_HEIGHT / 2,
-  dx: SERVE_SPEED * 0.9 * dir,
-  dy: SERVE_SPEED * 0.45 * (Math.random() < 0.5 ? -1 : 1),
-  slow: true
-});
-
-const createState = (winScore = DEFAULT_WIN) => ({
-  winScore,
-  player1: { x: 20, y: CANVAS_HEIGHT / 2 - PADDLE_HEIGHT / 2 },
-  player2: { x: CANVAS_WIDTH - 30, y: CANVAS_HEIGHT / 2 - PADDLE_HEIGHT / 2 },
-  ball: serveBall(Math.random() < 0.5 ? 1 : -1),
-  player1Score: 0,
-  player2Score: 0,
-  serveFrames: 0,
-  lastScorer: 0,
-  fx: []
-});
-
-// Move o paddle por teclado (up/down) ou seguindo o dedo/mouse (target = Y no canvas)
-const movePaddle = (paddle, input) => {
-  if (input.target !== null && input.target !== undefined) {
-    const diff = input.target - (paddle.y + PADDLE_HEIGHT / 2);
-    paddle.y += Math.max(-PADDLE_SPEED * 1.5, Math.min(PADDLE_SPEED * 1.5, diff));
-  } else {
-    if (input.up) paddle.y -= PADDLE_SPEED;
-    if (input.down) paddle.y += PADDLE_SPEED;
-  }
-  paddle.y = Math.max(0, Math.min(CANVAS_HEIGHT - PADDLE_HEIGHT, paddle.y));
-};
-
-const bounceOffPaddle = (ball, paddle, direction) => {
-  const currentSpeed = Math.hypot(ball.dx, ball.dy);
-  // Primeiro toque após o saque lento volta à velocidade normal; depois, +5% por rebatida
-  const newSpeed = ball.slow ? BALL_SPEED : Math.min(MAX_BALL_SPEED, currentSpeed * 1.05);
-  ball.slow = false;
-  const deltaY = (ball.y - (paddle.y + PADDLE_HEIGHT / 2)) / (PADDLE_HEIGHT / 2);
-  ball.dy = deltaY * newSpeed * 0.75;
-  ball.dx = direction * Math.sqrt(Math.max(newSpeed * newSpeed - ball.dy * ball.dy, (newSpeed * 0.5) ** 2));
-};
-
-// Avança um quadro da física. Retorna 'point', 'over' ou null.
-const stepGame = (state, input1, input2) => {
-  const { player1, player2, ball } = state;
-  const r = BALL_SIZE / 2;
-
-  movePaddle(player1, input1);
-  movePaddle(player2, input2);
-
-  // Pausa após gol: bola parada no centro, raquetes livres
-  if (state.serveFrames > 0) {
-    state.serveFrames -= 1;
-    return null;
-  }
-
-  const prevX = ball.x;
-  ball.x += ball.dx;
-  ball.y += ball.dy;
-
-  if (ball.y - r <= 0 || ball.y + r >= CANVAS_HEIGHT) {
-    ball.dy = -ball.dy;
-    ball.y = ball.y - r <= 0 ? r : CANVAS_HEIGHT - r;
-    state.fx.push('wall');
-  }
-
-  // Colisão considerando a trajetória (evita a bola "atravessar" em alta velocidade)
-  const p1Face = player1.x + PADDLE_WIDTH;
-  if (ball.dx < 0 && prevX - r >= p1Face && ball.x - r <= p1Face &&
-      ball.y >= player1.y - r && ball.y <= player1.y + PADDLE_HEIGHT + r) {
-    ball.x = p1Face + r;
-    bounceOffPaddle(ball, player1, 1);
-    state.fx.push('hit');
-  }
-  const p2Face = player2.x;
-  if (ball.dx > 0 && prevX + r <= p2Face && ball.x + r >= p2Face &&
-      ball.y >= player2.y - r && ball.y <= player2.y + PADDLE_HEIGHT + r) {
-    ball.x = p2Face - r;
-    bounceOffPaddle(ball, player2, -1);
-    state.fx.push('hit');
-  }
-
-  const scored = ball.x + r < 0 ? 2 : ball.x - r > CANVAS_WIDTH ? 1 : 0;
-  if (scored) {
-    if (scored === 1) state.player1Score += 1;
-    else state.player2Score += 1;
-    state.lastScorer = scored;
-    // Saque vai para quem sofreu o gol
-    state.ball = serveBall(scored === 1 ? 1 : -1);
-    state.serveFrames = SERVE_DELAY_FRAMES;
-    state.fx.push('goal');
-    const total = scored === 1 ? state.player1Score : state.player2Score;
-    return total >= state.winScore ? 'over' : 'point';
-  }
-  return null;
-};
-
-const drawGame = (ctx, state) => {
-  ctx.fillStyle = '#1a1a1a';
-  ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-
-  ctx.strokeStyle = 'rgba(0, 255, 204, 0.3)';
-  ctx.setLineDash([10, 10]);
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.moveTo(CANVAS_WIDTH / 2, 0);
-  ctx.lineTo(CANVAS_WIDTH / 2, CANVAS_HEIGHT);
-  ctx.stroke();
-  ctx.setLineDash([]);
-
-  ctx.fillStyle = '#00ffcc';
-  ctx.fillRect(state.player1.x, state.player1.y, PADDLE_WIDTH, PADDLE_HEIGHT);
-
-  ctx.fillStyle = '#ff6b9d';
-  ctx.fillRect(state.player2.x, state.player2.y, PADDLE_WIDTH, PADDLE_HEIGHT);
-
-  ctx.fillStyle = '#ffd700';
-  ctx.beginPath();
-  ctx.arc(state.ball.x, state.ball.y, BALL_SIZE / 2, 0, Math.PI * 2);
-  ctx.fill();
-};
+const emptyInput = () => ({ up: false, down: false, left: false, right: false, target: null });
+const filled = (n, value) => Array.from({ length: n }, () => value);
 
 const Pong = () => {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -152,36 +35,41 @@ const Pong = () => {
   const [screen, setScreen] = useState('menu');
   // phase: idle | waiting | connecting | countdown | playing | over | closed
   const [phase, setPhase] = useState('idle');
+  const [mode, setMode] = useState(2); // número de jogadores da partida
   const [countdown, setCountdown] = useState(0);
   const [scores, setScores] = useState([0, 0]);
-  const [winner, setWinner] = useState(null);
+  const [winner, setWinner] = useState(null); // índice do vencedor
   const [role, setRole] = useState(null); // host | guest
+  const [myIndex, setMyIndex] = useState(null); // índice deste jogador no online
+  const [playerNames, setPlayerNames] = useState(['', '']);
+  const [playersCount, setPlayersCount] = useState(1);
   const [room, setRoom] = useState(null);
   const [rooms, setRooms] = useState([]);
   const [loadingRooms, setLoadingRooms] = useState(false);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState(null);
   const [copied, setCopied] = useState(false);
-  const [goalBanner, setGoalBanner] = useState(null); // { scorer, id }
+  const [goalBanner, setGoalBanner] = useState(null); // { kind: goal|own|none, who, id }
   const [myName, setMyName] = useState(() => cleanName(localStorage.getItem(NAME_KEY)));
-  const [remoteName, setRemoteName] = useState('');
   const [volume, setVolumeState] = useState(getVolume);
   const [showVolume, setShowVolume] = useState(false);
   const [winScore, setWinScore] = useState(DEFAULT_WIN);
-  const [ready, setReady] = useState({ host: false, guest: false }); // revanche online
+  const [ready, setReady] = useState([false, false]); // revanche online
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [pseudoFull, setPseudoFull] = useState(false);
+  const [setup, setSetup] = useState(null); // modal: { kind: online|local, players, win }
 
   const canvasRef = useRef(null);
   const frameRef = useRef(null);
-  const stateRef = useRef(createState());
-  const keysRef = useRef({ w: false, s: false, up: false, down: false });
+  const stateRef = useRef(createGameState(2));
+  const keysRef = useRef({ w: false, s: false, a: false, d: false, up: false, down: false, left: false, right: false });
   const touchRef = useRef({ left: null, right: null, any: null });
   const pointersRef = useRef(new Map());
-  const remoteInputRef = useRef({ up: false, down: false, target: null });
   const peerRef = useRef(null);
   const slotPeerRef = useRef(null); // vaga de anúncio no lobby (só anfitrião)
-  const connRef = useRef(null);
+  const connRef = useRef(null); // convidado -> anfitrião
+  const guestsRef = useRef(new Map()); // anfitrião: índice -> { conn, lastSeen, input }
+  const namesRef = useRef(['', '']); // anfitrião: nomes oficiais da sala
   const timersRef = useRef([]);
   const leavingRef = useRef(false);
   const lastSentInputRef = useRef('');
@@ -190,17 +78,21 @@ const Pong = () => {
   const screenRef = useRef(screen);
   const roleRef = useRef(role);
   const phaseRef = useRef(phase);
+  const modeRef = useRef(mode);
+  const myIndexRef = useRef(myIndex);
   const myNameRef = useRef(myName);
   const winScoreRef = useRef(winScore);
-  const readyRef = useRef({ host: false, guest: false });
+  const readyRef = useRef([false, false]);
+  const labelsRef = useRef([]);
   const goalTimerRef = useRef(null);
   const lastVolumeRef = useRef(getVolume() || 0.6);
 
-  myNameRef.current = myName;
-  winScoreRef.current = winScore;
-
   screenRef.current = screen;
   roleRef.current = role;
+  modeRef.current = mode;
+  myIndexRef.current = myIndex;
+  myNameRef.current = myName;
+  winScoreRef.current = winScore;
 
   const updatePhase = useCallback((next) => {
     phaseRef.current = next;
@@ -212,7 +104,14 @@ const Pong = () => {
     timersRef.current = [];
   };
 
+  // Anfitrião envia para todos os convidados; convidado envia para o anfitrião
   const send = useCallback((msg) => {
+    if (roleRef.current === 'host') {
+      guestsRef.current.forEach(({ conn }) => {
+        if (conn.open) conn.send(msg);
+      });
+      return;
+    }
     const conn = connRef.current;
     if (conn && conn.open) conn.send(msg);
   }, []);
@@ -221,10 +120,20 @@ const Pong = () => {
     setSearchParams(value ? { sala: String(value) } : {}, { replace: true });
   }, [setSearchParams]);
 
-  const showGoal = useCallback((scorer) => {
+  const showGoal = useCallback((kind, who) => {
     clearTimeout(goalTimerRef.current);
-    setGoalBanner({ scorer, id: Date.now() });
+    setGoalBanner({ kind, who, id: Date.now() });
     goalTimerRef.current = setTimeout(() => setGoalBanner(null), (SERVE_DELAY_FRAMES / 60) * 1000);
+  }, []);
+
+  // Troca de modo (2 ou 3 jogadores) reinicia o estado do jogo
+  const applyMode = useCallback((nextMode, win = winScoreRef.current) => {
+    modeRef.current = nextMode;
+    setMode(nextMode);
+    stateRef.current = createGameState(nextMode, win);
+    setScores(filled(nextMode, 0));
+    readyRef.current = filled(nextMode, false);
+    setReady(filled(nextMode, false));
   }, []);
 
   // O navegador só libera áudio depois de uma interação
@@ -260,10 +169,26 @@ const Pong = () => {
     if (volume === 0) playSound('hit');
   };
 
+  // ---------- Nomes ----------
+  const broadcastPlayers = useCallback(() => {
+    const names = [...namesRef.current];
+    const count = 1 + [...guestsRef.current.values()].filter((g) => g.conn.open).length;
+    setPlayerNames(names);
+    setPlayersCount(count);
+    send({ t: 'players', names, n: count });
+  }, [send]);
+
   const changeName = (value) => {
     const name = value.slice(0, NAME_MAX);
     setMyName(name);
     localStorage.setItem(NAME_KEY, cleanName(name));
+    if (screenRef.current !== 'online' || myIndexRef.current === null) return;
+    if (roleRef.current === 'host') {
+      namesRef.current[0] = cleanName(name);
+      broadcastPlayers();
+    } else {
+      send({ t: 'name', name: cleanName(name) });
+    }
   };
 
   // ---------- Tela cheia (só o tabuleiro) ----------
@@ -313,19 +238,27 @@ const Pong = () => {
   };
 
   // ---------- Entradas ----------
-  const myInput = () => ({
-    up: keysRef.current.w || keysRef.current.up,
-    down: keysRef.current.s || keysRef.current.down,
-    target: touchRef.current.any
-  });
+  const myInput = () => {
+    const k = keysRef.current;
+    return {
+      up: k.w || k.up,
+      down: k.s || k.down,
+      left: k.a || k.left,
+      right: k.d || k.right,
+      target: touchRef.current.any
+    };
+  };
 
-  const localInputs = () => [
-    { up: keysRef.current.w, down: keysRef.current.s, target: touchRef.current.left },
-    { up: keysRef.current.up, down: keysRef.current.down, target: touchRef.current.right }
-  ];
+  const localInputs = () => {
+    const k = keysRef.current;
+    return [
+      { up: k.w, down: k.s, target: touchRef.current.left },
+      { up: k.up, down: k.down, target: touchRef.current.right }
+    ];
+  };
 
   useEffect(() => {
-    const map = { w: 'w', s: 's', arrowup: 'up', arrowdown: 'down' };
+    const map = { w: 'w', s: 's', a: 'a', d: 'd', arrowup: 'up', arrowdown: 'down', arrowleft: 'left', arrowright: 'right' };
     const handle = (pressed) => (e) => {
       const key = map[e.key.toLowerCase()];
       if (!key || e.target.tagName === 'INPUT') return;
@@ -342,23 +275,22 @@ const Pong = () => {
     };
   }, []);
 
-  // Toque/mouse: o paddle segue o dedo. No modo local, cada metade da tela controla um jogador.
+  // Toque/mouse: a raquete segue o dedo. No modo local, cada metade da tela controla um jogador.
   const handlePointer = (e) => {
     if (e.type === 'pointerdown') e.currentTarget.setPointerCapture?.(e.pointerId);
     if (e.type === 'pointermove' && !pointersRef.current.has(e.pointerId)) return;
+    const { w, h } = canvasSize(modeRef.current);
     // Área real do jogo dentro do canvas (pode haver faixas pretas em tela cheia)
     const rect = canvasRef.current.getBoundingClientRect();
-    const scale = Math.min(rect.width / CANVAS_WIDTH, rect.height / CANVAS_HEIGHT);
-    const offsetX = (rect.width - CANVAS_WIDTH * scale) / 2;
-    const offsetY = (rect.height - CANVAS_HEIGHT * scale) / 2;
-    const x = (e.clientX - rect.left - offsetX) / scale;
-    const y = Math.max(0, Math.min(CANVAS_HEIGHT, (e.clientY - rect.top - offsetY) / scale));
+    const scale = Math.min(rect.width / w, rect.height / h);
+    const x = (e.clientX - rect.left - (rect.width - w * scale) / 2) / scale;
+    const y = Math.max(0, Math.min(h, (e.clientY - rect.top - (rect.height - h * scale) / 2) / scale));
     let side = pointersRef.current.get(e.pointerId);
     if (!side) {
-      side = screenRef.current === 'local' ? (x < CANVAS_WIDTH / 2 ? 'left' : 'right') : 'any';
+      side = screenRef.current === 'local' ? (x < w / 2 ? 'left' : 'right') : 'any';
       pointersRef.current.set(e.pointerId, side);
     }
-    touchRef.current[side] = y;
+    touchRef.current[side] = modeRef.current === 3 ? hexTouchToTarget(x) : y;
   };
 
   const releasePointer = (e) => {
@@ -372,12 +304,15 @@ const Pong = () => {
     let raf;
     const render = () => {
       const canvas = canvasRef.current;
-      if (canvas) drawGame(canvas.getContext('2d'), stateRef.current);
+      const s = stateRef.current;
+      if (canvas && s.mode === modeRef.current) {
+        drawGame(canvas.getContext('2d'), s, myIndexRef.current || 0, labelsRef.current);
+      }
 
       // Convidado envia seus comandos quando mudam
       if (roleRef.current === 'guest' && screenRef.current === 'online') {
         const input = myInput();
-        if (input.target !== null) input.target = Math.round(input.target);
+        if (input.target !== null) input.target = Math.round(input.target * 1000) / 1000;
         const serialized = JSON.stringify(input);
         if (serialized !== lastSentInputRef.current) {
           lastSentInputRef.current = serialized;
@@ -392,13 +327,13 @@ const Pong = () => {
   }, [send]);
 
   // ---------- Partida (local ou anfitrião) ----------
-  const finishMatch = useCallback((winnerSide) => {
+  const finishMatch = useCallback((winnerIndex) => {
     const s = stateRef.current;
-    setWinner(winnerSide);
+    setWinner(winnerIndex);
     setGoalBanner(null);
     updatePhase('over');
     playSound('win');
-    send({ t: 'phase', phase: 'over', winner: winnerSide, scores: [s.player1Score, s.player2Score] });
+    send({ t: 'phase', phase: 'over', winner: winnerIndex, scores: s.scores });
   }, [send, updatePhase]);
 
   const runCountdown = useCallback((n) => {
@@ -416,10 +351,11 @@ const Pong = () => {
 
   const startMatch = useCallback(() => {
     clearTimers();
-    readyRef.current = { host: false, guest: false };
-    setReady({ host: false, guest: false });
-    stateRef.current = createState(winScoreRef.current);
-    setScores([0, 0]);
+    const n = modeRef.current;
+    readyRef.current = filled(n, false);
+    setReady(filled(n, false));
+    stateRef.current = createGameState(n, winScoreRef.current);
+    setScores(filled(n, 0));
     setWinner(null);
     setGoalBanner(null);
     runCountdown(3);
@@ -431,41 +367,44 @@ const Pong = () => {
 
     const loop = setInterval(() => {
       const s = stateRef.current;
-      const [in1, in2] = screen === 'local' ? localInputs() : [myInput(), remoteInputRef.current];
-      const event = stepGame(s, in1, in2);
-      if (event) setScores([s.player1Score, s.player2Score]);
-      if (event === 'point') showGoal(s.lastScorer);
+      let inputs;
+      if (screen === 'local') {
+        inputs = localInputs();
+      } else {
+        inputs = [myInput()];
+        for (let i = 1; i < s.mode; i++) inputs.push(guestsRef.current.get(i)?.input || emptyInput());
+      }
+
+      const event = stepGame(s, inputs);
+      if (event && event.type !== 'nopoint') setScores([...s.scores]);
+      let banner = null;
+      if (event?.type === 'point') banner = { k: 'goal', w: event.scorer };
+      if (event?.type === 'nopoint') banner = { k: event.reason, w: event.conceded };
+      if (banner) showGoal(banner.k, banner.w);
+
       const fx = s.fx;
       s.fx = [];
       fx.forEach(playSound);
 
       if (screen === 'online') {
-        const msg = {
-          t: 's',
-          a: Math.round(s.player1.y),
-          b: Math.round(s.player2.y),
-          x: Math.round(s.ball.x * 10) / 10,
-          y: Math.round(s.ball.y * 10) / 10,
-          p: [s.player1Score, s.player2Score]
-        };
+        const msg = packState(s);
         if (fx.length) msg.f = fx;
-        if (event === 'point') msg.g = s.lastScorer;
+        if (banner) msg.g = banner;
         send(msg);
       }
-      if (event === 'over') finishMatch(s.player1Score >= s.winScore ? 1 : 2);
+      if (event?.type === 'over') finishMatch(event.scorer);
     }, 1000 / 60);
 
     return () => clearInterval(loop);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase, screen, role, send, finishMatch, showGoal]);
 
-  // Revanche online: só recomeça quando os dois confirmam
-  const markReady = useCallback((who) => {
-    readyRef.current = { ...readyRef.current, [who]: true };
-    const { host, guest } = readyRef.current;
-    setReady({ host, guest });
-    send({ t: 'ready', host, guest });
-    if (host && guest) startMatch();
+  // Revanche online: só recomeça quando todos confirmam
+  const markReady = useCallback((index) => {
+    readyRef.current = readyRef.current.map((v, i) => (i === index ? true : v));
+    setReady([...readyRef.current]);
+    send({ t: 'ready', r: readyRef.current });
+    if (readyRef.current.every(Boolean)) startMatch();
   }, [send, startMatch]);
 
   // ---------- Online: encerrar ----------
@@ -473,41 +412,47 @@ const Pong = () => {
     clearTimers();
     leavingRef.current = true;
     remoteGoneRef.current = null;
-    if (connRef.current) {
+    const sayBye = (conn) => {
       try {
-        if (connRef.current.open) connRef.current.send({ t: 'bye' });
+        if (conn.open) conn.send({ t: 'bye' });
       } catch {
         // conexão já encerrada
       }
-      connRef.current.close();
-    }
+      conn.close();
+    };
+    if (connRef.current) sayBye(connRef.current);
+    guestsRef.current.forEach(({ conn }) => sayBye(conn));
+    guestsRef.current = new Map();
     if (peerRef.current) peerRef.current.destroy();
     if (slotPeerRef.current) slotPeerRef.current.destroy();
     slotPeerRef.current = null;
     connRef.current = null;
     peerRef.current = null;
-    remoteInputRef.current = { up: false, down: false, target: null };
     lastSentInputRef.current = '';
-    stateRef.current = createState();
-    setScores([0, 0]);
     setWinner(null);
     setGoalBanner(null);
-    setRemoteName('');
     setRole(null);
+    setMyIndex(null);
     setRoom(null);
+    setPlayersCount(1);
+    setPlayerNames(['', '']);
+    applyMode(2, DEFAULT_WIN);
     setTimeout(() => {
       leavingRef.current = false;
     }, 0);
-  }, []);
+  }, [applyMode]);
 
-  // Avisar o outro jogador ao fechar a aba ou sair da rota
+  // Avisar os outros jogadores ao fechar a aba ou sair da rota
   useEffect(() => {
     const sayBye = () => {
-      try {
-        if (connRef.current?.open) connRef.current.send({ t: 'bye' });
-      } catch {
-        // conexão já encerrada
-      }
+      const conns = [connRef.current, ...[...guestsRef.current.values()].map((g) => g.conn)];
+      conns.forEach((conn) => {
+        try {
+          if (conn?.open) conn.send({ t: 'bye' });
+        } catch {
+          // conexão já encerrada
+        }
+      });
     };
     const onPageHide = () => {
       sayBye();
@@ -524,34 +469,43 @@ const Pong = () => {
     };
   }, []);
 
-  // Batimento: detecta quedas em que o WebRTC não avisa (aba encerrada, internet caiu)
-  useEffect(() => {
-    const id = setInterval(() => {
-      const conn = connRef.current;
-      if (!conn || !conn.open) return;
-      conn.send({ t: 'ping' });
-      if (Date.now() - lastSeenRef.current > HEARTBEAT_TIMEOUT) remoteGoneRef.current?.();
-    }, 1000);
-    return () => clearInterval(id);
-  }, []);
-
   // ---------- Online: anfitrião ----------
-  const becomeHost = useCallback((peer, code) => {
+  const removeGuest = useRef(null);
+
+  const becomeHost = useCallback((peer, code, players, win) => {
     peerRef.current = peer;
+    guestsRef.current = new Map();
+    namesRef.current = filled(players, '');
+    namesRef.current[0] = cleanName(myNameRef.current);
+    winScoreRef.current = win;
+    setWinScore(win);
+    applyMode(players, win);
     setRole('host');
+    roleRef.current = 'host';
+    setMyIndex(0);
     setRoom(code);
+    setPlayerNames([...namesRef.current]);
+    setPlayersCount(1);
     setScreen('online');
     updatePhase('waiting');
     setRoomInUrl(code);
-    stateRef.current = createState();
 
     peer.on('disconnected', () => {
       if (!leavingRef.current && !peer.destroyed) peer.reconnect();
     });
 
+    const openGuests = () => [...guestsRef.current.values()].filter((g) => g.conn.open).length;
+
     const answerProbe = (conn) => {
       conn.on('open', () => {
-        conn.send({ t: 'status', code, players: connRef.current ? 2 : 1, host: cleanName(myNameRef.current), win: winScoreRef.current });
+        conn.send({
+          t: 'status',
+          code,
+          players: 1 + guestsRef.current.size,
+          max: players,
+          host: cleanName(myNameRef.current),
+          win: winScoreRef.current
+        });
         setTimeout(() => conn.close(), 1500);
       });
     };
@@ -573,6 +527,29 @@ const Pong = () => {
       });
     });
 
+    // Um jogador saiu: a partida volta para a espera
+    const onGuestLeft = (index, conn) => {
+      const guest = guestsRef.current.get(index);
+      if (!guest || guest.conn !== conn) return;
+      guestsRef.current.delete(index);
+      conn.close();
+      const leftName = namesRef.current[index] || `Jogador ${index + 1}`;
+      namesRef.current[index] = '';
+      if (leavingRef.current) return;
+      clearTimers();
+      stateRef.current = createGameState(players, winScoreRef.current);
+      setScores(filled(players, 0));
+      setWinner(null);
+      setGoalBanner(null);
+      readyRef.current = filled(players, false);
+      setReady(filled(players, false));
+      setNotice(`${leftName} saiu. Aguardando jogadores...`);
+      updatePhase('waiting');
+      send({ t: 'phase', phase: 'waiting', notice: `${leftName} saiu. Aguardando jogadores...` });
+      broadcastPlayers();
+    };
+    removeGuest.current = onGuestLeft;
+
     peer.on('connection', (conn) => {
       const type = conn.metadata?.type;
 
@@ -581,7 +558,8 @@ const Pong = () => {
         return;
       }
 
-      if (connRef.current) {
+      const freeIndex = Array.from({ length: players - 1 }, (_, i) => i + 1).find((i) => !guestsRef.current.has(i));
+      if (!freeIndex || phaseRef.current !== 'waiting') {
         conn.on('open', () => {
           conn.send({ t: 'full' });
           setTimeout(() => conn.close(), 500);
@@ -589,58 +567,80 @@ const Pong = () => {
         return;
       }
 
-      connRef.current = conn;
-      setRemoteName(cleanName(conn.metadata?.name));
+      const guest = { conn, lastSeen: Date.now(), input: emptyInput() };
+      guestsRef.current.set(freeIndex, guest);
+      namesRef.current[freeIndex] = cleanName(conn.metadata?.name);
+
       // Se a conexão P2P nunca abrir (rede bloqueada), liberar a vaga
       const pendingTimer = setTimeout(() => {
-        if (!conn.open && connRef.current === conn) {
-          connRef.current = null;
+        if (!conn.open && guestsRef.current.get(freeIndex)?.conn === conn) {
+          guestsRef.current.delete(freeIndex);
+          namesRef.current[freeIndex] = '';
           conn.close();
         }
       }, JOIN_TIMEOUT);
+
       conn.on('open', () => {
         clearTimeout(pendingTimer);
-        lastSeenRef.current = Date.now();
-        remoteGoneRef.current = onGuestLeft;
+        guest.lastSeen = Date.now();
         setNotice(null);
-        conn.send({ t: 'welcome', room: code, name: cleanName(myNameRef.current), win: winScoreRef.current });
-        startMatch();
+        conn.send({
+          t: 'welcome',
+          room: code,
+          index: freeIndex,
+          mode: players,
+          win: winScoreRef.current,
+          names: namesRef.current
+        });
+        broadcastPlayers();
+        if (openGuests() === players - 1) startMatch();
       });
       conn.on('data', (msg) => {
-        lastSeenRef.current = Date.now();
-        if (msg?.t === 'in') remoteInputRef.current = { up: !!msg.up, down: !!msg.down, target: msg.target ?? null };
-        if (msg?.t === 'again' && phaseRef.current === 'over') markReady('guest');
-        if (msg?.t === 'bye') onGuestLeft();
-      });
-      const onGuestLeft = () => {
-        if (connRef.current !== conn) return;
-        connRef.current = null;
-        remoteGoneRef.current = null;
-        conn.close();
-        clearTimers();
-        remoteInputRef.current = { up: false, down: false, target: null };
-        stateRef.current = createState(winScoreRef.current);
-        setScores([0, 0]);
-        setWinner(null);
-        readyRef.current = { host: false, guest: false };
-        setReady({ host: false, guest: false });
-        if (!leavingRef.current) {
-          setNotice('O oponente saiu. Aguardando outro jogador...');
-          setRemoteName('');
-          updatePhase('waiting');
+        guest.lastSeen = Date.now();
+        if (!msg) return;
+        if (msg.t === 'in') {
+          guest.input = { up: !!msg.up, down: !!msg.down, left: !!msg.left, right: !!msg.right, target: msg.target ?? null };
+        } else if (msg.t === 'again' && phaseRef.current === 'over') {
+          markReady(freeIndex);
+        } else if (msg.t === 'name') {
+          namesRef.current[freeIndex] = cleanName(msg.name);
+          broadcastPlayers();
+        } else if (msg.t === 'bye') {
+          onGuestLeft(freeIndex, conn);
         }
-      };
-      conn.on('close', onGuestLeft);
-      conn.on('error', onGuestLeft);
+      });
+      conn.on('close', () => onGuestLeft(freeIndex, conn));
+      conn.on('error', () => onGuestLeft(freeIndex, conn));
     });
-  }, [setRoomInUrl, startMatch, updatePhase, markReady]);
+  }, [applyMode, broadcastPlayers, markReady, send, setRoomInUrl, startMatch, updatePhase]);
 
-  const createRoom = async () => {
+  // Batimento: detecta quedas em que o WebRTC não avisa (aba encerrada, internet caiu)
+  useEffect(() => {
+    const id = setInterval(() => {
+      const now = Date.now();
+      if (roleRef.current === 'host') {
+        guestsRef.current.forEach((guest, index) => {
+          if (!guest.conn.open) return;
+          guest.conn.send({ t: 'ping' });
+          if (now - guest.lastSeen > HEARTBEAT_TIMEOUT) removeGuest.current?.(index, guest.conn);
+        });
+        return;
+      }
+      const conn = connRef.current;
+      if (!conn || !conn.open) return;
+      conn.send({ t: 'ping' });
+      if (now - lastSeenRef.current > HEARTBEAT_TIMEOUT) remoteGoneRef.current?.();
+    }, 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  const createRoom = async ({ players, win }) => {
     setBusy(true);
     setNotice(null);
     try {
       const { peer, code } = await hostNewRoom();
-      becomeHost(peer, code);
+      setSetup(null);
+      becomeHost(peer, code, players, win);
     } catch (err) {
       setNotice(err.message || 'Não foi possível criar a sala.');
     } finally {
@@ -651,7 +651,7 @@ const Pong = () => {
   const claimRoom = useCallback(async (code) => {
     try {
       const peer = await hostRoom(code);
-      becomeHost(peer, code);
+      becomeHost(peer, code, modeRef.current || 2, winScoreRef.current || DEFAULT_WIN);
       return true;
     } catch (err) {
       return err.type === 'unavailable-id' ? false : Promise.reject(err);
@@ -663,6 +663,7 @@ const Pong = () => {
     resetOnline();
     setScreen('online');
     setRole('guest');
+    roleRef.current = 'guest';
     setRoom(code);
     setNotice(null);
     updatePhase('connecting');
@@ -731,36 +732,37 @@ const Pong = () => {
         onHostLeft();
       } else if (msg.t === 's') {
         const s = stateRef.current;
-        s.player1.y = msg.a;
-        s.player2.y = msg.b;
-        s.ball.x = msg.x;
-        s.ball.y = msg.y;
-        if (msg.p[0] !== s.player1Score || msg.p[1] !== s.player2Score) {
-          s.player1Score = msg.p[0];
-          s.player2Score = msg.p[1];
-          setScores([...msg.p]);
-        }
+        if ((s.mode || 2) !== (msg.q ? 3 : 2)) return;
+        if (applyPacked(s, msg)) setScores([...s.scores]);
         if (msg.f) msg.f.forEach(playSound);
-        if (msg.g) showGoal(msg.g);
+        if (msg.g) showGoal(msg.g.k, msg.g.w);
       } else if (msg.t === 'welcome') {
+        const players = PLAYER_OPTIONS.includes(msg.mode) ? msg.mode : 2;
         const win = WIN_OPTIONS.includes(msg.win) ? msg.win : DEFAULT_WIN;
+        winScoreRef.current = win;
         setWinScore(win);
-        stateRef.current = createState(win);
-        setScores([0, 0]);
-        setRemoteName(cleanName(msg.name));
+        applyMode(players, win);
+        setMyIndex(msg.index || 1);
+        myIndexRef.current = msg.index || 1;
+        setPlayerNames(msg.names || filled(players, ''));
+        updatePhase('waiting');
+      } else if (msg.t === 'players') {
+        setPlayerNames(msg.names || []);
+        setPlayersCount(msg.n || 1);
       } else if (msg.t === 'ready') {
-        setReady({ host: !!msg.host, guest: !!msg.guest });
+        if (Array.isArray(msg.r)) setReady(msg.r);
       } else if (msg.t === 'full') {
-        setNotice(`A sala ${code.toUpperCase()} já está cheia.`);
+        setNotice(`A sala ${code.toUpperCase()} já está cheia ou a partida já começou.`);
         updatePhase('closed');
       } else if (msg.t === 'phase') {
+        const n = modeRef.current;
         if (msg.phase === 'countdown') {
           if (msg.count === 3) {
-            stateRef.current = createState(winScoreRef.current);
-            setScores([0, 0]);
+            stateRef.current = createGameState(n, winScoreRef.current);
+            setScores(filled(n, 0));
             setWinner(null);
             setGoalBanner(null);
-            setReady({ host: false, guest: false });
+            setReady(filled(n, false));
           }
           setCountdown(msg.count);
           playSound('beep');
@@ -772,12 +774,20 @@ const Pong = () => {
           setGoalBanner(null);
           playSound('win');
         }
+        if (msg.phase === 'waiting') {
+          stateRef.current = createGameState(n, winScoreRef.current);
+          setScores(filled(n, 0));
+          setWinner(null);
+          setGoalBanner(null);
+          setReady(filled(n, false));
+          setNotice(msg.notice || null);
+        }
         updatePhase(msg.phase);
       }
     });
 
     conn.on('close', onHostLeft);
-  }, [claimRoom, resetOnline, setRoomInUrl, updatePhase, showGoal]);
+  }, [applyMode, claimRoom, resetOnline, setRoomInUrl, updatePhase, showGoal]);
 
   // ---------- Lobby ----------
   const refreshRooms = useCallback(async () => {
@@ -814,13 +824,17 @@ const Pong = () => {
     updatePhase('idle');
   };
 
-  const startLocal = () => {
+  const startLocal = (win) => {
     resetOnline();
+    setSetup(null);
+    winScoreRef.current = win;
+    setWinScore(win);
+    applyMode(2, win);
     setScreen('local');
     startMatch();
   };
 
-  // Entrar direto pelo link (#/pong?sala=3)
+  // Entrar direto pelo link (#/pong?sala=ab3f)
   const urlRoom = (searchParams.get('sala') || '').trim().toLowerCase();
   const handledUrlRef = useRef(false);
   useEffect(() => {
@@ -842,46 +856,26 @@ const Pong = () => {
 
   const playAgain = () => {
     if (screen !== 'online') startMatch();
-    else if (role === 'host') markReady('host');
+    else if (role === 'host') markReady(0);
     else {
-      setReady((r) => ({ ...r, guest: true }));
+      setReady((r) => r.map((v, i) => (i === myIndex ? true : v)));
       send({ t: 'again' });
     }
   };
 
   // ---------- Textos ----------
   const roomLabel = room ? room.toUpperCase() : '';
-  const mine = cleanName(myName);
-  const names = screen === 'online'
-    ? (role === 'host'
-      ? [mine || 'Jogador 1', remoteName || 'Jogador 2']
-      : [remoteName || 'Jogador 1', mine || 'Jogador 2'])
-    : ['Jogador 1', 'Jogador 2'];
-  // Índice (0/1) do jogador desta tela no modo online
-  const myIndex = screen === 'online' && role ? (role === 'host' ? 0 : 1) : null;
-  const winnerName = winner ? names[winner - 1] : '';
-  const meReady = myIndex === 0 ? ready.host : myIndex === 1 ? ready.guest : false;
-  const otherReady = myIndex === 0 ? ready.guest : myIndex === 1 ? ready.host : false;
-  const readyCount = (ready.host ? 1 : 0) + (ready.guest ? 1 : 0);
-  const youWon = myIndex !== null && winner === myIndex + 1;
-
-  const winSelector = (
-    <div className="pong-win-select" role="radiogroup" aria-label="Gols para vencer">
-      <span>Gols para vencer:</span>
-      {WIN_OPTIONS.map((option) => (
-        <button
-          key={option}
-          type="button"
-          role="radio"
-          aria-checked={winScore === option}
-          className={winScore === option ? 'active' : ''}
-          onClick={() => setWinScore(option)}
-        >
-          {option}
-        </button>
-      ))}
-    </div>
-  );
+  const isOnline = screen === 'online';
+  const names = Array.from({ length: mode }, (_, i) => {
+    if (!isOnline) return `Jogador ${i + 1}`;
+    return (i === myIndex ? cleanName(myName) : playerNames[i]) || `Jogador ${i + 1}`;
+  });
+  labelsRef.current = names;
+  const winnerName = winner !== null ? names[winner] : '';
+  const youWon = isOnline && winner !== null && winner === myIndex;
+  const meReady = myIndex !== null && !!ready[myIndex];
+  const readyCount = ready.filter(Boolean).length;
+  const othersReady = ready.some((v, i) => v && i !== myIndex);
 
   const nameField = (
     <label className="pong-name-field">
@@ -890,7 +884,7 @@ const Pong = () => {
         type="text"
         value={myName}
         maxLength={NAME_MAX}
-        placeholder={role === 'guest' ? 'Jogador 2' : 'Jogador 1'}
+        placeholder={myIndex !== null ? `Jogador ${myIndex + 1}` : 'Jogador 1'}
         onChange={(e) => changeName(e.target.value)}
       />
     </label>
@@ -901,10 +895,11 @@ const Pong = () => {
       return (
         <div className="pong-panel">
           <h2>Pong</h2>
-          <p>Primeiro a {winScore} gols vence!</p>
-          {winSelector}
+          <p>Jogue no mesmo teclado ou online com 2 ou 3 jogadores</p>
           <div className="pong-actions">
-            <button className="pong-btn primary" onClick={startLocal}>🎮 Jogar local</button>
+            <button className="pong-btn primary" onClick={() => setSetup({ kind: 'local', players: 2, win: winScore })}>
+              🎮 Jogar local
+            </button>
             <button className="pong-btn secondary" onClick={openLobby}>🌐 Jogar online</button>
           </div>
         </div>
@@ -919,30 +914,29 @@ const Pong = () => {
           <div className="pong-room-list">
             {loadingRooms && rooms.length === 0 && <p className="pong-muted">Procurando salas...</p>}
             {!loadingRooms && rooms.length === 0 && <p className="pong-muted">Nenhuma sala aberta. Crie a primeira!</p>}
-            {rooms.map(({ code, players, host, win }) => (
-              <div key={code} className={`pong-room ${players >= 2 ? 'full' : ''}`}>
-                <span className="pong-room-name">
-                  Sala {code.toUpperCase()}
-                  {host && <small> · {host}</small>}
-                </span>
-                <span className="pong-room-players">
-                  {players}/2{win ? ` · até ${win}` : ''}
-                </span>
-                <button
-                  className="pong-btn small"
-                  disabled={players >= 2}
-                  onClick={() => joinRoom(code)}
-                >
-                  {players >= 2 ? 'Cheia' : 'Entrar'}
-                </button>
-              </div>
-            ))}
+            {rooms.map(({ code, players, max, host, win }) => {
+              const cap = max || 2;
+              const full = players >= cap;
+              return (
+                <div key={code} className={`pong-room ${full ? 'full' : ''}`}>
+                  <span className="pong-room-name">
+                    Sala {code.toUpperCase()}
+                    {host && <small> · {host}</small>}
+                  </span>
+                  <span className="pong-room-players">
+                    {players}/{cap}{win ? ` · até ${win}` : ''}
+                  </span>
+                  <button className="pong-btn small" disabled={full} onClick={() => joinRoom(code)}>
+                    {full ? 'Cheia' : 'Entrar'}
+                  </button>
+                </div>
+              );
+            })}
           </div>
           {notice && <p className="pong-notice">{notice}</p>}
-          {winSelector}
           <div className="pong-actions">
-            <button className="pong-btn primary" onClick={createRoom} disabled={busy}>
-              {busy ? 'Criando...' : '➕ Criar sala'}
+            <button className="pong-btn primary" onClick={() => setSetup({ kind: 'online', players: 2, win: winScore })} disabled={busy}>
+              ➕ Criar sala
             </button>
             <button className="pong-btn ghost" onClick={refreshRooms} disabled={loadingRooms}>
               {loadingRooms ? 'Atualizando...' : '↻ Atualizar'}
@@ -958,15 +952,17 @@ const Pong = () => {
         <div className="pong-panel">
           <h2>Sala {roomLabel}</h2>
           {notice && <p className="pong-notice">{notice}</p>}
-          <p className="pong-waiting"><span className="pong-dot" /> Aguardando oponente (1/2)</p>
-          <p className="pong-muted">Partida até {winScore} gols</p>
+          <p className="pong-waiting">
+            <span className="pong-dot" /> Aguardando jogadores ({playersCount}/{mode})
+          </p>
+          <p className="pong-muted">{mode} jogadores · até {winScore} gols</p>
           {nameField}
-          <p className="pong-muted">Envie o link para alguém entrar direto na sala:</p>
+          <p className="pong-muted">Envie o link para entrarem direto na sala:</p>
           <div className="pong-share">
             <input readOnly value={shareLink} onFocus={(e) => e.target.select()} />
             <button className="pong-btn small" onClick={copyLink}>{copied ? 'Copiado!' : 'Copiar'}</button>
           </div>
-          <button className="pong-btn ghost" onClick={openLobby}>Fechar sala</button>
+          <button className="pong-btn ghost" onClick={openLobby}>{role === 'host' ? 'Fechar sala' : 'Sair da sala'}</button>
         </div>
       );
     }
@@ -1003,22 +999,23 @@ const Pong = () => {
     }
 
     if (phase === 'over') {
+      const othersName = names.filter((_, i) => i !== myIndex && ready[i]).join(' e ');
       return (
         <div className="pong-panel">
-          <h2>{screen === 'online' ? (youWon ? 'Você venceu! 🏆' : 'Você perdeu!') : `${winnerName} venceu! 🏆`}</h2>
-          <p>{names[0]}: {scores[0]} | {names[1]}: {scores[1]}</p>
-          {screen === 'online' && (meReady || otherReady) && (
+          <h2>{isOnline ? (youWon ? 'Você venceu! 🏆' : `${winnerName} venceu!`) : `${winnerName} venceu! 🏆`}</h2>
+          <p>{names.map((name, i) => `${name}: ${scores[i] ?? 0}`).join(' | ')}</p>
+          {isOnline && (meReady || othersReady) && (
             <p className="pong-waiting">
               <span className="pong-dot" />
-              {meReady ? 'Aguardando o oponente confirmar' : `${names[1 - myIndex]} quer jogar de novo!`} ({readyCount}/2)
+              {meReady ? 'Aguardando os outros confirmarem' : `${othersName} quer jogar de novo!`} ({readyCount}/{mode})
             </p>
           )}
           <div className="pong-actions">
-            <button className="pong-btn primary" onClick={playAgain} disabled={screen === 'online' && meReady}>
-              {screen === 'online' && meReady ? `Pronto (${readyCount}/2)` : 'Jogar novamente'}
+            <button className="pong-btn primary" onClick={playAgain} disabled={isOnline && meReady}>
+              {isOnline && meReady ? `Pronto (${readyCount}/${mode})` : 'Jogar novamente'}
             </button>
-            <button className="pong-btn ghost" onClick={screen === 'online' ? openLobby : goToMenu}>
-              {screen === 'online' ? 'Sair da sala' : 'Menu'}
+            <button className="pong-btn ghost" onClick={isOnline ? openLobby : goToMenu}>
+              {isOnline ? 'Sair da sala' : 'Menu'}
             </button>
           </div>
         </div>
@@ -1026,10 +1023,16 @@ const Pong = () => {
     }
 
     if (phase === 'playing' && goalBanner) {
+      const who = names[goalBanner.who] || '';
+      const title = goalBanner.kind === 'goal'
+        ? `⚽ Gol de ${who}!`
+        : goalBanner.kind === 'own'
+          ? `🙈 Gol contra de ${who}!`
+          : '🚫 Ninguém tocou na bola';
       return (
         <div className="pong-goal" key={goalBanner.id}>
-          <strong>⚽ Gol de {names[goalBanner.scorer - 1]}!</strong>
-          <span>Prepare-se...</span>
+          <strong>{title}</strong>
+          <span>{goalBanner.kind === 'goal' ? 'Prepare-se...' : 'Não vale ponto. Prepare-se...'}</span>
           <div className="pong-goal-bar" />
         </div>
       );
@@ -1042,8 +1045,10 @@ const Pong = () => {
   // Contagem e aviso de gol ficam por cima do jogo sem bloquear os controles
   const passiveOverlay = phase === 'countdown' || (phase === 'playing' && !!goalBanner);
   const volumeIcon = volume === 0 ? '🔇' : volume < 0.4 ? '🔈' : volume < 0.75 ? '🔉' : '🔊';
-  const isOnline = screen === 'online';
-  const mySide = role === 'host' ? 'esquerda (ciano)' : 'direita (rosa)';
+  const { w: canvasW, h: canvasH } = canvasSize(mode);
+  const full = isFullscreen || pseudoFull;
+  const myColor = myIndex !== null ? COLOR_NAMES[myIndex] : '';
+  const mySide = mode === 3 ? `${myColor} (seu gol fica embaixo)` : myIndex === 0 ? 'esquerda (ciano)' : 'direita (rosa)';
 
   return (
     <div className="pong-container">
@@ -1077,36 +1082,35 @@ const Pong = () => {
             </div>
           )}
         </div>
-        <div className="pong-score">
-          <div className="player-score player1-score">
-            <span className="pong-score-name">{names[0]}</span>
-            {myIndex === 0 && <em className="pong-you">você</em>}
-            <strong>{scores[0]}</strong>
-          </div>
-          <div className="separator">vs</div>
-          <div className="player-score player2-score">
-            <span className="pong-score-name">{names[1]}</span>
-            {myIndex === 1 && <em className="pong-you">você</em>}
-            <strong>{scores[1]}</strong>
-          </div>
+        <div className={`pong-score players-${mode}`}>
+          {names.map((name, i) => (
+            <React.Fragment key={i}>
+              {i > 0 && <div className="separator">vs</div>}
+              <div className="player-score" style={{ borderColor: COLORS[i], background: `${COLORS[i]}1a` }}>
+                <span className="pong-score-name">{name}</span>
+                {myIndex === i && isOnline && <em className="pong-you">você</em>}
+                <strong style={{ color: COLORS[i] }}>{scores[i] ?? 0}</strong>
+              </div>
+            </React.Fragment>
+          ))}
         </div>
       </div>
 
       <div className="pong-game-wrapper">
         <div
-          className={`pong-frame ${overlay && !passiveOverlay ? 'has-panel' : ''} ${isFullscreen || pseudoFull ? 'is-full' : ''} ${pseudoFull ? 'pseudo-full' : ''}`}
+          className={`pong-frame mode-${mode} ${overlay && !passiveOverlay ? 'has-panel' : ''} ${full ? 'is-full' : ''} ${pseudoFull ? 'pseudo-full' : ''}`}
           ref={frameRef}
           onPointerDown={handlePointer}
           onPointerMove={handlePointer}
           onPointerUp={releasePointer}
           onPointerCancel={releasePointer}
         >
-          <canvas ref={canvasRef} width={CANVAS_WIDTH} height={CANVAS_HEIGHT} className="pong-canvas" />
-          {(isFullscreen || pseudoFull) && (
+          <canvas ref={canvasRef} width={canvasW} height={canvasH} className="pong-canvas" />
+          {full && mode === 2 && (
             <div className="pong-hud">
-              <span className="p1">{names[0]}</span>
+              <span style={{ color: COLORS[0] }}>{names[0]}</span>
               <strong>{scores[0]} : {scores[1]}</strong>
-              <span className="p2">{names[1]}</span>
+              <span style={{ color: COLORS[1] }}>{names[1]}</span>
             </div>
           )}
           <button
@@ -1114,10 +1118,10 @@ const Pong = () => {
             className="pong-fs-btn"
             onPointerDown={(e) => e.stopPropagation()}
             onClick={toggleFullscreen}
-            title={isFullscreen || pseudoFull ? 'Sair da tela cheia (Esc)' : 'Tela cheia'}
-            aria-label={isFullscreen || pseudoFull ? 'Sair da tela cheia' : 'Tela cheia'}
+            title={full ? 'Sair da tela cheia (Esc)' : 'Tela cheia'}
+            aria-label={full ? 'Sair da tela cheia' : 'Tela cheia'}
           >
-            {isFullscreen || pseudoFull ? '✕' : '⛶'}
+            {full ? '✕' : '⛶'}
           </button>
           {overlay && (
             <div
@@ -1132,18 +1136,27 @@ const Pong = () => {
 
       {isOnline && role && ['countdown', 'playing', 'over'].includes(phase) && (
         <div className="pong-online-bar">
-          <span>🌐 Sala {roomLabel} · Você controla a raquete da {mySide}</span>
+          <span>🌐 Sala {roomLabel} · Você controla a raquete {mode === 3 ? '' : 'da '}{mySide}</span>
           <button className="pong-btn small ghost" onClick={openLobby}>Sair da sala</button>
         </div>
       )}
 
       {isOnline ? (
         <div className="pong-instructions">
-          <div className={`instruction-column ${role === 'host' ? 'player1-instructions' : 'player2-instructions'}`}>
-            <h3>🎮 Seus controles</h3>
+          <div className="instruction-column" style={{ borderColor: myIndex !== null ? COLORS[myIndex] : undefined }}>
+            <h3 style={{ color: myIndex !== null ? COLORS[myIndex] : undefined }}>🎮 Seus controles</h3>
             <ul>
-              <li><strong>W / ↑</strong> - Mover para cima</li>
-              <li><strong>S / ↓</strong> - Mover para baixo</li>
+              {mode === 3 ? (
+                <>
+                  <li><strong>A / ←</strong> - Mover para a esquerda</li>
+                  <li><strong>D / →</strong> - Mover para a direita</li>
+                </>
+              ) : (
+                <>
+                  <li><strong>W / ↑</strong> - Mover para cima</li>
+                  <li><strong>S / ↓</strong> - Mover para baixo</li>
+                </>
+              )}
               <li><strong>Toque/arraste</strong> na tela - a raquete segue o dedo</li>
             </ul>
           </div>
@@ -1173,13 +1186,79 @@ const Pong = () => {
       <div className="pong-rules">
         <h3>Regras:</h3>
         <ul>
-          <li>Use seu paddle para rebater a bola</li>
-          <li>Se a bola passar por você, o adversário marca um ponto</li>
-          <li>Primeiro a chegar em {winScore} gols vence (escolha 3, 5 ou 10)</li>
-          <li>A bola aumenta de velocidade a cada rebatida</li>
+          <li>Use sua raquete para rebater a bola</li>
+          <li>A bola sai devagar após cada gol e acelera a cada rebatida</li>
+          <li>Primeiro a chegar em {winScore} gols vence</li>
           <li>Online: crie uma sala e envie o link, ou entre em uma sala aberta</li>
+          <li>3 jogadores: o gol é de quem tocou por último na bola (a bola fica da cor dele). Gol contra não vale</li>
         </ul>
       </div>
+
+      {setup && (
+        <div className="pong-modal-backdrop" onPointerDown={() => !busy && setSetup(null)}>
+          <div
+            className="pong-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="pong-setup-title"
+            onPointerDown={(e) => e.stopPropagation()}
+          >
+            <h2 id="pong-setup-title">{setup.kind === 'online' ? 'Criar sala' : 'Jogar local'}</h2>
+
+            {setup.kind === 'online' && (
+              <div className="pong-modal-field">
+                <span>Jogadores</span>
+                <div className="pong-segment">
+                  {PLAYER_OPTIONS.map((option) => (
+                    <button
+                      key={option}
+                      type="button"
+                      className={setup.players === option ? 'active' : ''}
+                      onClick={() => setSetup((s) => ({ ...s, players: option }))}
+                    >
+                      {option === 2 ? '2 · clássico' : '3 · hexágono'}
+                    </button>
+                  ))}
+                </div>
+                {setup.players === 3 && (
+                  <p className="pong-modal-hint">
+                    Campo de 3 gols. Faz o ponto quem tocou por último na bola. Começa quando os 3 entrarem.
+                  </p>
+                )}
+              </div>
+            )}
+
+            <div className="pong-modal-field">
+              <span>Gols para vencer</span>
+              <div className="pong-segment">
+                {WIN_OPTIONS.map((option) => (
+                  <button
+                    key={option}
+                    type="button"
+                    className={setup.win === option ? 'active' : ''}
+                    onClick={() => setSetup((s) => ({ ...s, win: option }))}
+                  >
+                    {option}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {notice && setup.kind === 'online' && <p className="pong-notice">{notice}</p>}
+
+            <div className="pong-actions">
+              <button
+                className="pong-btn primary"
+                disabled={busy}
+                onClick={() => (setup.kind === 'online' ? createRoom(setup) : startLocal(setup.win))}
+              >
+                {setup.kind === 'online' ? (busy ? 'Criando...' : 'Criar sala') : 'Começar'}
+              </button>
+              <button className="pong-btn ghost" disabled={busy} onClick={() => setSetup(null)}>Cancelar</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
