@@ -59,6 +59,10 @@ const SOUNDS = {
     [523, 659, 784, 1047].forEach((f, i) => tone(f, 0.14, { type: 'triangle', gain: 0.28, delay: i * 0.08 }));
     tone(180, 0.35, { type: 'sawtooth', gain: 0.08, slideTo: 90 });
   },
+  power: () => {
+    [440, 660, 880, 1320].forEach((f, i) => tone(f, 0.09, { type: 'square', gain: 0.14, delay: i * 0.05 }));
+    tone(1760, 0.2, { type: 'sine', gain: 0.18, delay: 0.2 });
+  },
   beep: () => tone(660, 0.12, { type: 'sine', gain: 0.3 }),
   go: () => tone(990, 0.28, { type: 'sine', gain: 0.32 }),
   win: () => {

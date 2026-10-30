@@ -14,7 +14,9 @@ import {
   drawGame,
   packState,
   applyPacked,
-  hexTouchToTarget
+  hexTouchToTarget,
+  activeEffects,
+  POWERS
 } from './pongPhysics';
 import './Pong.css';
 
@@ -58,6 +60,8 @@ const Pong = () => {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [pseudoFull, setPseudoFull] = useState(false);
   const [setup, setSetup] = useState(null); // modal: { kind: online|local, players, win }
+  const [effects, setEffects] = useState({ big: 0, slow: 0, fast: 0 }); // segundos restantes dos poderes
+  const [powerToast, setPowerToast] = useState(null); // { type, id }
 
   const canvasRef = useRef(null);
   const frameRef = useRef(null);
@@ -85,6 +89,8 @@ const Pong = () => {
   const readyRef = useRef([false, false]);
   const labelsRef = useRef([]);
   const goalTimerRef = useRef(null);
+  const powerTimerRef = useRef(null);
+  const effectsKeyRef = useRef('');
   const lastVolumeRef = useRef(getVolume() || 0.6);
 
   screenRef.current = screen;
@@ -126,6 +132,23 @@ const Pong = () => {
     goalTimerRef.current = setTimeout(() => setGoalBanner(null), (SERVE_DELAY_FRAMES / 60) * 1000);
   }, []);
 
+  const showPower = useCallback((type) => {
+    if (!POWERS[type]) return;
+    clearTimeout(powerTimerRef.current);
+    setPowerToast({ type, id: Date.now() });
+    powerTimerRef.current = setTimeout(() => setPowerToast(null), 1800);
+  }, []);
+
+  // Atualiza os indicadores de poder só quando os segundos mudam
+  const syncEffects = useCallback((s) => {
+    const next = activeEffects(s);
+    const key = `${next.big}|${next.slow}|${next.fast}`;
+    if (key !== effectsKeyRef.current) {
+      effectsKeyRef.current = key;
+      setEffects(next);
+    }
+  }, []);
+
   // Troca de modo (2 ou 3 jogadores) reinicia o estado do jogo
   const applyMode = useCallback((nextMode, win = winScoreRef.current) => {
     modeRef.current = nextMode;
@@ -145,6 +168,7 @@ const Pong = () => {
       window.removeEventListener('pointerdown', unlock);
       window.removeEventListener('keydown', unlock);
       clearTimeout(goalTimerRef.current);
+      clearTimeout(powerTimerRef.current);
     };
   }, []);
 
@@ -358,8 +382,9 @@ const Pong = () => {
     setScores(filled(n, 0));
     setWinner(null);
     setGoalBanner(null);
+    syncEffects(stateRef.current);
     runCountdown(3);
-  }, [runCountdown]);
+  }, [runCountdown, syncEffects]);
 
   useEffect(() => {
     const simulates = screen === 'local' || (screen === 'online' && role === 'host');
@@ -385,10 +410,15 @@ const Pong = () => {
       const fx = s.fx;
       s.fx = [];
       fx.forEach(playSound);
+      const pw = s.pw;
+      s.pw = [];
+      pw.forEach(showPower);
+      syncEffects(s);
 
       if (screen === 'online') {
         const msg = packState(s);
         if (fx.length) msg.f = fx;
+        if (pw.length) msg.pw = pw;
         if (banner) msg.g = banner;
         send(msg);
       }
@@ -397,7 +427,7 @@ const Pong = () => {
 
     return () => clearInterval(loop);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [phase, screen, role, send, finishMatch, showGoal]);
+  }, [phase, screen, role, send, finishMatch, showGoal, showPower, syncEffects]);
 
   // Revanche online: só recomeça quando todos confirmam
   const markReady = useCallback((index) => {
@@ -734,7 +764,9 @@ const Pong = () => {
         const s = stateRef.current;
         if ((s.mode || 2) !== (msg.q ? 3 : 2)) return;
         if (applyPacked(s, msg)) setScores([...s.scores]);
+        syncEffects(s);
         if (msg.f) msg.f.forEach(playSound);
+        if (msg.pw) msg.pw.forEach(showPower);
         if (msg.g) showGoal(msg.g.k, msg.g.w);
       } else if (msg.t === 'welcome') {
         const players = PLAYER_OPTIONS.includes(msg.mode) ? msg.mode : 2;
@@ -787,7 +819,7 @@ const Pong = () => {
     });
 
     conn.on('close', onHostLeft);
-  }, [applyMode, claimRoom, resetOnline, setRoomInUrl, updatePhase, showGoal]);
+  }, [applyMode, claimRoom, resetOnline, setRoomInUrl, updatePhase, showGoal, showPower, syncEffects]);
 
   // ---------- Lobby ----------
   const refreshRooms = useCallback(async () => {
@@ -1113,6 +1145,20 @@ const Pong = () => {
               <span style={{ color: COLORS[1] }}>{names[1]}</span>
             </div>
           )}
+          {(phase === 'playing' || phase === 'countdown') && (effects.big > 0 || effects.slow > 0 || effects.fast > 0) && (
+            <div className="pong-effects">
+              {['big', 'slow', 'fast'].map((key) => (effects[key] > 0 ? (
+                <span key={key} className="pong-effect" style={{ borderColor: POWERS[key].color }}>
+                  {POWERS[key].icon} {effects[key]}s
+                </span>
+              ) : null))}
+            </div>
+          )}
+          {powerToast && phase === 'playing' && (
+            <div className="pong-power-toast" key={powerToast.id} style={{ borderColor: POWERS[powerToast.type].color }}>
+              🎈 {POWERS[powerToast.type].icon} {POWERS[powerToast.type].label}
+            </div>
+          )}
           <button
             type="button"
             className="pong-fs-btn"
@@ -1191,6 +1237,7 @@ const Pong = () => {
           <li>Primeiro a chegar em {winScore} gols vence</li>
           <li>Online: crie uma sala e envie o link, ou entre em uma sala aberta</li>
           <li>3 jogadores: o gol é de quem tocou por último na bola (a bola fica da cor dele). Gol contra não vale</li>
+          <li>🎈 A cada 2 rebatidas surge um balão no meio da quadra. Acerte a bola nele para ativar um poder: 🔵 bola gigante, 🐢 bola lenta, ⚡ bola rápida ou ⚽ duas bolas</li>
         </ul>
       </div>
 
