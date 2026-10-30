@@ -91,11 +91,12 @@ const CurrentWeather = ({ data }) => {
   const isDay = current.is_day === 1;
   const description = getWeatherDescription(current.weather_code);
 
-  const dateLabel = new Date(current.time).toLocaleDateString('pt-BR', {
+  const rawDate = new Date(current.time).toLocaleDateString('pt-BR', {
     weekday: 'long',
     day: 'numeric',
     month: 'long'
   });
+  const dateLabel = rawDate.charAt(0).toUpperCase() + rawDate.slice(1);
 
   return (
     <div className="current-weather">
