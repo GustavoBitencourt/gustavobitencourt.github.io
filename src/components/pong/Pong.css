@@ -953,3 +953,10 @@
   80% { opacity: 1; }
   100% { opacity: 0; }
 }
+
+/* No hexágono, os indicadores ficam empilhados no canto inferior esquerdo (área vazia) */
+.pong-frame.mode-3 .pong-effects {
+  flex-direction: column;
+  align-items: flex-start;
+  max-width: 34%;
+}

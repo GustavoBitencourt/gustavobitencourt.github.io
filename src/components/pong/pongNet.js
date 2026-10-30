@@ -1,15 +1,15 @@
 // Rede do Pong online via PeerJS (WebRTC P2P, servidor de sinalização público e gratuito).
 //
 // Cada sala tem um código aleatório de 4 caracteres (ex.: "ab3f"):
-//   gbpong-v3-sala-ab3f  -> peer do anfitrião, usado para entrar na sala (link #/pong?sala=ab3f)
+//   gbpong-v4-sala-ab3f  -> peer do anfitrião, usado para entrar na sala (link #/pong?sala=ab3f)
 //
 // O servidor público não permite listar peers, então para a sala aparecer no lobby
 // o anfitrião também ocupa uma "vaga de anúncio" numerada:
-//   gbpong-v3-vaga-1 ... gbpong-v3-vaga-N -> responde com { código, jogadores, nome do anfitrião }
+//   gbpong-v4-vaga-1 ... gbpong-v4-vaga-N -> responde com { código, jogadores, nome do anfitrião }
 // Se todas as vagas estiverem ocupadas, a sala continua funcionando pelo link, só não aparece na lista.
 import Peer from 'peerjs';
 
-const PREFIX = 'gbpong-v3-';
+const PREFIX = 'gbpong-v4-';
 export const MAX_SLOTS = 12;
 const PROBE_TIMEOUT = 5000;
 const CODE_CHARS = 'abcdefghjkmnpqrstuvwxyz23456789'; // sem 0/o, 1/l/i para evitar confusão
@@ -100,7 +100,7 @@ export const listRooms = async () => {
       const conn = peer.connect(slotPeerId(slot), { metadata: { type: 'probe' }, serialization: 'json' });
       conn.on('data', (msg) => {
         if (msg?.t === 'status' && CODE_PATTERN.test(msg.code || '')) {
-          found.set(msg.code, { players: msg.players, max: msg.max || 2, host: msg.host || '', win: msg.win || null });
+          found.set(msg.code, { players: msg.players, max: msg.max || 2, host: msg.host || '', win: msg.win || null, powers: msg.powers !== false });
           conn.close();
           done(slot);
         }

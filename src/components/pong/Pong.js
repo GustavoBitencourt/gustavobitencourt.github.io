@@ -15,7 +15,7 @@ import {
   packState,
   applyPacked,
   hexTouchToTarget,
-  activeEffects,
+  effectChips,
   POWERS
 } from './pongPhysics';
 import './Pong.css';
@@ -60,8 +60,9 @@ const Pong = () => {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [pseudoFull, setPseudoFull] = useState(false);
   const [setup, setSetup] = useState(null); // modal: { kind: online|local, players, win }
-  const [effects, setEffects] = useState({ big: 0, slow: 0, fast: 0 }); // segundos restantes dos poderes
-  const [powerToast, setPowerToast] = useState(null); // { type, id }
+  const [powersOn, setPowersOn] = useState(true); // partida com ou sem balões de poder
+  const [effects, setEffects] = useState([]); // poderes ativos (chips)
+  const [powerToast, setPowerToast] = useState(null); // { type, owner, id }
 
   const canvasRef = useRef(null);
   const frameRef = useRef(null);
@@ -86,6 +87,7 @@ const Pong = () => {
   const myIndexRef = useRef(myIndex);
   const myNameRef = useRef(myName);
   const winScoreRef = useRef(winScore);
+  const powersRef = useRef(powersOn);
   const readyRef = useRef([false, false]);
   const labelsRef = useRef([]);
   const goalTimerRef = useRef(null);
@@ -99,6 +101,7 @@ const Pong = () => {
   myIndexRef.current = myIndex;
   myNameRef.current = myName;
   winScoreRef.current = winScore;
+  powersRef.current = powersOn;
 
   const updatePhase = useCallback((next) => {
     phaseRef.current = next;
@@ -132,17 +135,18 @@ const Pong = () => {
     goalTimerRef.current = setTimeout(() => setGoalBanner(null), (SERVE_DELAY_FRAMES / 60) * 1000);
   }, []);
 
-  const showPower = useCallback((type) => {
+  const showPower = useCallback((evt) => {
+    const type = typeof evt === 'string' ? evt : evt?.t;
     if (!POWERS[type]) return;
     clearTimeout(powerTimerRef.current);
-    setPowerToast({ type, id: Date.now() });
+    setPowerToast({ type, owner: evt?.o ?? null, id: Date.now() });
     powerTimerRef.current = setTimeout(() => setPowerToast(null), 1800);
   }, []);
 
   // Atualiza os indicadores de poder só quando os segundos mudam
   const syncEffects = useCallback((s) => {
-    const next = activeEffects(s);
-    const key = `${next.big}|${next.slow}|${next.fast}`;
+    const next = effectChips(s);
+    const key = JSON.stringify(next);
     if (key !== effectsKeyRef.current) {
       effectsKeyRef.current = key;
       setEffects(next);
@@ -153,7 +157,7 @@ const Pong = () => {
   const applyMode = useCallback((nextMode, win = winScoreRef.current) => {
     modeRef.current = nextMode;
     setMode(nextMode);
-    stateRef.current = createGameState(nextMode, win);
+    stateRef.current = createGameState(nextMode, win, powersRef.current);
     setScores(filled(nextMode, 0));
     readyRef.current = filled(nextMode, false);
     setReady(filled(nextMode, false));
@@ -378,7 +382,7 @@ const Pong = () => {
     const n = modeRef.current;
     readyRef.current = filled(n, false);
     setReady(filled(n, false));
-    stateRef.current = createGameState(n, winScoreRef.current);
+    stateRef.current = createGameState(n, winScoreRef.current, powersRef.current);
     setScores(filled(n, 0));
     setWinner(null);
     setGoalBanner(null);
@@ -502,7 +506,9 @@ const Pong = () => {
   // ---------- Online: anfitrião ----------
   const removeGuest = useRef(null);
 
-  const becomeHost = useCallback((peer, code, players, win) => {
+  const becomeHost = useCallback((peer, code, players, win, powers = true) => {
+    powersRef.current = powers;
+    setPowersOn(powers);
     peerRef.current = peer;
     guestsRef.current = new Map();
     namesRef.current = filled(players, '');
@@ -534,7 +540,8 @@ const Pong = () => {
           players: 1 + guestsRef.current.size,
           max: players,
           host: cleanName(myNameRef.current),
-          win: winScoreRef.current
+          win: winScoreRef.current,
+          powers: powersRef.current
         });
         setTimeout(() => conn.close(), 1500);
       });
@@ -567,7 +574,7 @@ const Pong = () => {
       namesRef.current[index] = '';
       if (leavingRef.current) return;
       clearTimers();
-      stateRef.current = createGameState(players, winScoreRef.current);
+      stateRef.current = createGameState(players, winScoreRef.current, powersRef.current);
       setScores(filled(players, 0));
       setWinner(null);
       setGoalBanner(null);
@@ -620,6 +627,7 @@ const Pong = () => {
           index: freeIndex,
           mode: players,
           win: winScoreRef.current,
+          powers: powersRef.current,
           names: namesRef.current
         });
         broadcastPlayers();
@@ -664,13 +672,13 @@ const Pong = () => {
     return () => clearInterval(id);
   }, []);
 
-  const createRoom = async ({ players, win }) => {
+  const createRoom = async ({ players, win, powers }) => {
     setBusy(true);
     setNotice(null);
     try {
       const { peer, code } = await hostNewRoom();
       setSetup(null);
-      becomeHost(peer, code, players, win);
+      becomeHost(peer, code, players, win, powers);
     } catch (err) {
       setNotice(err.message || 'Não foi possível criar a sala.');
     } finally {
@@ -681,7 +689,7 @@ const Pong = () => {
   const claimRoom = useCallback(async (code) => {
     try {
       const peer = await hostRoom(code);
-      becomeHost(peer, code, modeRef.current || 2, winScoreRef.current || DEFAULT_WIN);
+      becomeHost(peer, code, modeRef.current || 2, winScoreRef.current || DEFAULT_WIN, powersRef.current);
       return true;
     } catch (err) {
       return err.type === 'unavailable-id' ? false : Promise.reject(err);
@@ -771,6 +779,8 @@ const Pong = () => {
       } else if (msg.t === 'welcome') {
         const players = PLAYER_OPTIONS.includes(msg.mode) ? msg.mode : 2;
         const win = WIN_OPTIONS.includes(msg.win) ? msg.win : DEFAULT_WIN;
+        powersRef.current = msg.powers !== false;
+        setPowersOn(msg.powers !== false);
         winScoreRef.current = win;
         setWinScore(win);
         applyMode(players, win);
@@ -790,7 +800,7 @@ const Pong = () => {
         const n = modeRef.current;
         if (msg.phase === 'countdown') {
           if (msg.count === 3) {
-            stateRef.current = createGameState(n, winScoreRef.current);
+            stateRef.current = createGameState(n, winScoreRef.current, powersRef.current);
             setScores(filled(n, 0));
             setWinner(null);
             setGoalBanner(null);
@@ -807,7 +817,7 @@ const Pong = () => {
           playSound('win');
         }
         if (msg.phase === 'waiting') {
-          stateRef.current = createGameState(n, winScoreRef.current);
+          stateRef.current = createGameState(n, winScoreRef.current, powersRef.current);
           setScores(filled(n, 0));
           setWinner(null);
           setGoalBanner(null);
@@ -856,7 +866,9 @@ const Pong = () => {
     updatePhase('idle');
   };
 
-  const startLocal = (win) => {
+  const startLocal = (win, powers = true) => {
+    powersRef.current = powers;
+    setPowersOn(powers);
     resetOnline();
     setSetup(null);
     winScoreRef.current = win;
@@ -929,7 +941,7 @@ const Pong = () => {
           <h2>Pong</h2>
           <p>Jogue no mesmo teclado ou online com 2 ou 3 jogadores</p>
           <div className="pong-actions">
-            <button className="pong-btn primary" onClick={() => setSetup({ kind: 'local', players: 2, win: winScore })}>
+            <button className="pong-btn primary" onClick={() => setSetup({ kind: 'local', players: 2, win: winScore, powers: powersOn })}>
               🎮 Jogar local
             </button>
             <button className="pong-btn secondary" onClick={openLobby}>🌐 Jogar online</button>
@@ -946,7 +958,7 @@ const Pong = () => {
           <div className="pong-room-list">
             {loadingRooms && rooms.length === 0 && <p className="pong-muted">Procurando salas...</p>}
             {!loadingRooms && rooms.length === 0 && <p className="pong-muted">Nenhuma sala aberta. Crie a primeira!</p>}
-            {rooms.map(({ code, players, max, host, win }) => {
+            {rooms.map(({ code, players, max, host, win, powers }) => {
               const cap = max || 2;
               const full = players >= cap;
               return (
@@ -956,7 +968,7 @@ const Pong = () => {
                     {host && <small> · {host}</small>}
                   </span>
                   <span className="pong-room-players">
-                    {players}/{cap}{win ? ` · até ${win}` : ''}
+                    {players}/{cap}{win ? ` · até ${win}` : ''}{powers === false ? ' · sem poderes' : ' · 🎈'}
                   </span>
                   <button className="pong-btn small" disabled={full} onClick={() => joinRoom(code)}>
                     {full ? 'Cheia' : 'Entrar'}
@@ -967,7 +979,7 @@ const Pong = () => {
           </div>
           {notice && <p className="pong-notice">{notice}</p>}
           <div className="pong-actions">
-            <button className="pong-btn primary" onClick={() => setSetup({ kind: 'online', players: 2, win: winScore })} disabled={busy}>
+            <button className="pong-btn primary" onClick={() => setSetup({ kind: 'online', players: 2, win: winScore, powers: powersOn })} disabled={busy}>
               ➕ Criar sala
             </button>
             <button className="pong-btn ghost" onClick={refreshRooms} disabled={loadingRooms}>
@@ -1073,6 +1085,14 @@ const Pong = () => {
     return null;
   };
 
+  const powerLabel = ({ type, owner }) => {
+    const who = owner !== null && owner !== undefined ? names[owner] : '';
+    if (type === 'grow') return `Raquete gigante para ${who}!`;
+    if (type === 'invert') return `Controles invertidos para os adversários de ${who}!`;
+    if (type === 'shield') return `Escudo no gol de ${who}!`;
+    return POWERS[type].label;
+  };
+
   const overlay = renderOverlay();
   // Contagem e aviso de gol ficam por cima do jogo sem bloquear os controles
   const passiveOverlay = phase === 'countdown' || (phase === 'playing' && !!goalBanner);
@@ -1145,18 +1165,20 @@ const Pong = () => {
               <span style={{ color: COLORS[1] }}>{names[1]}</span>
             </div>
           )}
-          {(phase === 'playing' || phase === 'countdown') && (effects.big > 0 || effects.slow > 0 || effects.fast > 0) && (
+          {(phase === 'playing' || phase === 'countdown') && effects.length > 0 && (
             <div className="pong-effects">
-              {['big', 'slow', 'fast'].map((key) => (effects[key] > 0 ? (
-                <span key={key} className="pong-effect" style={{ borderColor: POWERS[key].color }}>
-                  {POWERS[key].icon} {effects[key]}s
+              {effects.map((chip) => (
+                <span key={chip.key} className="pong-effect" style={{ borderColor: chip.color }}>
+                  {chip.icon}
+                  {chip.owner !== undefined && <span style={{ color: chip.color }}> {names[chip.owner]}</span>}
+                  {chip.text && ` ${chip.text}`}
                 </span>
-              ) : null))}
+              ))}
             </div>
           )}
           {powerToast && phase === 'playing' && (
             <div className="pong-power-toast" key={powerToast.id} style={{ borderColor: POWERS[powerToast.type].color }}>
-              🎈 {POWERS[powerToast.type].icon} {POWERS[powerToast.type].label}
+              🎈 {POWERS[powerToast.type].icon} {powerLabel(powerToast)}
             </div>
           )}
           <button
@@ -1237,7 +1259,8 @@ const Pong = () => {
           <li>Primeiro a chegar em {winScore} gols vence</li>
           <li>Online: crie uma sala e envie o link, ou entre em uma sala aberta</li>
           <li>3 jogadores: o gol é de quem tocou por último na bola (a bola fica da cor dele). Gol contra não vale</li>
-          <li>🎈 A cada 2 rebatidas surge um balão no meio da quadra. Acerte a bola nele para ativar um poder: 🔵 bola gigante, 🐢 bola lenta, ⚡ bola rápida ou ⚽ duas bolas</li>
+          <li>🎈 Com poderes ligados, a cada 2 rebatidas surge um balão. Acerte a bola nele: 🔵 gigante, ⚡ rápida, 🐢 lenta, ⚽ mais uma bola, 🌀 efeito, 👻 fantasma, 🌪️ desvio maluco, 📏 raquete gigante, 🔄 inverte os adversários ou 🛡️ escudo no gol</li>
+          <li>Poderes iguais se acumulam (ex.: rápida 2x → 4x) e todos acabam quando sai um gol</li>
         </ul>
       </div>
 
@@ -1291,13 +1314,29 @@ const Pong = () => {
               </div>
             </div>
 
+            <div className="pong-modal-field">
+              <span>Balões de poder</span>
+              <div className="pong-segment">
+                {[[true, '🎈 Com poderes'], [false, 'Sem poderes']].map(([value, label]) => (
+                  <button
+                    key={label}
+                    type="button"
+                    className={setup.powers === value ? 'active' : ''}
+                    onClick={() => setSetup((st) => ({ ...st, powers: value }))}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
             {notice && setup.kind === 'online' && <p className="pong-notice">{notice}</p>}
 
             <div className="pong-actions">
               <button
                 className="pong-btn primary"
                 disabled={busy}
-                onClick={() => (setup.kind === 'online' ? createRoom(setup) : startLocal(setup.win))}
+                onClick={() => (setup.kind === 'online' ? createRoom(setup) : startLocal(setup.win, setup.powers))}
               >
                 {setup.kind === 'online' ? (busy ? 'Criando...' : 'Criar sala') : 'Começar'}
               </button>
