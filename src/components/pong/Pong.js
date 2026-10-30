@@ -12,7 +12,9 @@ const BALL_SIZE = 8;
 const PADDLE_SPEED = 6;
 const BALL_SPEED = 5;
 const MAX_BALL_SPEED = 15;
-const WIN_SCORE = 5;
+const SERVE_SPEED = 2.2; // saque lento até o primeiro toque numa raquete
+const WIN_OPTIONS = [3, 5, 10];
+const DEFAULT_WIN = 5;
 const JOIN_TIMEOUT = 12000;
 const HEARTBEAT_TIMEOUT = 6000;
 const SERVE_DELAY_FRAMES = 60; // 1 s de pausa após cada gol (loop a 60 FPS)
@@ -24,11 +26,13 @@ const cleanName = (value) => String(value || '').replace(/\s+/g, ' ').trim().sli
 const serveBall = (dir) => ({
   x: CANVAS_WIDTH / 2,
   y: CANVAS_HEIGHT / 2,
-  dx: BALL_SPEED * dir,
-  dy: BALL_SPEED * 0.8 * (Math.random() < 0.5 ? -1 : 1)
+  dx: SERVE_SPEED * 0.9 * dir,
+  dy: SERVE_SPEED * 0.45 * (Math.random() < 0.5 ? -1 : 1),
+  slow: true
 });
 
-const createState = () => ({
+const createState = (winScore = DEFAULT_WIN) => ({
+  winScore,
   player1: { x: 20, y: CANVAS_HEIGHT / 2 - PADDLE_HEIGHT / 2 },
   player2: { x: CANVAS_WIDTH - 30, y: CANVAS_HEIGHT / 2 - PADDLE_HEIGHT / 2 },
   ball: serveBall(Math.random() < 0.5 ? 1 : -1),
@@ -53,7 +57,9 @@ const movePaddle = (paddle, input) => {
 
 const bounceOffPaddle = (ball, paddle, direction) => {
   const currentSpeed = Math.hypot(ball.dx, ball.dy);
-  const newSpeed = Math.min(MAX_BALL_SPEED, currentSpeed * 1.05); // +5% por rebatida
+  // Primeiro toque após o saque lento volta à velocidade normal; depois, +5% por rebatida
+  const newSpeed = ball.slow ? BALL_SPEED : Math.min(MAX_BALL_SPEED, currentSpeed * 1.05);
+  ball.slow = false;
   const deltaY = (ball.y - (paddle.y + PADDLE_HEIGHT / 2)) / (PADDLE_HEIGHT / 2);
   ball.dy = deltaY * newSpeed * 0.75;
   ball.dx = direction * Math.sqrt(Math.max(newSpeed * newSpeed - ball.dy * ball.dy, (newSpeed * 0.5) ** 2));
@@ -109,7 +115,7 @@ const stepGame = (state, input1, input2) => {
     state.serveFrames = SERVE_DELAY_FRAMES;
     state.fx.push('goal');
     const total = scored === 1 ? state.player1Score : state.player2Score;
-    return total >= WIN_SCORE ? 'over' : 'point';
+    return total >= state.winScore ? 'over' : 'point';
   }
   return null;
 };
@@ -161,6 +167,10 @@ const Pong = () => {
   const [remoteName, setRemoteName] = useState('');
   const [volume, setVolumeState] = useState(getVolume);
   const [showVolume, setShowVolume] = useState(false);
+  const [winScore, setWinScore] = useState(DEFAULT_WIN);
+  const [ready, setReady] = useState({ host: false, guest: false }); // revanche online
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [pseudoFull, setPseudoFull] = useState(false);
 
   const canvasRef = useRef(null);
   const frameRef = useRef(null);
@@ -181,10 +191,13 @@ const Pong = () => {
   const roleRef = useRef(role);
   const phaseRef = useRef(phase);
   const myNameRef = useRef(myName);
+  const winScoreRef = useRef(winScore);
+  const readyRef = useRef({ host: false, guest: false });
   const goalTimerRef = useRef(null);
   const lastVolumeRef = useRef(getVolume() || 0.6);
 
   myNameRef.current = myName;
+  winScoreRef.current = winScore;
 
   screenRef.current = screen;
   roleRef.current = role;
@@ -253,6 +266,52 @@ const Pong = () => {
     localStorage.setItem(NAME_KEY, cleanName(name));
   };
 
+  // ---------- Tela cheia (só o tabuleiro) ----------
+  useEffect(() => {
+    const onChange = () => {
+      const el = document.fullscreenElement || document.webkitFullscreenElement;
+      setIsFullscreen(!!el && el === frameRef.current);
+    };
+    document.addEventListener('fullscreenchange', onChange);
+    document.addEventListener('webkitfullscreenchange', onChange);
+    return () => {
+      document.removeEventListener('fullscreenchange', onChange);
+      document.removeEventListener('webkitfullscreenchange', onChange);
+    };
+  }, []);
+
+  // iPhone não tem tela cheia para elementos: usamos um modo "maximizado" via CSS
+  useEffect(() => {
+    if (!pseudoFull) return undefined;
+    const onKey = (e) => {
+      if (e.key === 'Escape') setPseudoFull(false);
+    };
+    document.body.style.overflow = 'hidden';
+    window.addEventListener('keydown', onKey);
+    return () => {
+      document.body.style.overflow = '';
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [pseudoFull]);
+
+  const toggleFullscreen = () => {
+    const el = frameRef.current;
+    if (document.fullscreenElement || document.webkitFullscreenElement) {
+      (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+      return;
+    }
+    if (pseudoFull) {
+      setPseudoFull(false);
+      return;
+    }
+    const request = el.requestFullscreen || el.webkitRequestFullscreen;
+    if (request) {
+      Promise.resolve(request.call(el)).catch(() => setPseudoFull(true));
+    } else {
+      setPseudoFull(true);
+    }
+  };
+
   // ---------- Entradas ----------
   const myInput = () => ({
     up: keysRef.current.w || keysRef.current.up,
@@ -287,11 +346,16 @@ const Pong = () => {
   const handlePointer = (e) => {
     if (e.type === 'pointerdown') e.currentTarget.setPointerCapture?.(e.pointerId);
     if (e.type === 'pointermove' && !pointersRef.current.has(e.pointerId)) return;
-    const rect = frameRef.current.getBoundingClientRect();
-    const y = ((e.clientY - rect.top) / rect.height) * CANVAS_HEIGHT;
+    // Área real do jogo dentro do canvas (pode haver faixas pretas em tela cheia)
+    const rect = canvasRef.current.getBoundingClientRect();
+    const scale = Math.min(rect.width / CANVAS_WIDTH, rect.height / CANVAS_HEIGHT);
+    const offsetX = (rect.width - CANVAS_WIDTH * scale) / 2;
+    const offsetY = (rect.height - CANVAS_HEIGHT * scale) / 2;
+    const x = (e.clientX - rect.left - offsetX) / scale;
+    const y = Math.max(0, Math.min(CANVAS_HEIGHT, (e.clientY - rect.top - offsetY) / scale));
     let side = pointersRef.current.get(e.pointerId);
     if (!side) {
-      side = screenRef.current === 'local' ? (e.clientX - rect.left < rect.width / 2 ? 'left' : 'right') : 'any';
+      side = screenRef.current === 'local' ? (x < CANVAS_WIDTH / 2 ? 'left' : 'right') : 'any';
       pointersRef.current.set(e.pointerId, side);
     }
     touchRef.current[side] = y;
@@ -352,7 +416,9 @@ const Pong = () => {
 
   const startMatch = useCallback(() => {
     clearTimers();
-    stateRef.current = createState();
+    readyRef.current = { host: false, guest: false };
+    setReady({ host: false, guest: false });
+    stateRef.current = createState(winScoreRef.current);
     setScores([0, 0]);
     setWinner(null);
     setGoalBanner(null);
@@ -386,12 +452,21 @@ const Pong = () => {
         if (event === 'point') msg.g = s.lastScorer;
         send(msg);
       }
-      if (event === 'over') finishMatch(s.player1Score >= WIN_SCORE ? 1 : 2);
+      if (event === 'over') finishMatch(s.player1Score >= s.winScore ? 1 : 2);
     }, 1000 / 60);
 
     return () => clearInterval(loop);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase, screen, role, send, finishMatch, showGoal]);
+
+  // Revanche online: só recomeça quando os dois confirmam
+  const markReady = useCallback((who) => {
+    readyRef.current = { ...readyRef.current, [who]: true };
+    const { host, guest } = readyRef.current;
+    setReady({ host, guest });
+    send({ t: 'ready', host, guest });
+    if (host && guest) startMatch();
+  }, [send, startMatch]);
 
   // ---------- Online: encerrar ----------
   const resetOnline = useCallback(() => {
@@ -476,7 +551,7 @@ const Pong = () => {
 
     const answerProbe = (conn) => {
       conn.on('open', () => {
-        conn.send({ t: 'status', code, players: connRef.current ? 2 : 1, host: cleanName(myNameRef.current) });
+        conn.send({ t: 'status', code, players: connRef.current ? 2 : 1, host: cleanName(myNameRef.current), win: winScoreRef.current });
         setTimeout(() => conn.close(), 1500);
       });
     };
@@ -528,13 +603,13 @@ const Pong = () => {
         lastSeenRef.current = Date.now();
         remoteGoneRef.current = onGuestLeft;
         setNotice(null);
-        conn.send({ t: 'welcome', room: code, name: cleanName(myNameRef.current) });
+        conn.send({ t: 'welcome', room: code, name: cleanName(myNameRef.current), win: winScoreRef.current });
         startMatch();
       });
       conn.on('data', (msg) => {
         lastSeenRef.current = Date.now();
         if (msg?.t === 'in') remoteInputRef.current = { up: !!msg.up, down: !!msg.down, target: msg.target ?? null };
-        if (msg?.t === 'again' && phaseRef.current === 'over') startMatch();
+        if (msg?.t === 'again' && phaseRef.current === 'over') markReady('guest');
         if (msg?.t === 'bye') onGuestLeft();
       });
       const onGuestLeft = () => {
@@ -544,9 +619,11 @@ const Pong = () => {
         conn.close();
         clearTimers();
         remoteInputRef.current = { up: false, down: false, target: null };
-        stateRef.current = createState();
+        stateRef.current = createState(winScoreRef.current);
         setScores([0, 0]);
         setWinner(null);
+        readyRef.current = { host: false, guest: false };
+        setReady({ host: false, guest: false });
         if (!leavingRef.current) {
           setNotice('O oponente saiu. Aguardando outro jogador...');
           setRemoteName('');
@@ -556,7 +633,7 @@ const Pong = () => {
       conn.on('close', onGuestLeft);
       conn.on('error', onGuestLeft);
     });
-  }, [setRoomInUrl, startMatch, updatePhase]);
+  }, [setRoomInUrl, startMatch, updatePhase, markReady]);
 
   const createRoom = async () => {
     setBusy(true);
@@ -666,19 +743,24 @@ const Pong = () => {
         if (msg.f) msg.f.forEach(playSound);
         if (msg.g) showGoal(msg.g);
       } else if (msg.t === 'welcome') {
-        stateRef.current = createState();
+        const win = WIN_OPTIONS.includes(msg.win) ? msg.win : DEFAULT_WIN;
+        setWinScore(win);
+        stateRef.current = createState(win);
         setScores([0, 0]);
         setRemoteName(cleanName(msg.name));
+      } else if (msg.t === 'ready') {
+        setReady({ host: !!msg.host, guest: !!msg.guest });
       } else if (msg.t === 'full') {
         setNotice(`A sala ${code.toUpperCase()} já está cheia.`);
         updatePhase('closed');
       } else if (msg.t === 'phase') {
         if (msg.phase === 'countdown') {
           if (msg.count === 3) {
-            stateRef.current = createState();
+            stateRef.current = createState(winScoreRef.current);
             setScores([0, 0]);
             setWinner(null);
             setGoalBanner(null);
+            setReady({ host: false, guest: false });
           }
           setCountdown(msg.count);
           playSound('beep');
@@ -759,8 +841,12 @@ const Pong = () => {
   };
 
   const playAgain = () => {
-    if (screen === 'online' && role === 'guest') send({ t: 'again' });
-    else startMatch();
+    if (screen !== 'online') startMatch();
+    else if (role === 'host') markReady('host');
+    else {
+      setReady((r) => ({ ...r, guest: true }));
+      send({ t: 'again' });
+    }
   };
 
   // ---------- Textos ----------
@@ -774,7 +860,28 @@ const Pong = () => {
   // Índice (0/1) do jogador desta tela no modo online
   const myIndex = screen === 'online' && role ? (role === 'host' ? 0 : 1) : null;
   const winnerName = winner ? names[winner - 1] : '';
+  const meReady = myIndex === 0 ? ready.host : myIndex === 1 ? ready.guest : false;
+  const otherReady = myIndex === 0 ? ready.guest : myIndex === 1 ? ready.host : false;
+  const readyCount = (ready.host ? 1 : 0) + (ready.guest ? 1 : 0);
   const youWon = myIndex !== null && winner === myIndex + 1;
+
+  const winSelector = (
+    <div className="pong-win-select" role="radiogroup" aria-label="Gols para vencer">
+      <span>Gols para vencer:</span>
+      {WIN_OPTIONS.map((option) => (
+        <button
+          key={option}
+          type="button"
+          role="radio"
+          aria-checked={winScore === option}
+          className={winScore === option ? 'active' : ''}
+          onClick={() => setWinScore(option)}
+        >
+          {option}
+        </button>
+      ))}
+    </div>
+  );
 
   const nameField = (
     <label className="pong-name-field">
@@ -794,7 +901,8 @@ const Pong = () => {
       return (
         <div className="pong-panel">
           <h2>Pong</h2>
-          <p>Primeiro a {WIN_SCORE} pontos vence!</p>
+          <p>Primeiro a {winScore} gols vence!</p>
+          {winSelector}
           <div className="pong-actions">
             <button className="pong-btn primary" onClick={startLocal}>🎮 Jogar local</button>
             <button className="pong-btn secondary" onClick={openLobby}>🌐 Jogar online</button>
@@ -811,13 +919,15 @@ const Pong = () => {
           <div className="pong-room-list">
             {loadingRooms && rooms.length === 0 && <p className="pong-muted">Procurando salas...</p>}
             {!loadingRooms && rooms.length === 0 && <p className="pong-muted">Nenhuma sala aberta. Crie a primeira!</p>}
-            {rooms.map(({ code, players, host }) => (
+            {rooms.map(({ code, players, host, win }) => (
               <div key={code} className={`pong-room ${players >= 2 ? 'full' : ''}`}>
                 <span className="pong-room-name">
                   Sala {code.toUpperCase()}
                   {host && <small> · {host}</small>}
                 </span>
-                <span className="pong-room-players">{players}/2 jogadores</span>
+                <span className="pong-room-players">
+                  {players}/2{win ? ` · até ${win}` : ''}
+                </span>
                 <button
                   className="pong-btn small"
                   disabled={players >= 2}
@@ -829,6 +939,7 @@ const Pong = () => {
             ))}
           </div>
           {notice && <p className="pong-notice">{notice}</p>}
+          {winSelector}
           <div className="pong-actions">
             <button className="pong-btn primary" onClick={createRoom} disabled={busy}>
               {busy ? 'Criando...' : '➕ Criar sala'}
@@ -848,6 +959,7 @@ const Pong = () => {
           <h2>Sala {roomLabel}</h2>
           {notice && <p className="pong-notice">{notice}</p>}
           <p className="pong-waiting"><span className="pong-dot" /> Aguardando oponente (1/2)</p>
+          <p className="pong-muted">Partida até {winScore} gols</p>
           {nameField}
           <p className="pong-muted">Envie o link para alguém entrar direto na sala:</p>
           <div className="pong-share">
@@ -895,8 +1007,16 @@ const Pong = () => {
         <div className="pong-panel">
           <h2>{screen === 'online' ? (youWon ? 'Você venceu! 🏆' : 'Você perdeu!') : `${winnerName} venceu! 🏆`}</h2>
           <p>{names[0]}: {scores[0]} | {names[1]}: {scores[1]}</p>
+          {screen === 'online' && (meReady || otherReady) && (
+            <p className="pong-waiting">
+              <span className="pong-dot" />
+              {meReady ? 'Aguardando o oponente confirmar' : `${names[1 - myIndex]} quer jogar de novo!`} ({readyCount}/2)
+            </p>
+          )}
           <div className="pong-actions">
-            <button className="pong-btn primary" onClick={playAgain}>Jogar novamente</button>
+            <button className="pong-btn primary" onClick={playAgain} disabled={screen === 'online' && meReady}>
+              {screen === 'online' && meReady ? `Pronto (${readyCount}/2)` : 'Jogar novamente'}
+            </button>
             <button className="pong-btn ghost" onClick={screen === 'online' ? openLobby : goToMenu}>
               {screen === 'online' ? 'Sair da sala' : 'Menu'}
             </button>
@@ -974,7 +1094,7 @@ const Pong = () => {
 
       <div className="pong-game-wrapper">
         <div
-          className={`pong-frame ${overlay && !passiveOverlay ? 'has-panel' : ''}`}
+          className={`pong-frame ${overlay && !passiveOverlay ? 'has-panel' : ''} ${isFullscreen || pseudoFull ? 'is-full' : ''} ${pseudoFull ? 'pseudo-full' : ''}`}
           ref={frameRef}
           onPointerDown={handlePointer}
           onPointerMove={handlePointer}
@@ -982,6 +1102,23 @@ const Pong = () => {
           onPointerCancel={releasePointer}
         >
           <canvas ref={canvasRef} width={CANVAS_WIDTH} height={CANVAS_HEIGHT} className="pong-canvas" />
+          {(isFullscreen || pseudoFull) && (
+            <div className="pong-hud">
+              <span className="p1">{names[0]}</span>
+              <strong>{scores[0]} : {scores[1]}</strong>
+              <span className="p2">{names[1]}</span>
+            </div>
+          )}
+          <button
+            type="button"
+            className="pong-fs-btn"
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={toggleFullscreen}
+            title={isFullscreen || pseudoFull ? 'Sair da tela cheia (Esc)' : 'Tela cheia'}
+            aria-label={isFullscreen || pseudoFull ? 'Sair da tela cheia' : 'Tela cheia'}
+          >
+            {isFullscreen || pseudoFull ? '✕' : '⛶'}
+          </button>
           {overlay && (
             <div
               className={`pong-overlay ${passiveOverlay ? 'transparent' : ''}`}
@@ -1038,7 +1175,7 @@ const Pong = () => {
         <ul>
           <li>Use seu paddle para rebater a bola</li>
           <li>Se a bola passar por você, o adversário marca um ponto</li>
-          <li>Primeiro a chegar em {WIN_SCORE} pontos vence</li>
+          <li>Primeiro a chegar em {winScore} gols vence (escolha 3, 5 ou 10)</li>
           <li>A bola aumenta de velocidade a cada rebatida</li>
           <li>Online: crie uma sala e envie o link, ou entre em uma sala aberta</li>
         </ul>

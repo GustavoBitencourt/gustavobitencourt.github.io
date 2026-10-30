@@ -708,3 +708,117 @@
     width: 110px;
   }
 }
+
+/* ---------- Gols para vencer ---------- */
+.pong-win-select {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin: 10px 0 4px;
+  font-size: 0.8rem;
+  color: #aaa;
+}
+
+.pong-win-select span {
+  margin-right: 4px;
+}
+
+.pong-win-select button {
+  min-width: 38px;
+  padding: 5px 10px;
+  border-radius: 6px;
+  border: 2px solid rgba(255, 215, 0, 0.5);
+  background: transparent;
+  color: #ffd700;
+  font-family: "Fira Code", monospace;
+  font-weight: bold;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.pong-win-select button.active {
+  background: #ffd700;
+  color: #111;
+}
+
+/* ---------- Tela cheia ---------- */
+.pong-fs-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 4;
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 215, 0, 0.5);
+  background: rgba(0, 0, 0, 0.55);
+  color: #ffd700;
+  font-size: 1.05rem;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0.7;
+  transition: opacity 0.2s ease, background 0.2s ease;
+}
+
+.pong-fs-btn:hover {
+  opacity: 1;
+  background: rgba(0, 0, 0, 0.8);
+}
+
+.pong-frame.is-full {
+  width: 100vw;
+  height: 100vh;
+  height: 100dvh;
+  max-width: none;
+  min-height: 0;
+  aspect-ratio: auto;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  background: #000;
+}
+
+.pong-frame.pseudo-full {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+}
+
+/* Faixas pretas fora do campo deixam as paredes visíveis */
+.pong-frame.is-full .pong-canvas {
+  object-fit: contain;
+  background: #000;
+}
+
+.pong-hud {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 6px 16px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.6);
+  border: 1px solid rgba(255, 215, 0, 0.4);
+  font-size: clamp(0.8rem, 2vw, 1.1rem);
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+.pong-hud strong {
+  color: #ffd700;
+  font-size: 1.2em;
+  font-variant-numeric: tabular-nums;
+}
+
+.pong-hud .p1 {
+  color: #00ffcc;
+}
+
+.pong-hud .p2 {
+  color: #ff6b9d;
+}

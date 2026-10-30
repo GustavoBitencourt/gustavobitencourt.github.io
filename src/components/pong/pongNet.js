@@ -72,7 +72,7 @@ export const claimListingSlot = async () => {
 export const openGuestPeer = () => openPeer(null);
 
 /**
- * Consulta as vagas de anúncio e devolve [{ code, players, host }] das salas abertas.
+ * Consulta as vagas de anúncio e devolve [{ code, players, host, win }] das salas abertas.
  */
 export const listRooms = async () => {
   const peer = await openGuestPeer();
@@ -100,7 +100,7 @@ export const listRooms = async () => {
       const conn = peer.connect(slotPeerId(slot), { metadata: { type: 'probe' }, serialization: 'json' });
       conn.on('data', (msg) => {
         if (msg?.t === 'status' && CODE_PATTERN.test(msg.code || '')) {
-          found.set(msg.code, { players: msg.players, host: msg.host || '' });
+          found.set(msg.code, { players: msg.players, host: msg.host || '', win: msg.win || null });
           conn.close();
           done(slot);
         }
