@@ -1,5 +1,8 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import LocationSearch from './LocationSearch';
+import WeatherBackground from './WeatherBackground';
+import { getSkyScene, SCENE_TYPES } from './weatherUtils';
 import CurrentWeather from './CurrentWeather';
 import WeatherForecast from './WeatherForecast';
 import WeatherMap from './WeatherMap';
@@ -118,48 +121,74 @@ const Weather = () => {
     fetchWeatherData(location.latitude, location.longitude, location.name);
   };
 
+  // Cena do fundo animado. Permite forçar via URL para testes: #/weather?sky=storm&night=1
+  const [searchParams] = useSearchParams();
+  const skyOverride = searchParams.get('sky');
+  const nightOverride = searchParams.get('night');
+  const current = weatherData?.current;
+
+  const skyScene = useMemo(() => {
+    const base = current
+      ? getSkyScene(current.weather_code, current.is_day === 1)
+      : { type: 'partly', isDay: true, intensity: 0.3 };
+    const type = SCENE_TYPES.includes(skyOverride) ? skyOverride : base.type;
+    const isDay = nightOverride !== null ? nightOverride !== '1' : base.isDay;
+    const intensity = type === base.type ? base.intensity : 1;
+    return { type, isDay, intensity };
+  }, [current, skyOverride, nightOverride]);
+
   return (
-    <div className="weather-container">
-      <div className="weather-header">
-        <h1>🌤️ Previsão do Tempo</h1>
-        <p>Dados climáticos em tempo real e previsão estendida</p>
-      </div>
+    <div className={`weather-container sky-${skyScene.type} ${skyScene.isDay ? 'is-day' : 'is-night'}`}>
+      <WeatherBackground
+        scene={skyScene}
+        wind={current?.wind_speed_10m ?? 0}
+        windDirection={current?.wind_direction_10m ?? 0}
+        temperature={current?.temperature_2m ?? null}
+      />
 
-      <LocationSearch onLocationSelect={handleLocationSelect} />
-
-      {loading && (
-        <div className="weather-loading">
-          <div className="loading-spinner"></div>
-          <p>Carregando dados climáticos...</p>
+      <div className="weather-inner">
+        <div className="weather-header">
+          <h1>🌤️ Previsão do Tempo</h1>
+          <p>Dados climáticos em tempo real e previsão estendida</p>
         </div>
-      )}
 
-      {error && (
-        <div className="weather-error">
-          <p>❌ {error}</p>
-          <button onClick={getCurrentLocation} className="retry-button">
-            Tentar Novamente
-          </button>
-        </div>
-      )}
+        <LocationSearch
+          onLocationSelect={handleLocationSelect}
+          onUseCurrentLocation={getCurrentLocation}
+        />
 
-      {weatherData && !loading && (
-        <>
+        {loading && (
+          <div className="weather-loading">
+            <div className="loading-spinner"></div>
+            <p>Carregando dados climáticos...</p>
+          </div>
+        )}
+
+        {error && (
+          <div className="weather-error">
+            <p>❌ {error}</p>
+            <button onClick={getCurrentLocation} className="retry-button">
+              Tentar Novamente
+            </button>
+          </div>
+        )}
+
+        {weatherData && !loading && (
           <div className="weather-content">
             <div className="weather-left">
               <CurrentWeather data={weatherData} />
             </div>
             <div className="weather-right">
-              <WeatherMap 
+              <WeatherMap
                 latitude={weatherData.location.latitude}
                 longitude={weatherData.location.longitude}
                 locationName={weatherData.location.name}
               />
-              <WeatherForecast data={forecastData} />
+              <WeatherForecast data={forecastData} today={weatherData.current.time.slice(0, 10)} />
             </div>
           </div>
-        </>
-      )}
+        )}
+      </div>
     </div>
   );
 };

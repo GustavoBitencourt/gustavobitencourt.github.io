@@ -1,14 +1,12 @@
 import React, { useEffect, useRef } from 'react';
 import './WeatherMap.css';
 
-const WeatherMap = ({ latitude, longitude, locationName }) => {
-  const mapRef = useRef(null);
-  const mapInstanceRef = useRef(null);
-  const markerRef = useRef(null);
-
-  useEffect(() => {
-    // Carregar Leaflet dinamicamente
-    if (!window.L) {
+// Carrega o Leaflet uma única vez (evita scripts duplicados no StrictMode / remontagens)
+let leafletPromise = null;
+const loadLeaflet = () => {
+  if (window.L) return Promise.resolve(window.L);
+  if (!leafletPromise) {
+    leafletPromise = new Promise((resolve, reject) => {
       const link = document.createElement('link');
       link.rel = 'stylesheet';
       link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
@@ -16,58 +14,67 @@ const WeatherMap = ({ latitude, longitude, locationName }) => {
 
       const script = document.createElement('script');
       script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
-      script.onload = () => initMap();
+      // Com CORS, erros do Leaflet mostram a mensagem real em vez de "Script error."
+      script.crossOrigin = 'anonymous';
+      script.onload = () => resolve(window.L);
+      script.onerror = () => {
+        leafletPromise = null;
+        reject(new Error('Falha ao carregar o Leaflet'));
+      };
       document.body.appendChild(script);
-    } else {
-      initMap();
-    }
+    });
+  }
+  return leafletPromise;
+};
 
-    function initMap() {
-      if (!mapRef.current || !window.L) return;
+const WeatherMap = ({ latitude, longitude, locationName }) => {
+  const mapRef = useRef(null);
 
-      // Remover mapa existente se houver
-      if (mapInstanceRef.current) {
-        mapInstanceRef.current.remove();
-      }
+  useEffect(() => {
+    let map = null;
+    let resizeTimer = null;
+    let cancelled = false;
 
-      // Criar novo mapa
-      const map = window.L.map(mapRef.current).setView([latitude, longitude], 8);
+    loadLeaflet()
+      .then((L) => {
+        if (cancelled || !mapRef.current) return;
 
-      // Adicionar camada de tiles do OpenStreetMap
-      window.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '© OpenStreetMap contributors',
-        maxZoom: 19
-      }).addTo(map);
+        map = L.map(mapRef.current).setView([latitude, longitude], 8);
 
+        // Adicionar camada de tiles do OpenStreetMap
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          attribution: '© OpenStreetMap contributors',
+          maxZoom: 19
+        }).addTo(map);
 
+        // Adicionar marcador personalizado
+        const customIcon = L.divIcon({
+          className: 'custom-marker',
+          html: '<div class="marker-pin">📍</div>',
+          iconSize: [40, 40],
+          iconAnchor: [20, 40],
+          popupAnchor: [0, -40]
+        });
 
-      // Adicionar marcador personalizado
-      const customIcon = window.L.divIcon({
-        className: 'custom-marker',
-        html: '<div class="marker-pin">📍</div>',
-        iconSize: [40, 40],
-        iconAnchor: [20, 40],
-        popupAnchor: [0, -40]
-      });
+        L.marker([latitude, longitude], { icon: customIcon })
+          .addTo(map)
+          .bindPopup(`<b>${locationName}</b><br>Lat: ${latitude.toFixed(2)}, Lon: ${longitude.toFixed(2)}`, { autoPan: false })
+          .openPopup();
 
-      const marker = window.L.marker([latitude, longitude], { icon: customIcon })
-        .addTo(map)
-        .bindPopup(`<b>${locationName}</b><br>Lat: ${latitude.toFixed(2)}, Lon: ${longitude.toFixed(2)}`)
-        .openPopup();
-
-      mapInstanceRef.current = map;
-      markerRef.current = marker;
-
-      // Ajustar tamanho do mapa após renderização
-      setTimeout(() => {
-        map.invalidateSize();
-      }, 100);
-    }
+        // Ajustar tamanho do mapa depois da animação de entrada do card
+        resizeTimer = setTimeout(() => {
+          if (map) map.invalidateSize();
+        }, 800);
+      })
+      .catch((err) => console.error(err));
 
     return () => {
-      if (mapInstanceRef.current) {
-        mapInstanceRef.current.remove();
-        mapInstanceRef.current = null;
+      cancelled = true;
+      clearTimeout(resizeTimer);
+      if (map) {
+        map.stop();
+        map.remove();
+        map = null;
       }
     };
   }, [latitude, longitude, locationName]);

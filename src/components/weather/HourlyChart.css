@@ -1,28 +1,187 @@
 .hourly-chart {
-  width: 100%;
   position: relative;
-  min-height: 250px;
-  display: flex;
-  flex-direction: column;
+  width: 100%;
+  min-width: 0;
+  min-height: 270px;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
-.chart-canvas {
-  width: 100% !important;
-  height: 200px !important;
-  background: transparent;
-  border-radius: 8px;
+.chart-svg {
   display: block;
-  margin: 0;
-  padding: 0;
+  /* O SVG acompanha o contêiner, nunca o contrário */
+  width: 100%;
+  max-width: 100%;
+  overflow: visible;
+  touch-action: pan-y;
+  cursor: crosshair;
+}
+
+.chart-grid {
+  stroke: rgba(45, 52, 54, 0.08);
+  stroke-width: 1;
+}
+
+.chart-axis {
+  fill: #8a959b;
+  font-size: 11px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.chart-night {
+  fill: rgba(36, 48, 94, 0.06);
+}
+
+.chart-line {
+  fill: none;
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.12));
+  animation: chart-draw 1.4s cubic-bezier(0.65, 0, 0.35, 1) forwards;
+}
+
+.chart-area {
+  opacity: 0;
+  animation: chart-fade 0.9s ease 0.6s forwards;
+}
+
+@keyframes chart-draw {
+  to { stroke-dashoffset: 0; }
+}
+
+@keyframes chart-fade {
+  to { opacity: 1; }
+}
+
+.chart-now line {
+  stroke: #2d3436;
+  stroke-width: 1;
+  stroke-dasharray: 3 4;
+  opacity: 0.45;
+}
+
+.chart-now text {
+  fill: #2d3436;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.chart-now circle {
+  fill: #fff;
+  stroke: #2d3436;
+  stroke-width: 2.5;
+}
+
+.chart-now .chart-now-pulse {
+  fill: rgba(45, 52, 54, 0.25);
+  stroke: none;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: chart-pulse 2s ease-out infinite;
+}
+
+@keyframes chart-pulse {
+  0% { transform: scale(1); opacity: 0.8; }
+  100% { transform: scale(3.2); opacity: 0; }
+}
+
+.chart-extreme text {
+  fill: #2d3436;
+  font-size: 12px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  paint-order: stroke;
+  stroke: rgba(255, 255, 255, 0.85);
+  stroke-width: 3px;
+}
+
+.chart-extreme-label {
+  font-size: 9px;
+  font-weight: 600;
+  fill: #8a959b;
+  text-transform: uppercase;
+}
+
+.chart-rain-bar {
+  fill: #3b82f6;
+  transition: fill 0.15s ease;
+}
+
+.chart-rain-bar.active {
+  fill: #1d4ed8;
+}
+
+.chart-icon {
+  font-size: 15px;
+}
+
+.chart-hour {
+  fill: #636e72;
+  font-size: 11px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.chart-hour.now {
+  fill: #2d3436;
+  font-weight: 700;
+}
+
+.chart-hover line {
+  stroke: rgba(45, 52, 54, 0.35);
+  stroke-width: 1;
+}
+
+.chart-hover circle {
+  stroke: #fff;
+  stroke-width: 3;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.25));
+}
+
+.chart-tooltip {
+  position: absolute;
+  transform: translate(-50%, calc(-100% - 16px));
+  pointer-events: none;
+  background: rgba(20, 26, 38, 0.92);
+  color: #fff;
+  padding: 8px 12px;
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+  backdrop-filter: blur(6px);
+  text-align: center;
+  white-space: nowrap;
+  z-index: 2;
+}
+
+.tooltip-hour {
+  font-size: 11px;
+  opacity: 0.75;
+}
+
+.tooltip-temp {
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+}
+
+.tooltip-rain {
+  font-size: 11px;
+  opacity: 0.85;
 }
 
 .chart-legend {
   display: flex;
-  gap: 20px;
-  margin-top: 12px;
+  flex-wrap: wrap;
+  gap: 18px;
+  margin-top: 10px;
   justify-content: center;
-  position: relative;
-  z-index: 1;
 }
 
 .legend-item {
@@ -33,29 +192,33 @@
   color: #636e72;
 }
 
-.legend-color {
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
+.legend-swatch {
+  display: inline-block;
+  width: 18px;
+  height: 10px;
+  border-radius: 3px;
 }
 
-.legend-color.current {
-  background: #e74c3c;
+.legend-swatch.line {
+  height: 4px;
+  background: linear-gradient(90deg, #4aa3ff, #38c9b4, #f7c948, #ff8a3d);
 }
 
-.legend-color.line {
-  background: #0984e3;
+.legend-swatch.rain {
+  width: 8px;
+  background: #3b82f6;
 }
 
-@media (max-width: 768px) {
-  .chart-canvas {
-    width: 100%;
-    height: 150px;
-    display: block;
-  }
-  
-  .chart-legend {
-    flex-direction: column;
-    gap: 8px;
+.legend-swatch.night {
+  background: rgba(36, 48, 94, 0.15);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chart-line,
+  .chart-area,
+  .chart-now .chart-now-pulse {
+    animation: none;
+    stroke-dashoffset: 0;
+    opacity: 1;
   }
 }

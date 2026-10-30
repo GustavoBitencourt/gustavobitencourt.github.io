@@ -1,135 +1,104 @@
 import React from 'react';
+import { getWeatherIcon, getWeatherDescription, tempColor } from './weatherUtils';
 import './WeatherForecast.css';
 
-const WeatherForecast = ({ data }) => {
+const DAYS = 14;
+
+// "2026-10-30" -> Date local (evita o deslocamento de fuso do parse UTC)
+const parseDay = (day) => new Date(`${day}T12:00:00`);
+
+const WeatherForecast = ({ data, today }) => {
   if (!data) return null;
 
-  const getWeatherIcon = (code) => {
-    const weatherIcons = {
-      0: '☀️',
-      1: '🌤️',
-      2: '⛅',
-      3: '☁️',
-      45: '🌫️',
-      48: '🌫️',
-      51: '🌦️',
-      53: '🌦️',
-      55: '🌧️',
-      61: '🌧️',
-      63: '🌧️',
-      65: '⛈️',
-      71: '🌨️',
-      73: '🌨️',
-      75: '❄️',
-      95: '⛈️',
-      96: '⛈️',
-      99: '⛈️'
-    };
-    
-    return weatherIcons[code] || '🌤️';
+  const todayKey = today || data.time.find((d) => parseDay(d) >= new Date(new Date().toDateString())) || data.time[0];
+  const start = Math.max(0, data.time.indexOf(todayKey));
+  const indexes = data.time.slice(start, start + DAYS).map((_, i) => start + i);
+
+  const mins = indexes.map((i) => data.temperature_2m_min[i]);
+  const maxs = indexes.map((i) => data.temperature_2m_max[i]);
+  const rangeMin = Math.min(...mins);
+  const rangeMax = Math.max(...maxs);
+  const span = Math.max(1, rangeMax - rangeMin);
+
+  const dayLabel = (day, offset) => {
+    if (offset === 0) return 'Hoje';
+    if (offset === 1) return 'Amanhã';
+    const label = parseDay(day).toLocaleDateString('pt-BR', { weekday: 'long' }).split('-')[0];
+    return label.charAt(0).toUpperCase() + label.slice(1);
   };
 
-  const getWeatherDescription = (code) => {
-    const descriptions = {
-      0: 'Céu limpo',
-      1: 'Principalmente limpo',
-      2: 'Parcialmente nublado',
-      3: 'Nublado',
-      45: 'Neblina',
-      48: 'Neblina com geada',
-      51: 'Garoa leve',
-      53: 'Garoa moderada',
-      55: 'Garoa intensa',
-      61: 'Chuva leve',
-      63: 'Chuva moderada',
-      65: 'Chuva intensa',
-      71: 'Neve leve',
-      73: 'Neve moderada',
-      75: 'Neve intensa',
-      95: 'Tempestade',
-      96: 'Tempestade com granizo leve',
-      99: 'Tempestade com granizo intenso'
-    };
-    return descriptions[code] || 'Condição desconhecida';
-  };
-
-  const isToday = (dateString) => {
-    const date = new Date(dateString);
-    const today = new Date();
-    return date.toDateString() === today.toDateString();
-  };
-
-  const formatDate = (dateString) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('pt-BR', {
-      weekday: 'short',
-      day: 'numeric',
-      month: 'short'
-    });
-  };
-
-  // Filtrar para pegar apenas do dia de hoje em diante
-  const getTodayIndex = () => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    
-    for (let i = 0; i < data.time.length; i++) {
-      const forecastDate = new Date(data.time[i]);
-      forecastDate.setHours(0, 0, 0, 0);
-      
-      if (forecastDate >= today) {
-        return i;
-      }
-    }
-    return 0;
-  };
-
-  const todayIndex = getTodayIndex();
-  const forecastData = data.time.slice(todayIndex, todayIndex + 14);
+  const shortDate = (day) => parseDay(day).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
 
   return (
     <div className="weather-forecast">
-      <h3>📅 Previsão para 14 dias</h3>
-      <div className="forecast-grid">
-        {forecastData.map((date, i) => {
-          const index = todayIndex !== -1 ? todayIndex + i : i;
+      <div className="wf-header">
+        <h3>Próximos {indexes.length} dias</h3>
+        <span className="wf-range">
+          Variação: {Math.round(rangeMin)}° a {Math.round(rangeMax)}°
+        </span>
+      </div>
+
+      <div className="wf-columns" aria-hidden="true">
+        <span>Dia</span>
+        <span>Condição</span>
+        <span className="wf-col-rain">Chuva</span>
+        <span className="wf-col-temp">Mín · Máx</span>
+        <span className="wf-col-wind">Vento</span>
+      </div>
+
+      <ul className="wf-list">
+        {indexes.map((i, offset) => {
+          const day = data.time[i];
+          const min = data.temperature_2m_min[i];
+          const max = data.temperature_2m_max[i];
+          const code = data.weather_code[i];
+          const chance = data.precipitation_probability_max?.[i];
+          const rainMm = data.precipitation_sum?.[i] ?? 0;
+          const snowMm = data.snowfall_sum?.[i] ?? 0;
+          const left = ((min - rangeMin) / span) * 100;
+          const width = Math.max(4, ((max - min) / span) * 100);
+
           return (
-            <div key={date} className={`forecast-item ${isToday(date) ? 'today' : ''}`}>
-              <div className="forecast-date">
-                {isToday(date) ? 'Hoje' : formatDate(date)}
+            <li key={day} className={`wf-row ${offset === 0 ? 'today' : ''}`} style={{ animationDelay: `${offset * 35}ms` }}>
+              <div className="wf-day">
+                <strong>{dayLabel(day, offset)}</strong>
+                <span>{shortDate(day)}</span>
               </div>
-            <div className="forecast-icon">
-              {getWeatherIcon(data.weather_code[index])}
-            </div>
-            <div className="forecast-description">
-              {getWeatherDescription(data.weather_code[index])}
-            </div>
-            <div className="forecast-temps">
-              <span className="temp-max">{Math.round(data.temperature_2m_max[index])}°</span>
-              <span className="temp-min">{Math.round(data.temperature_2m_min[index])}°</span>
-            </div>
-            <div className="forecast-details">
-              <div className="forecast-rain">
-                💧 {Math.round(data.precipitation_sum[index])}mm
+
+              <div className="wf-cond" title={getWeatherDescription(code)}>
+                <span className="wf-icon">{getWeatherIcon(code)}</span>
+                <span className="wf-desc">{getWeatherDescription(code)}</span>
               </div>
-              <div className="forecast-wind">
-                🌬️ {Math.round(data.wind_speed_10m_max[index])}km/h
+
+              <div className={`wf-rain ${chance >= 50 ? 'high' : ''}`}>
+                <span className="wf-rain-chance">💧 {chance ?? 0}%</span>
+                <span className="wf-rain-mm">
+                  {snowMm > 0 ? `❄️ ${snowMm.toFixed(1)} cm` : `${rainMm.toFixed(1)} mm`}
+                </span>
               </div>
-              {data.rain_sum && (
-                <div className="forecast-rain-detail">
-                  🌧️ {Math.round(data.rain_sum[index])}mm
+
+              <div className="wf-temps">
+                <span className="wf-min">{Math.round(min)}°</span>
+                <div className="wf-bar">
+                  <div
+                    className="wf-bar-fill"
+                    style={{
+                      left: `${Math.min(left, 100 - width)}%`,
+                      width: `${width}%`,
+                      background: `linear-gradient(90deg, ${tempColor(min)}, ${tempColor(max)})`
+                    }}
+                  />
                 </div>
-              )}
-              {data.snowfall_sum && data.snowfall_sum[index] > 0 && (
-                <div className="forecast-snow">
-                  ❄️ {Math.round(data.snowfall_sum[index])}mm
-                </div>
-              )}
-            </div>
-          </div>
+                <span className="wf-max">{Math.round(max)}°</span>
+              </div>
+
+              <div className="wf-wind">
+                <strong>{Math.round(data.wind_speed_10m_max[i])}</strong> km/h
+              </div>
+            </li>
           );
         })}
-      </div>
+      </ul>
     </div>
   );
 };
