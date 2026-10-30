@@ -1,20 +1,28 @@
 // Rede do Pong online via PeerJS (WebRTC P2P, servidor de sinalização público e gratuito).
 //
-// Não existe servidor próprio, então as salas usam IDs fixos e previsíveis:
-//   gbpong-v1-sala-1 ... gbpong-v1-sala-N
-// - Criar sala = registrar o primeiro ID livre (quem registra vira o anfitrião).
-// - Listar salas = tentar conectar em cada ID; o anfitrião responde quantos jogadores há.
-// - Entrar pela URL (#/pong?sala=3) = conectar no anfitrião daquele ID, ou virar anfitrião se estiver livre.
+// Cada sala tem um código aleatório de 4 caracteres (ex.: "ab3f"):
+//   gbpong-v2-sala-ab3f  -> peer do anfitrião, usado para entrar na sala (link #/pong?sala=ab3f)
+//
+// O servidor público não permite listar peers, então para a sala aparecer no lobby
+// o anfitrião também ocupa uma "vaga de anúncio" numerada:
+//   gbpong-v2-vaga-1 ... gbpong-v2-vaga-N -> responde com { código, jogadores, nome do anfitrião }
+// Se todas as vagas estiverem ocupadas, a sala continua funcionando pelo link, só não aparece na lista.
 import Peer from 'peerjs';
 
-export const MAX_ROOMS = 8;
-const ROOM_PREFIX = 'gbpong-v1-sala-';
+const PREFIX = 'gbpong-v2-';
+export const MAX_SLOTS = 12;
 const PROBE_TIMEOUT = 5000;
+const CODE_CHARS = 'abcdefghjkmnpqrstuvwxyz23456789'; // sem 0/o, 1/l/i para evitar confusão
+export const CODE_PATTERN = /^[a-z0-9]{4}$/;
 
-export const roomPeerId = (room) => `${ROOM_PREFIX}${room}`;
+export const roomPeerId = (code) => `${PREFIX}sala-${code}`;
+const slotPeerId = (slot) => `${PREFIX}vaga-${slot}`;
 
-const roomFromPeerError = (err) => {
-  const match = String(err?.message || '').match(new RegExp(`${ROOM_PREFIX}(\\d+)`));
+export const generateRoomCode = () =>
+  Array.from({ length: 4 }, () => CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)]).join('');
+
+const slotFromPeerError = (err) => {
+  const match = String(err?.message || '').match(new RegExp(`${PREFIX}vaga-(\\d+)`));
   return match ? Number(match[1]) : null;
 };
 
@@ -32,65 +40,76 @@ const openPeer = (id) =>
     peer.once('error', onError);
   });
 
-/** Registra o ID da sala. Rejeita com err.type === 'unavailable-id' se já houver anfitrião. */
-export const hostRoom = (room) => openPeer(roomPeerId(room));
+/** Registra a sala com o código informado. Rejeita com err.type === 'unavailable-id' se já existir. */
+export const hostRoom = (code) => openPeer(roomPeerId(code));
 
-/** Cria uma sala no primeiro número livre. */
-export const hostAnyRoom = async (busyRooms = []) => {
-  for (let room = 1; room <= MAX_ROOMS; room++) {
-    if (busyRooms.includes(room)) continue;
+/** Cria uma sala com código aleatório (tenta outro se, por acaso, já existir). */
+export const hostNewRoom = async () => {
+  for (let attempt = 0; attempt < 8; attempt++) {
+    const code = generateRoomCode();
     try {
-      const peer = await hostRoom(room);
-      return { peer, room };
+      const peer = await hostRoom(code);
+      return { peer, code };
     } catch (err) {
       if (err.type !== 'unavailable-id') throw err;
     }
   }
-  throw new Error('Todas as salas estão ocupadas no momento.');
+  throw new Error('Não foi possível criar a sala. Tente novamente.');
+};
+
+/** Ocupa a primeira vaga de anúncio livre. Retorna o peer ou null se todas estiverem ocupadas. */
+export const claimListingSlot = async () => {
+  for (let slot = 1; slot <= MAX_SLOTS; slot++) {
+    try {
+      return await openPeer(slotPeerId(slot));
+    } catch (err) {
+      if (err.type !== 'unavailable-id') return null;
+    }
+  }
+  return null;
 };
 
 export const openGuestPeer = () => openPeer(null);
 
 /**
- * Consulta todas as salas e devolve [{ room, players }] apenas das que existem.
+ * Consulta as vagas de anúncio e devolve [{ code, players, host }] das salas abertas.
  */
 export const listRooms = async () => {
   const peer = await openGuestPeer();
   const found = new Map();
-  const pending = new Set(Array.from({ length: MAX_ROOMS }, (_, i) => i + 1));
+  const pending = new Set(Array.from({ length: MAX_SLOTS }, (_, i) => i + 1));
 
   await new Promise((resolve) => {
-    const finish = () => {
-      if (pending.size === 0) resolve();
-    };
     const timer = setTimeout(resolve, PROBE_TIMEOUT);
+    const done = (slot) => {
+      pending.delete(slot);
+      if (pending.size === 0) {
+        clearTimeout(timer);
+        resolve();
+      }
+    };
 
     peer.on('error', (err) => {
       if (err.type === 'peer-unavailable') {
-        const room = roomFromPeerError(err);
-        if (room) {
-          pending.delete(room);
-          finish();
-        }
+        const slot = slotFromPeerError(err);
+        if (slot) done(slot);
       }
     });
 
-    for (let room = 1; room <= MAX_ROOMS; room++) {
-      const conn = peer.connect(roomPeerId(room), { metadata: { type: 'probe' }, serialization: 'json' });
+    for (let slot = 1; slot <= MAX_SLOTS; slot++) {
+      const conn = peer.connect(slotPeerId(slot), { metadata: { type: 'probe' }, serialization: 'json' });
       conn.on('data', (msg) => {
-        if (msg?.t === 'status') {
-          found.set(room, msg.players);
-          pending.delete(room);
+        if (msg?.t === 'status' && CODE_PATTERN.test(msg.code || '')) {
+          found.set(msg.code, { players: msg.players, host: msg.host || '' });
           conn.close();
-          if (pending.size === 0) {
-            clearTimeout(timer);
-            finish();
-          }
+          done(slot);
         }
       });
     }
   });
 
   peer.destroy();
-  return [...found.entries()].sort((a, b) => a[0] - b[0]).map(([room, players]) => ({ room, players }));
+  return [...found.entries()]
+    .map(([code, info]) => ({ code, ...info }))
+    .sort((a, b) => a.players - b.players || a.code.localeCompare(b.code));
 };

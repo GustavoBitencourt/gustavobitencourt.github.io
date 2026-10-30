@@ -529,3 +529,182 @@
     padding: 8px;
   }
 }
+
+/* ---------- Volume ---------- */
+.pong-header {
+  position: relative;
+  max-width: 800px;
+}
+
+.pong-volume {
+  position: absolute;
+  top: 0;
+  right: 0;
+  z-index: 5;
+}
+
+.pong-volume-btn {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 215, 0, 0.6);
+  background: rgba(255, 215, 0, 0.08);
+  font-size: 1.2rem;
+  cursor: pointer;
+  transition: background 0.2s ease, transform 0.2s ease;
+}
+
+.pong-volume-btn:hover {
+  background: rgba(255, 215, 0, 0.2);
+  transform: scale(1.05);
+}
+
+.pong-volume-pop {
+  position: absolute;
+  top: 52px;
+  right: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  background: #111;
+  border: 2px solid rgba(255, 215, 0, 0.6);
+  border-radius: 999px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  animation: pong-fade-in 0.15s ease-out;
+}
+
+.pong-volume-mute {
+  background: none;
+  border: none;
+  font-size: 1.1rem;
+  cursor: pointer;
+  padding: 0;
+}
+
+.pong-volume-pop input[type='range'] {
+  width: 140px;
+  accent-color: #ffd700;
+  cursor: pointer;
+}
+
+.pong-volume-value {
+  min-width: 38px;
+  font-size: 0.8rem;
+  color: #ffd700;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- Nomes ---------- */
+.pong-score-name {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pong-you {
+  font-style: normal;
+  font-size: 0.65rem;
+  font-weight: bold;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #111;
+  background: #ffd700;
+  border-radius: 999px;
+  padding: 1px 8px;
+  margin-bottom: 2px;
+}
+
+.pong-name-field {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+  max-width: 280px;
+  margin: 4px auto 10px;
+  text-align: left;
+}
+
+.pong-name-field span {
+  font-size: 0.75rem;
+  color: #aaa;
+}
+
+.pong-name-field input {
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid rgba(0, 255, 204, 0.5);
+  background: rgba(255, 255, 255, 0.06);
+  color: #fff;
+  font-family: "Fira Code", monospace;
+  font-size: 0.9rem;
+  outline: none;
+}
+
+.pong-name-field input:focus {
+  border-color: #00ffcc;
+  box-shadow: 0 0 0 3px rgba(0, 255, 204, 0.2);
+}
+
+.pong-room-name small {
+  color: #aaa;
+  font-weight: normal;
+}
+
+/* ---------- Aviso de gol ---------- */
+.pong-goal {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 12px 24px;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.75);
+  border: 2px solid #ffd700;
+  animation: pong-goal-in 0.25s ease-out;
+}
+
+.pong-goal strong {
+  font-size: clamp(1rem, 3vw, 1.6rem);
+  color: #ffd700;
+  text-shadow: 0 0 12px rgba(255, 215, 0, 0.6);
+}
+
+.pong-goal span {
+  font-size: 0.8rem;
+  color: #ccc;
+}
+
+.pong-goal-bar {
+  width: 100%;
+  height: 4px;
+  margin-top: 4px;
+  border-radius: 999px;
+  background: #ffd700;
+  transform-origin: left;
+  animation: pong-goal-timer 1s linear forwards;
+}
+
+@keyframes pong-goal-in {
+  from { transform: scale(1.4); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+@keyframes pong-goal-timer {
+  from { transform: scaleX(1); }
+  to { transform: scaleX(0); }
+}
+
+@media (max-width: 480px) {
+  .pong-volume-btn {
+    width: 38px;
+    height: 38px;
+    font-size: 1rem;
+  }
+
+  .pong-volume-pop input[type='range'] {
+    width: 110px;
+  }
+}

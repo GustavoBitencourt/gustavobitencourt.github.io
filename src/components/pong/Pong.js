@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { hostRoom, hostAnyRoom, openGuestPeer, listRooms, roomPeerId } from './pongNet';
+import { hostRoom, hostNewRoom, claimListingSlot, openGuestPeer, listRooms, roomPeerId, CODE_PATTERN } from './pongNet';
+import { playSound, unlockAudio, getVolume, setVolume } from './pongSound';
 import './Pong.css';
 
 const CANVAS_WIDTH = 800;
@@ -14,6 +15,11 @@ const MAX_BALL_SPEED = 15;
 const WIN_SCORE = 5;
 const JOIN_TIMEOUT = 12000;
 const HEARTBEAT_TIMEOUT = 6000;
+const SERVE_DELAY_FRAMES = 60; // 1 s de pausa após cada gol (loop a 60 FPS)
+const NAME_MAX = 16;
+const NAME_KEY = 'pong-player-name';
+
+const cleanName = (value) => String(value || '').replace(/\s+/g, ' ').trim().slice(0, NAME_MAX);
 
 const serveBall = (dir) => ({
   x: CANVAS_WIDTH / 2,
@@ -27,7 +33,10 @@ const createState = () => ({
   player2: { x: CANVAS_WIDTH - 30, y: CANVAS_HEIGHT / 2 - PADDLE_HEIGHT / 2 },
   ball: serveBall(Math.random() < 0.5 ? 1 : -1),
   player1Score: 0,
-  player2Score: 0
+  player2Score: 0,
+  serveFrames: 0,
+  lastScorer: 0,
+  fx: []
 });
 
 // Move o paddle por teclado (up/down) ou seguindo o dedo/mouse (target = Y no canvas)
@@ -58,6 +67,12 @@ const stepGame = (state, input1, input2) => {
   movePaddle(player1, input1);
   movePaddle(player2, input2);
 
+  // Pausa após gol: bola parada no centro, raquetes livres
+  if (state.serveFrames > 0) {
+    state.serveFrames -= 1;
+    return null;
+  }
+
   const prevX = ball.x;
   ball.x += ball.dx;
   ball.y += ball.dy;
@@ -65,6 +80,7 @@ const stepGame = (state, input1, input2) => {
   if (ball.y - r <= 0 || ball.y + r >= CANVAS_HEIGHT) {
     ball.dy = -ball.dy;
     ball.y = ball.y - r <= 0 ? r : CANVAS_HEIGHT - r;
+    state.fx.push('wall');
   }
 
   // Colisão considerando a trajetória (evita a bola "atravessar" em alta velocidade)
@@ -73,23 +89,27 @@ const stepGame = (state, input1, input2) => {
       ball.y >= player1.y - r && ball.y <= player1.y + PADDLE_HEIGHT + r) {
     ball.x = p1Face + r;
     bounceOffPaddle(ball, player1, 1);
+    state.fx.push('hit');
   }
   const p2Face = player2.x;
   if (ball.dx > 0 && prevX + r <= p2Face && ball.x + r >= p2Face &&
       ball.y >= player2.y - r && ball.y <= player2.y + PADDLE_HEIGHT + r) {
     ball.x = p2Face - r;
     bounceOffPaddle(ball, player2, -1);
+    state.fx.push('hit');
   }
 
-  if (ball.x + r < 0) {
-    state.player2Score += 1;
-    state.ball = serveBall(1);
-    return state.player2Score >= WIN_SCORE ? 'over' : 'point';
-  }
-  if (ball.x - r > CANVAS_WIDTH) {
-    state.player1Score += 1;
-    state.ball = serveBall(-1);
-    return state.player1Score >= WIN_SCORE ? 'over' : 'point';
+  const scored = ball.x + r < 0 ? 2 : ball.x - r > CANVAS_WIDTH ? 1 : 0;
+  if (scored) {
+    if (scored === 1) state.player1Score += 1;
+    else state.player2Score += 1;
+    state.lastScorer = scored;
+    // Saque vai para quem sofreu o gol
+    state.ball = serveBall(scored === 1 ? 1 : -1);
+    state.serveFrames = SERVE_DELAY_FRAMES;
+    state.fx.push('goal');
+    const total = scored === 1 ? state.player1Score : state.player2Score;
+    return total >= WIN_SCORE ? 'over' : 'point';
   }
   return null;
 };
@@ -136,6 +156,11 @@ const Pong = () => {
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState(null);
   const [copied, setCopied] = useState(false);
+  const [goalBanner, setGoalBanner] = useState(null); // { scorer, id }
+  const [myName, setMyName] = useState(() => cleanName(localStorage.getItem(NAME_KEY)));
+  const [remoteName, setRemoteName] = useState('');
+  const [volume, setVolumeState] = useState(getVolume);
+  const [showVolume, setShowVolume] = useState(false);
 
   const canvasRef = useRef(null);
   const frameRef = useRef(null);
@@ -145,6 +170,7 @@ const Pong = () => {
   const pointersRef = useRef(new Map());
   const remoteInputRef = useRef({ up: false, down: false, target: null });
   const peerRef = useRef(null);
+  const slotPeerRef = useRef(null); // vaga de anúncio no lobby (só anfitrião)
   const connRef = useRef(null);
   const timersRef = useRef([]);
   const leavingRef = useRef(false);
@@ -154,6 +180,11 @@ const Pong = () => {
   const screenRef = useRef(screen);
   const roleRef = useRef(role);
   const phaseRef = useRef(phase);
+  const myNameRef = useRef(myName);
+  const goalTimerRef = useRef(null);
+  const lastVolumeRef = useRef(getVolume() || 0.6);
+
+  myNameRef.current = myName;
 
   screenRef.current = screen;
   roleRef.current = role;
@@ -176,6 +207,51 @@ const Pong = () => {
   const setRoomInUrl = useCallback((value) => {
     setSearchParams(value ? { sala: String(value) } : {}, { replace: true });
   }, [setSearchParams]);
+
+  const showGoal = useCallback((scorer) => {
+    clearTimeout(goalTimerRef.current);
+    setGoalBanner({ scorer, id: Date.now() });
+    goalTimerRef.current = setTimeout(() => setGoalBanner(null), (SERVE_DELAY_FRAMES / 60) * 1000);
+  }, []);
+
+  // O navegador só libera áudio depois de uma interação
+  useEffect(() => {
+    const unlock = () => unlockAudio();
+    window.addEventListener('pointerdown', unlock);
+    window.addEventListener('keydown', unlock);
+    return () => {
+      window.removeEventListener('pointerdown', unlock);
+      window.removeEventListener('keydown', unlock);
+      clearTimeout(goalTimerRef.current);
+    };
+  }, []);
+
+  // Fechar a barra de volume ao clicar fora dela
+  useEffect(() => {
+    if (!showVolume) return undefined;
+    const close = (e) => {
+      if (!e.target.closest('.pong-volume')) setShowVolume(false);
+    };
+    document.addEventListener('pointerdown', close);
+    return () => document.removeEventListener('pointerdown', close);
+  }, [showVolume]);
+
+  const changeVolume = (value) => {
+    setVolume(value);
+    setVolumeState(value);
+    if (value > 0) lastVolumeRef.current = value;
+  };
+
+  const toggleMute = () => {
+    changeVolume(volume > 0 ? 0 : lastVolumeRef.current || 0.6);
+    if (volume === 0) playSound('hit');
+  };
+
+  const changeName = (value) => {
+    const name = value.slice(0, NAME_MAX);
+    setMyName(name);
+    localStorage.setItem(NAME_KEY, cleanName(name));
+  };
 
   // ---------- Entradas ----------
   const myInput = () => ({
@@ -255,12 +331,15 @@ const Pong = () => {
   const finishMatch = useCallback((winnerSide) => {
     const s = stateRef.current;
     setWinner(winnerSide);
+    setGoalBanner(null);
     updatePhase('over');
+    playSound('win');
     send({ t: 'phase', phase: 'over', winner: winnerSide, scores: [s.player1Score, s.player2Score] });
   }, [send, updatePhase]);
 
   const runCountdown = useCallback((n) => {
     setCountdown(n);
+    playSound(n === 0 ? 'go' : 'beep');
     if (n === 0) {
       updatePhase('playing');
       send({ t: 'phase', phase: 'playing' });
@@ -276,6 +355,7 @@ const Pong = () => {
     stateRef.current = createState();
     setScores([0, 0]);
     setWinner(null);
+    setGoalBanner(null);
     runCountdown(3);
   }, [runCountdown]);
 
@@ -288,23 +368,30 @@ const Pong = () => {
       const [in1, in2] = screen === 'local' ? localInputs() : [myInput(), remoteInputRef.current];
       const event = stepGame(s, in1, in2);
       if (event) setScores([s.player1Score, s.player2Score]);
+      if (event === 'point') showGoal(s.lastScorer);
+      const fx = s.fx;
+      s.fx = [];
+      fx.forEach(playSound);
 
       if (screen === 'online') {
-        send({
+        const msg = {
           t: 's',
           a: Math.round(s.player1.y),
           b: Math.round(s.player2.y),
           x: Math.round(s.ball.x * 10) / 10,
           y: Math.round(s.ball.y * 10) / 10,
           p: [s.player1Score, s.player2Score]
-        });
+        };
+        if (fx.length) msg.f = fx;
+        if (event === 'point') msg.g = s.lastScorer;
+        send(msg);
       }
       if (event === 'over') finishMatch(s.player1Score >= WIN_SCORE ? 1 : 2);
     }, 1000 / 60);
 
     return () => clearInterval(loop);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [phase, screen, role, send, finishMatch]);
+  }, [phase, screen, role, send, finishMatch, showGoal]);
 
   // ---------- Online: encerrar ----------
   const resetOnline = useCallback(() => {
@@ -320,6 +407,8 @@ const Pong = () => {
       connRef.current.close();
     }
     if (peerRef.current) peerRef.current.destroy();
+    if (slotPeerRef.current) slotPeerRef.current.destroy();
+    slotPeerRef.current = null;
     connRef.current = null;
     peerRef.current = null;
     remoteInputRef.current = { up: false, down: false, target: null };
@@ -327,6 +416,8 @@ const Pong = () => {
     stateRef.current = createState();
     setScores([0, 0]);
     setWinner(null);
+    setGoalBanner(null);
+    setRemoteName('');
     setRole(null);
     setRoom(null);
     setTimeout(() => {
@@ -346,6 +437,7 @@ const Pong = () => {
     const onPageHide = () => {
       sayBye();
       if (peerRef.current) peerRef.current.destroy();
+      if (slotPeerRef.current) slotPeerRef.current.destroy();
     };
     window.addEventListener('pagehide', onPageHide);
     return () => {
@@ -353,6 +445,7 @@ const Pong = () => {
       sayBye();
       clearTimers();
       if (peerRef.current) peerRef.current.destroy();
+      if (slotPeerRef.current) slotPeerRef.current.destroy();
     };
   }, []);
 
@@ -368,27 +461,48 @@ const Pong = () => {
   }, []);
 
   // ---------- Online: anfitrião ----------
-  const becomeHost = useCallback((peer, roomNumber) => {
+  const becomeHost = useCallback((peer, code) => {
     peerRef.current = peer;
     setRole('host');
-    setRoom(roomNumber);
+    setRoom(code);
     setScreen('online');
     updatePhase('waiting');
-    setRoomInUrl(roomNumber);
+    setRoomInUrl(code);
     stateRef.current = createState();
 
     peer.on('disconnected', () => {
       if (!leavingRef.current && !peer.destroyed) peer.reconnect();
     });
 
+    const answerProbe = (conn) => {
+      conn.on('open', () => {
+        conn.send({ t: 'status', code, players: connRef.current ? 2 : 1, host: cleanName(myNameRef.current) });
+        setTimeout(() => conn.close(), 1500);
+      });
+    };
+
+    // Anunciar a sala no lobby (se houver vaga livre)
+    claimListingSlot().then((slotPeer) => {
+      if (!slotPeer) return;
+      if (peerRef.current !== peer || peer.destroyed) {
+        slotPeer.destroy();
+        return;
+      }
+      slotPeerRef.current = slotPeer;
+      slotPeer.on('connection', (conn) => {
+        if (conn.metadata?.type === 'probe') answerProbe(conn);
+        else conn.close();
+      });
+      slotPeer.on('disconnected', () => {
+        if (!slotPeer.destroyed) slotPeer.reconnect();
+      });
+    });
+
     peer.on('connection', (conn) => {
       const type = conn.metadata?.type;
 
       if (type === 'probe') {
-        conn.on('open', () => {
-          conn.send({ t: 'status', players: connRef.current ? 2 : 1 });
-          setTimeout(() => conn.close(), 1500);
-        });
+        answerProbe(conn);
         return;
       }
 
@@ -401,6 +515,7 @@ const Pong = () => {
       }
 
       connRef.current = conn;
+      setRemoteName(cleanName(conn.metadata?.name));
       // Se a conexão P2P nunca abrir (rede bloqueada), liberar a vaga
       const pendingTimer = setTimeout(() => {
         if (!conn.open && connRef.current === conn) {
@@ -413,7 +528,7 @@ const Pong = () => {
         lastSeenRef.current = Date.now();
         remoteGoneRef.current = onGuestLeft;
         setNotice(null);
-        conn.send({ t: 'welcome', room: roomNumber });
+        conn.send({ t: 'welcome', room: code, name: cleanName(myNameRef.current) });
         startMatch();
       });
       conn.on('data', (msg) => {
@@ -434,6 +549,7 @@ const Pong = () => {
         setWinner(null);
         if (!leavingRef.current) {
           setNotice('O oponente saiu. Aguardando outro jogador...');
+          setRemoteName('');
           updatePhase('waiting');
         }
       };
@@ -446,9 +562,8 @@ const Pong = () => {
     setBusy(true);
     setNotice(null);
     try {
-      const occupied = rooms.map((r) => r.room);
-      const { peer, room: roomNumber } = await hostAnyRoom(occupied);
-      becomeHost(peer, roomNumber);
+      const { peer, code } = await hostNewRoom();
+      becomeHost(peer, code);
     } catch (err) {
       setNotice(err.message || 'Não foi possível criar a sala.');
     } finally {
@@ -456,10 +571,10 @@ const Pong = () => {
     }
   };
 
-  const claimRoom = useCallback(async (roomNumber) => {
+  const claimRoom = useCallback(async (code) => {
     try {
-      const peer = await hostRoom(roomNumber);
-      becomeHost(peer, roomNumber);
+      const peer = await hostRoom(code);
+      becomeHost(peer, code);
       return true;
     } catch (err) {
       return err.type === 'unavailable-id' ? false : Promise.reject(err);
@@ -467,14 +582,14 @@ const Pong = () => {
   }, [becomeHost]);
 
   // ---------- Online: convidado ----------
-  const joinRoom = useCallback(async (roomNumber, { claimIfEmpty = false } = {}) => {
+  const joinRoom = useCallback(async (code, { claimIfEmpty = false } = {}) => {
     resetOnline();
     setScreen('online');
     setRole('guest');
-    setRoom(roomNumber);
+    setRoom(code);
     setNotice(null);
     updatePhase('connecting');
-    setRoomInUrl(roomNumber);
+    setRoomInUrl(code);
 
     let peer;
     try {
@@ -486,7 +601,7 @@ const Pong = () => {
     }
     peerRef.current = peer;
 
-    const conn = peer.connect(roomPeerId(roomNumber), { metadata: { type: 'join' }, serialization: 'json' });
+    const conn = peer.connect(roomPeerId(code), { metadata: { type: 'join', name: cleanName(myNameRef.current) }, serialization: 'json' });
     connRef.current = conn;
     let opened = false;
 
@@ -506,12 +621,12 @@ const Pong = () => {
       // Sala vazia: quem entrou pelo link vira o anfitrião
       if (claimIfEmpty) {
         try {
-          if (await claimRoom(roomNumber)) return;
+          if (await claimRoom(code)) return;
         } catch {
           // segue para a mensagem abaixo
         }
       }
-      setNotice(`A sala ${roomNumber} não está mais aberta.`);
+      setNotice(`A sala ${code.toUpperCase()} não está mais aberta.`);
       setRole(null);
       updatePhase('closed');
     });
@@ -548,11 +663,14 @@ const Pong = () => {
           s.player2Score = msg.p[1];
           setScores([...msg.p]);
         }
+        if (msg.f) msg.f.forEach(playSound);
+        if (msg.g) showGoal(msg.g);
       } else if (msg.t === 'welcome') {
         stateRef.current = createState();
         setScores([0, 0]);
+        setRemoteName(cleanName(msg.name));
       } else if (msg.t === 'full') {
-        setNotice(`A sala ${roomNumber} já está cheia.`);
+        setNotice(`A sala ${code.toUpperCase()} já está cheia.`);
         updatePhase('closed');
       } else if (msg.t === 'phase') {
         if (msg.phase === 'countdown') {
@@ -560,19 +678,24 @@ const Pong = () => {
             stateRef.current = createState();
             setScores([0, 0]);
             setWinner(null);
+            setGoalBanner(null);
           }
           setCountdown(msg.count);
+          playSound('beep');
         }
+        if (msg.phase === 'playing') playSound('go');
         if (msg.phase === 'over') {
           setWinner(msg.winner);
           setScores(msg.scores);
+          setGoalBanner(null);
+          playSound('win');
         }
         updatePhase(msg.phase);
       }
     });
 
     conn.on('close', onHostLeft);
-  }, [claimRoom, resetOnline, setRoomInUrl, updatePhase]);
+  }, [claimRoom, resetOnline, setRoomInUrl, updatePhase, showGoal]);
 
   // ---------- Lobby ----------
   const refreshRooms = useCallback(async () => {
@@ -616,12 +739,12 @@ const Pong = () => {
   };
 
   // Entrar direto pelo link (#/pong?sala=3)
-  const urlRoom = Number(searchParams.get('sala'));
+  const urlRoom = (searchParams.get('sala') || '').trim().toLowerCase();
   const handledUrlRef = useRef(false);
   useEffect(() => {
     if (handledUrlRef.current) return;
     handledUrlRef.current = true;
-    if (urlRoom >= 1) joinRoom(urlRoom, { claimIfEmpty: true });
+    if (CODE_PATTERN.test(urlRoom)) joinRoom(urlRoom, { claimIfEmpty: true });
   }, [urlRoom, joinRoom]);
 
   const shareLink = room ? `${window.location.origin}${window.location.pathname}#/pong?sala=${room}` : '';
@@ -641,11 +764,30 @@ const Pong = () => {
   };
 
   // ---------- Textos ----------
+  const roomLabel = room ? room.toUpperCase() : '';
+  const mine = cleanName(myName);
   const names = screen === 'online'
-    ? (role === 'host' ? ['Você', 'Oponente'] : ['Oponente', 'Você'])
+    ? (role === 'host'
+      ? [mine || 'Jogador 1', remoteName || 'Jogador 2']
+      : [remoteName || 'Jogador 1', mine || 'Jogador 2'])
     : ['Jogador 1', 'Jogador 2'];
+  // Índice (0/1) do jogador desta tela no modo online
+  const myIndex = screen === 'online' && role ? (role === 'host' ? 0 : 1) : null;
   const winnerName = winner ? names[winner - 1] : '';
-  const youWon = screen === 'online' && winner && names[winner - 1] === 'Você';
+  const youWon = myIndex !== null && winner === myIndex + 1;
+
+  const nameField = (
+    <label className="pong-name-field">
+      <span>Seu nome (opcional)</span>
+      <input
+        type="text"
+        value={myName}
+        maxLength={NAME_MAX}
+        placeholder={role === 'guest' ? 'Jogador 2' : 'Jogador 1'}
+        onChange={(e) => changeName(e.target.value)}
+      />
+    </label>
+  );
 
   const renderOverlay = () => {
     if (screen === 'menu') {
@@ -665,17 +807,21 @@ const Pong = () => {
       return (
         <div className="pong-panel lobby">
           <h2>Salas online</h2>
+          {nameField}
           <div className="pong-room-list">
             {loadingRooms && rooms.length === 0 && <p className="pong-muted">Procurando salas...</p>}
             {!loadingRooms && rooms.length === 0 && <p className="pong-muted">Nenhuma sala aberta. Crie a primeira!</p>}
-            {rooms.map(({ room: number, players }) => (
-              <div key={number} className={`pong-room ${players >= 2 ? 'full' : ''}`}>
-                <span className="pong-room-name">Sala {number}</span>
+            {rooms.map(({ code, players, host }) => (
+              <div key={code} className={`pong-room ${players >= 2 ? 'full' : ''}`}>
+                <span className="pong-room-name">
+                  Sala {code.toUpperCase()}
+                  {host && <small> · {host}</small>}
+                </span>
                 <span className="pong-room-players">{players}/2 jogadores</span>
                 <button
                   className="pong-btn small"
                   disabled={players >= 2}
-                  onClick={() => joinRoom(number)}
+                  onClick={() => joinRoom(code)}
                 >
                   {players >= 2 ? 'Cheia' : 'Entrar'}
                 </button>
@@ -699,9 +845,10 @@ const Pong = () => {
     if (phase === 'waiting') {
       return (
         <div className="pong-panel">
-          <h2>Sala {room}</h2>
+          <h2>Sala {roomLabel}</h2>
           {notice && <p className="pong-notice">{notice}</p>}
           <p className="pong-waiting"><span className="pong-dot" /> Aguardando oponente (1/2)</p>
+          {nameField}
           <p className="pong-muted">Envie o link para alguém entrar direto na sala:</p>
           <div className="pong-share">
             <input readOnly value={shareLink} onFocus={(e) => e.target.select()} />
@@ -715,7 +862,7 @@ const Pong = () => {
     if (phase === 'connecting') {
       return (
         <div className="pong-panel">
-          <h2>Sala {room}</h2>
+          <h2>Sala {roomLabel}</h2>
           <p className="pong-waiting"><span className="pong-dot" /> Conectando...</p>
           <button className="pong-btn ghost" onClick={openLobby}>Cancelar</button>
         </div>
@@ -758,10 +905,23 @@ const Pong = () => {
       );
     }
 
+    if (phase === 'playing' && goalBanner) {
+      return (
+        <div className="pong-goal" key={goalBanner.id}>
+          <strong>⚽ Gol de {names[goalBanner.scorer - 1]}!</strong>
+          <span>Prepare-se...</span>
+          <div className="pong-goal-bar" />
+        </div>
+      );
+    }
+
     return null;
   };
 
   const overlay = renderOverlay();
+  // Contagem e aviso de gol ficam por cima do jogo sem bloquear os controles
+  const passiveOverlay = phase === 'countdown' || (phase === 'playing' && !!goalBanner);
+  const volumeIcon = volume === 0 ? '🔇' : volume < 0.4 ? '🔈' : volume < 0.75 ? '🔉' : '🔊';
   const isOnline = screen === 'online';
   const mySide = role === 'host' ? 'esquerda (ciano)' : 'direita (rosa)';
 
@@ -769,14 +929,44 @@ const Pong = () => {
     <div className="pong-container">
       <div className="pong-header">
         <h1>🎮 Pong</h1>
+        <div className="pong-volume">
+          <button
+            className="pong-volume-btn"
+            onClick={() => setShowVolume((v) => !v)}
+            aria-label="Volume do som"
+            aria-expanded={showVolume}
+            title="Volume do som"
+          >
+            {volumeIcon}
+          </button>
+          {showVolume && (
+            <div className="pong-volume-pop">
+              <button className="pong-volume-mute" onClick={toggleMute} aria-label={volume === 0 ? 'Ativar som' : 'Silenciar'}>
+                {volume === 0 ? '🔇' : '🔊'}
+              </button>
+              <input
+                type="range"
+                min="0"
+                max="100"
+                value={Math.round(volume * 100)}
+                onChange={(e) => changeVolume(Number(e.target.value) / 100)}
+                onPointerUp={() => playSound('hit')}
+                aria-label="Volume"
+              />
+              <span className="pong-volume-value">{Math.round(volume * 100)}%</span>
+            </div>
+          )}
+        </div>
         <div className="pong-score">
           <div className="player-score player1-score">
-            <span>{names[0]}</span>
+            <span className="pong-score-name">{names[0]}</span>
+            {myIndex === 0 && <em className="pong-you">você</em>}
             <strong>{scores[0]}</strong>
           </div>
           <div className="separator">vs</div>
           <div className="player-score player2-score">
-            <span>{names[1]}</span>
+            <span className="pong-score-name">{names[1]}</span>
+            {myIndex === 1 && <em className="pong-you">você</em>}
             <strong>{scores[1]}</strong>
           </div>
         </div>
@@ -784,7 +974,7 @@ const Pong = () => {
 
       <div className="pong-game-wrapper">
         <div
-          className={`pong-frame ${overlay && phase !== 'countdown' ? 'has-panel' : ''}`}
+          className={`pong-frame ${overlay && !passiveOverlay ? 'has-panel' : ''}`}
           ref={frameRef}
           onPointerDown={handlePointer}
           onPointerMove={handlePointer}
@@ -794,7 +984,7 @@ const Pong = () => {
           <canvas ref={canvasRef} width={CANVAS_WIDTH} height={CANVAS_HEIGHT} className="pong-canvas" />
           {overlay && (
             <div
-              className={`pong-overlay ${phase === 'countdown' ? 'transparent' : ''}`}
+              className={`pong-overlay ${passiveOverlay ? 'transparent' : ''}`}
               onPointerDown={(e) => e.stopPropagation()}
             >
               {overlay}
@@ -805,7 +995,7 @@ const Pong = () => {
 
       {isOnline && role && ['countdown', 'playing', 'over'].includes(phase) && (
         <div className="pong-online-bar">
-          <span>🌐 Sala {room} · Você controla a raquete da {mySide}</span>
+          <span>🌐 Sala {roomLabel} · Você controla a raquete da {mySide}</span>
           <button className="pong-btn small ghost" onClick={openLobby}>Sair da sala</button>
         </div>
       )}
