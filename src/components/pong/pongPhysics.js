@@ -18,7 +18,7 @@ export const SERVE_DELAY_FRAMES = 60; // 1 s de pausa após cada gol (loop a 60 
 const FPS = 60;
 const BALL_R = 4;
 const BALL_SPEED = 5;
-const SERVE_SPEED = 2.2; // saque lento até o primeiro toque numa raquete
+const SERVE_SPEED = 3; // saque mais lento que o normal até o primeiro toque numa raquete
 const MAX_FRAME_DISTANCE = 32; // limite de deslocamento por quadro (mesmo com a bola rápida)
 const SUBSTEP = 3; // tamanho máximo de cada subpasso de colisão (px)
 
@@ -189,15 +189,6 @@ const applyCurve = (s) => {
       b.dx = Math.sign(b.dx || 1) * Math.hypot(b.dx, b.dy) * 0.35;
     }
   });
-};
-
-// Batida na parede também acelera (como uma rebatida), exceto no saque lento
-const accelerate = (ball, max) => {
-  if (ball.slow) return;
-  const sp = Math.hypot(ball.dx, ball.dy);
-  const ns = Math.min(max, sp * 1.05);
-  ball.dx *= ns / sp;
-  ball.dy *= ns / sp;
 };
 
 // Deslocamento de um subpasso, considerando os poderes de velocidade
@@ -373,12 +364,10 @@ const moveClassicBall = (s, ball, r, mul) => {
     if (ball.y - r <= 0 && ball.dy < 0) {
       ball.y = r;
       ball.dy = -ball.dy;
-      accelerate(ball, CLASSIC_MAX_SPEED);
       s.fx.push('wall');
     } else if (ball.y + r >= CLASSIC_H && ball.dy > 0) {
       ball.y = CLASSIC_H - r;
       ball.dy = -ball.dy;
-      accelerate(ball, CLASSIC_MAX_SPEED);
       s.fx.push('wall');
     }
 
@@ -624,7 +613,6 @@ const moveHexBall = (s, ball, r, mul) => {
       const d = dot(ball.x - A.x, ball.y - A.y, n);
       if (d < r && dot(ball.dx, ball.dy, n) < 0) {
         reflectOn(ball, n, d, r);
-        accelerate(ball, HEX_MAX_SPEED);
         s.fx.push('wall');
       }
     }
