@@ -1,0 +1,52 @@
+{
+ "motor": [
+  {
+   "rpm": 900.0,
+   "carga": "motor_900_carga.wav",
+   "solto": "motor_900_solto.wav",
+   "rpm_solto": 900.0
+  },
+  {
+   "rpm": 1400.0,
+   "carga": "motor_1400_carga.wav",
+   "solto": "motor_1400_solto.wav",
+   "rpm_solto": 1400.0
+  },
+  {
+   "rpm": 2000.0,
+   "carga": "motor_2000_carga.wav",
+   "solto": "motor_2000_solto.wav",
+   "rpm_solto": 2000.0
+  },
+  {
+   "rpm": 2700.0,
+   "carga": "motor_2700_carga.wav",
+   "solto": "motor_2700_solto.wav",
+   "rpm_solto": 2700.0
+  },
+  {
+   "rpm": 3500.0,
+   "carga": "motor_3500_carga.wav",
+   "solto": "motor_3500_solto.wav",
+   "rpm_solto": 3500.0
+  },
+  {
+   "rpm": 4400.04,
+   "carga": "motor_4400_carga.wav",
+   "solto": "motor_4400_solto.wav",
+   "rpm_solto": 4400.04
+  },
+  {
+   "rpm": 5300.0,
+   "carga": "motor_5300_carga.wav",
+   "solto": "motor_5300_solto.wav",
+   "rpm_solto": 5300.0
+  },
+  {
+   "rpm": 6199.96,
+   "carga": "motor_6200_carga.wav",
+   "solto": "motor_6200_solto.wav",
+   "rpm_solto": 6199.96
+  }
+ ]
+}

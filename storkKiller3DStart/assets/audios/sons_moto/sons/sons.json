@@ -1,0 +1,54 @@
+{
+ "motor": [
+  {
+   "rpm": 1150.0,
+   "carga": "motor_1150_carga.wav",
+   "solto": "motor_1150_solto.wav"
+  },
+  {
+   "rpm": 1800.0,
+   "carga": "motor_1800_carga.wav",
+   "solto": "motor_1800_solto.wav"
+  },
+  {
+   "rpm": 2700.0,
+   "carga": "motor_2700_carga.wav",
+   "solto": "motor_2700_solto.wav"
+  },
+  {
+   "rpm": 3699.99,
+   "carga": "motor_3700_carga.wav",
+   "solto": "motor_3700_solto.wav"
+  },
+  {
+   "rpm": 4800.0,
+   "carga": "motor_4800_carga.wav",
+   "solto": "motor_4800_solto.wav"
+  },
+  {
+   "rpm": 6000.0,
+   "carga": "motor_6000_carga.wav",
+   "solto": "motor_6000_solto.wav"
+  },
+  {
+   "rpm": 7399.98,
+   "carga": "motor_7400_carga.wav",
+   "solto": "motor_7400_solto.wav"
+  },
+  {
+   "rpm": 9000.0,
+   "carga": "motor_9000_carga.wav",
+   "solto": "motor_9000_solto.wav"
+  }
+ ],
+ "queda": {
+  "terra": "queda_terra.wav",
+  "grama": "queda_grama.wav",
+  "agua": "queda_agua.wav"
+ },
+ "raspando": {
+  "terra": "raspando_terra.wav",
+  "grama": "raspando_grama.wav",
+  "agua": "raspando_agua.wav"
+ }
+}
