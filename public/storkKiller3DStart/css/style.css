@@ -1,0 +1,1013 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap');
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: 'Inter', sans-serif;
+  background: #0a0a12;
+  overflow: hidden;
+  width: 100vw;
+  height: 100vh;
+}
+
+#canvas-container {
+  position: fixed;
+  inset: 0;
+}
+
+canvas {
+  display: block;
+}
+
+/* ── HUD ── */
+#hud {
+  position: fixed;
+  bottom: 28px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 10px;
+  pointer-events: none;
+  z-index: 10;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+#hud.hidden {
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, 16px);
+}
+
+.hud-layer {
+  transition: opacity 0.4s ease, transform 0.4s ease;
+}
+
+.badge {
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border-radius: 40px;
+  padding: 8px 16px;
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 12px;
+  font-weight: 400;
+  letter-spacing: 0.02em;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+  transition: background 0.3s, border-color 0.3s, color 0.3s;
+}
+
+.badge-interactive {
+  cursor: pointer;
+  pointer-events: auto;
+  border-color: rgba(167, 139, 250, 0.35);
+  background: rgba(167, 139, 250, 0.12);
+  color: #d4bbff;
+}
+
+.badge-interactive:hover {
+  background: rgba(167, 139, 250, 0.25);
+  border-color: rgba(167, 139, 250, 0.6);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 14px rgba(167, 139, 250, 0.25);
+}
+
+/* Fly mode badge glows */
+#fly-badge {
+  transition: all 0.4s ease;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+#fly-badge.flying {
+  background: rgba(167, 139, 250, 0.18);
+  border-color: rgba(167, 139, 250, 0.5);
+  color: #d4bbff;
+  box-shadow: 0 0 16px rgba(167, 139, 250, 0.25);
+}
+
+/* Dance badge */
+#dance-badge {
+  transition: all 0.25s ease;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+#dance-badge.active {
+  background: rgba(236, 72, 153, 0.25);
+  border-color: rgba(236, 72, 153, 0.6);
+  color: #fbcfe8;
+  box-shadow: 0 0 16px rgba(236, 72, 153, 0.35);
+  transform: scale(1.05);
+}
+
+/* Peck badge */
+#peck-badge {
+  transition: all 0.25s ease;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+#peck-badge.active {
+  background: rgba(239, 68, 68, 0.25);
+  border-color: rgba(239, 68, 68, 0.6);
+  color: #fca5a5;
+  box-shadow: 0 0 16px rgba(239, 68, 68, 0.35);
+  transform: scale(1.05);
+}
+
+/* Attack badge */
+#attack-badge {
+  transition: all 0.25s ease;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+#attack-badge.active {
+  background: rgba(245, 158, 11, 0.25);
+  border-color: rgba(245, 158, 11, 0.6);
+  color: #fde68a;
+  box-shadow: 0 0 16px rgba(245, 158, 11, 0.35);
+  transform: scale(1.05);
+}
+
+/* Arm (pegar/soltar arma) badge */
+#arm-badge {
+  transition: all 0.25s ease;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+#arm-badge.active {
+  background: rgba(34, 197, 94, 0.25);
+  border-color: rgba(34, 197, 94, 0.6);
+  color: #86efac;
+  box-shadow: 0 0 16px rgba(34, 197, 94, 0.35);
+}
+
+/* Shoot badge */
+#shoot-badge {
+  transition: all 0.25s ease;
+  cursor: pointer;
+  pointer-events: auto;
+  user-select: none;
+}
+
+#shoot-badge.active {
+  background: rgba(249, 115, 22, 0.3);
+  border-color: rgba(249, 115, 22, 0.7);
+  color: #fdba74;
+  box-shadow: 0 0 16px rgba(249, 115, 22, 0.4);
+  transform: scale(1.05);
+}
+
+#shoot-badge.disabled,
+#sit-badge.disabled {
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+/* Sit badge */
+#sit-badge {
+  transition: all 0.25s ease;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+#sit-badge.active {
+  background: rgba(59, 130, 246, 0.25);
+  border-color: rgba(59, 130, 246, 0.6);
+  color: #93c5fd;
+  box-shadow: 0 0 16px rgba(59, 130, 246, 0.35);
+  transform: scale(1.05);
+}
+
+.keys {
+  display: flex;
+  gap: 4px;
+}
+
+.key {
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 5px;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.key.space {
+  width: 46px;
+  font-size: 9px;
+  letter-spacing: 0.04em;
+}
+
+/* ── Title ── */
+#title {
+  position: fixed;
+  top: 28px;
+  left: 36px;
+  z-index: 10;
+  pointer-events: none;
+}
+
+#title.hidden {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-16px);
+}
+
+#title h1 {
+  font-size: 22px;
+  font-weight: 600;
+  background: linear-gradient(135deg, #e0e0ff 0%, #a78bfa 60%, #60a5fa 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  letter-spacing: -0.02em;
+}
+
+#title p {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.35);
+  margin-top: 2px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+/* ── Fly status indicator (top-right) ── */
+#fly-status {
+  position: fixed;
+  top: 28px;
+  right: 36px;
+  z-index: 10;
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  opacity: 0;
+  transform: translateY(-8px);
+  transition: opacity 0.4s ease, transform 0.4s ease;
+}
+
+#fly-status.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+#fly-status .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #a78bfa;
+  box-shadow: 0 0 8px #a78bfa;
+  animation: pulse-dot 1.2s ease-in-out infinite;
+}
+
+@keyframes pulse-dot {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  50% {
+    opacity: 0.5;
+    transform: scale(0.7);
+  }
+}
+
+#fly-status span {
+  font-size: 12px;
+  font-weight: 600;
+  color: #c4aaff;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* ── Loading ── */
+#loading {
+  position: fixed;
+  inset: 0;
+  background: #0a0a12;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  transition: opacity 0.6s ease;
+}
+
+#loading.hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.loader-ring {
+  width: 56px;
+  height: 56px;
+  border: 3px solid rgba(167, 139, 250, 0.15);
+  border-top-color: #a78bfa;
+  border-radius: 50%;
+  animation: spin 0.9s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+#loading p {
+  margin-top: 18px;
+  color: rgba(255, 255, 255, 0.45);
+  font-size: 13px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+/* ── Tela inicial: selva ao fundo (cena 3D real), botão de jogar no centro, outros modos à direita ── */
+.char-select-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 150;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  /* transparente: o fundo é a fase 1 renderizada, com a cegonha voando */
+  background: none;
+  opacity: 1;
+  visibility: visible;
+  transition: opacity 0.45s cubic-bezier(0.16, 1, 0.3, 1), visibility 0.45s ease;
+}
+
+.char-select-overlay.hidden {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+/* Vinheta suave: escurece as bordas para o texto ler bem sobre a selva */
+.menu-vinheta {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse at 50% 50%, rgba(5, 8, 18, 0.05) 30%, rgba(5, 8, 18, 0.55) 100%),
+    linear-gradient(to left, rgba(5, 8, 18, 0.45), transparent 32%);
+}
+
+.menu-centro {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.game-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(10, 10, 20, 0.45);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  color: #fff;
+  text-transform: uppercase;
+  margin-bottom: 22px;
+}
+
+.game-tag-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #f97316;
+  box-shadow: 0 0 8px #f97316;
+}
+
+.play-killer-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 14px;
+  padding: 22px 52px;
+  border: none;
+  border-radius: 18px;
+  font-family: inherit;
+  font-size: 26px;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  color: #fff;
+  cursor: pointer;
+  background: linear-gradient(135deg, #dc2626 0%, #f97316 100%);
+  box-shadow: 0 10px 40px rgba(220, 38, 38, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.15) inset;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.play-killer-btn:hover {
+  transform: translateY(-3px) scale(1.03);
+  box-shadow: 0 14px 48px rgba(249, 115, 22, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.25) inset;
+}
+
+.play-killer-icon {
+  font-size: 18px;
+  display: inline-flex;
+  align-items: center;
+}
+
+.play-killer-sub {
+  margin-top: 16px;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.85);
+  letter-spacing: 0.04em;
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.7);
+}
+
+/* Outros modos: lista pequena e discreta na direita */
+.menu-lista {
+  position: absolute;
+  right: 28px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 210px;
+  padding: 12px;
+  border-radius: 14px;
+  background: rgba(10, 10, 20, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.menu-lista-titulo {
+  padding: 2px 8px 8px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.menu-lista-itens {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.menu-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px;
+  border: none;
+  border-radius: 9px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.75);
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.menu-item:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}
+
+.menu-item .char-avatar-icon {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  opacity: 0.8;
+}
+
+.menu-item-texto {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.menu-item-nome {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.menu-item-papel {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+@media (max-width: 760px) {
+  .play-killer-btn {
+    font-size: 20px;
+    padding: 18px 34px;
+  }
+  /* no celular a lista desce para baixo do botão */
+  .char-select-overlay {
+    flex-direction: column;
+    gap: 28px;
+  }
+  .menu-lista {
+    position: relative;
+    right: auto;
+    top: auto;
+    transform: none;
+  }
+}
+
+/* ═══════════════════════════════════════
+   MODO CEGONHA KILLER
+═══════════════════════════════════════ */
+body:not(.killer-mode) .killer-only,
+body.killer-mode .viewer-only {
+  display: none !important;
+}
+
+#crosshair {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  width: 22px;
+  height: 22px;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  z-index: 12;
+  background:
+    linear-gradient(#fff, #fff) center / 2px 8px no-repeat,
+    linear-gradient(#fff, #fff) center / 8px 2px no-repeat;
+  border: 2px solid rgba(255, 255, 255, 0.85);
+  border-radius: 50%;
+  filter: drop-shadow(0 0 2px rgba(0, 0, 0, 0.8));
+}
+
+#killer-hud {
+  position: fixed;
+  top: 24px;
+  right: 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 12;
+  pointer-events: none;
+}
+
+.killer-stat {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 8px 16px;
+  border-radius: 10px;
+  background: rgba(10, 10, 20, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  color: #fff;
+  font-size: 13px;
+}
+
+.killer-stat span:last-child {
+  font-size: 18px;
+  font-weight: 700;
+  color: #fca5a5;
+}
+
+.killer-stat-label {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+#lock-hint {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, 40px);
+  padding: 12px 20px;
+  border-radius: 12px;
+  background: rgba(10, 10, 20, 0.65);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  color: #fff;
+  font-size: 14px;
+  text-align: center;
+  pointer-events: none;
+  z-index: 12;
+}
+
+#lock-hint small {
+  display: block;
+  margin-top: 4px;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+body.pointer-locked #lock-hint {
+  display: none !important;
+}
+
+#damage-flash {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 11;
+  opacity: 0;
+  background: radial-gradient(ellipse at center, transparent 45%, rgba(200, 0, 0, 0.55) 100%);
+}
+
+#damage-flash.show {
+  animation: damage-flash 0.45s ease-out;
+}
+
+@keyframes damage-flash {
+  0% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+/* Mirando (botão direito): mira menor e vermelha, transição suave */
+#crosshair {
+  transition: width 0.15s ease, height 0.15s ease, border-color 0.15s ease;
+}
+
+body.aiming #crosshair {
+  width: 14px;
+  height: 14px;
+  border-color: rgba(255, 70, 70, 0.95);
+  background:
+    radial-gradient(circle, #ff4646 0 2px, transparent 2.5px) center / 100% 100% no-repeat;
+}
+
+/* Fases do modo Killer */
+#vulture-speed-stat {
+  display: none;
+}
+
+#vulture-speed-stat.visible {
+  display: flex;
+}
+
+#phase-banner {
+  position: fixed;
+  top: 22%;
+  left: 50%;
+  transform: translate(-50%, -12px);
+  z-index: 13;
+  padding: 18px 36px;
+  border-radius: 16px;
+  text-align: center;
+  pointer-events: none;
+  background: rgba(10, 10, 20, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  opacity: 0;
+  transition: opacity 0.5s ease, transform 0.5s ease;
+}
+
+#phase-banner.show {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+.phase-banner-title {
+  font-size: 34px;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  background: linear-gradient(135deg, #fde68a 0%, #f97316 60%, #dc2626 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.phase-banner-text {
+  margin-top: 6px;
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+/* Fase 3: dica do buggy (entrar / velocidade e comandos) */
+#car-hint {
+  position: fixed;
+  bottom: 96px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 12;
+  padding: 10px 18px;
+  border-radius: 12px;
+  background: rgba(10, 10, 20, 0.65);
+  border: 1px solid rgba(249, 115, 22, 0.5);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.25s ease;
+}
+
+#car-hint.visible {
+  opacity: 1;
+}
+
+/* A mira só aparece mirando (botão direito); sem mirar, a tela fica limpa */
+body:not(.aiming) #crosshair {
+  display: none;
+}
+
+/* Botão discreto do som ambiente da tela inicial (o clique também libera o áudio no navegador) */
+.menu-som {
+  position: absolute;
+  right: 28px;
+  bottom: 24px;
+  width: 36px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(10, 10, 20, 0.35);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  color: rgba(255, 255, 255, 0.7);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.menu-som:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+}
+
+.menu-som svg {
+  width: 17px;
+  height: 17px;
+}
+
+.menu-som .menu-som-off,
+.menu-som.mudo .menu-som-on {
+  display: none;
+}
+
+.menu-som.mudo .menu-som-off {
+  display: block;
+}
+
+/* Dentro das fases: botãozinho no canto (abaixo do título) que volta ao menu principal */
+.menu-voltar {
+  position: fixed;
+  top: 88px;
+  left: 36px;
+  z-index: 12;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(10, 10, 20, 0.45);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  color: rgba(255, 255, 255, 0.75);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.menu-voltar:hover {
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+}
+
+.menu-voltar svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* Pausa: botão abaixo do "Menu" e aviso no centro */
+.pause-btn {
+  top: 126px;
+}
+
+.pause-btn svg {
+  width: 12px;
+  height: 12px;
+}
+
+.pause-btn .pause-icone-continuar,
+.pause-btn.pausado .pause-icone-pausar {
+  display: none;
+}
+
+.pause-btn.pausado .pause-icone-continuar {
+  display: block;
+}
+
+.pause-btn.pausado {
+  color: #fff;
+  border-color: rgba(249, 115, 22, 0.6);
+  background: rgba(249, 115, 22, 0.25);
+}
+
+#pause-aviso {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 13;
+  padding: 18px 34px;
+  border-radius: 16px;
+  text-align: center;
+  pointer-events: none;
+  background: rgba(10, 10, 20, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  color: #fff;
+}
+
+body:not(.pausado) #pause-aviso {
+  display: none;
+}
+
+.pause-aviso-titulo {
+  font-size: 28px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+
+.pause-aviso-texto {
+  margin-top: 4px;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+/* pausado: some o aviso de "clique para controlar a câmera" e a mira */
+body.pausado #lock-hint,
+body.pausado #crosshair {
+  display: none !important;
+}
+
+/* ── Desafio da fase 3 (js/desafio.js): cronômetro, checkpoints, seta, contagem e troca de mapa ── */
+#desafio-hud {
+  position: fixed;
+  top: 18px;
+  left: 50%;
+  transform: translate(-50%, -8px);
+  z-index: 12;
+  min-width: 260px;
+  padding: 10px 22px 12px;
+  border-radius: 14px;
+  text-align: center;
+  pointer-events: none;
+  background: rgba(10, 10, 20, 0.6);
+  border: 1px solid rgba(249, 115, 22, 0.45);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  color: #fff;
+  opacity: 0;
+  transition: opacity 0.35s ease, transform 0.35s ease;
+}
+#desafio-hud.show {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+.desafio-tempo {
+  font-size: 34px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+  background: linear-gradient(135deg, #fde68a 0%, #f97316 70%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+#desafio-hud.chegou .desafio-tempo {
+  background: linear-gradient(135deg, #bbf7d0 0%, #22c55e 70%);
+  -webkit-background-clip: text;
+  background-clip: text;
+}
+.desafio-linha {
+  display: flex;
+  justify-content: center;
+  gap: 14px;
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.85);
+}
+.desafio-zona { color: #fde68a; }
+.desafio-sub { margin-top: 3px; font-size: 11px; font-weight: 500; color: rgba(255, 255, 255, 0.6); }
+.desafio-pen { color: #fca5a5; }
+
+#desafio-seta {
+  position: fixed;
+  top: 126px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 12;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+#desafio-seta.show { opacity: 1; }
+.desafio-seta-icone {
+  font-size: 34px;
+  line-height: 1;
+  color: #fbbf24;
+  text-shadow: 0 0 8px rgba(0, 0, 0, 0.8);
+  transition: transform 0.08s linear;
+}
+.desafio-seta-dist {
+  font-size: 12px;
+  font-weight: 700;
+  color: #fff;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+}
+
+#desafio-contagem {
+  position: fixed;
+  top: 56%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 14;
+  font-size: 120px;
+  font-weight: 900;
+  color: #fde68a;
+  text-shadow: 0 6px 24px rgba(0, 0, 0, 0.7), 0 0 2px #000;
+  pointer-events: none;
+  opacity: 0;
+}
+#desafio-contagem.pulso {
+  animation: desafio-pulso 0.9s ease-out forwards;
+}
+@keyframes desafio-pulso {
+  0% { opacity: 0; transform: translate(-50%, -50%) scale(1.8); }
+  20% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  80% { opacity: 1; }
+  100% { opacity: 0; transform: translate(-50%, -50%) scale(0.85); }
+}
+
+#desafio-fade {
+  position: fixed;
+  inset: 0;
+  z-index: 15;
+  background: #000;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.5s ease;
+}
+#desafio-fade.show { opacity: 1; }
+
+#desafio-aviso {
+  position: fixed;
+  top: 30%;
+  left: 50%;
+  transform: translate(-50%, 6px);
+  z-index: 13;
+  padding: 8px 18px;
+  border-radius: 10px;
+  background: rgba(10, 10, 20, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  color: #fff;
+  font-size: 16px;
+  font-weight: 700;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.25s ease, transform 0.25s ease;
+}
+#desafio-aviso.show { opacity: 1; transform: translate(-50%, 0); }
+#desafio-aviso.bom { border-color: rgba(34, 197, 94, 0.7); color: #bbf7d0; }
+#desafio-aviso.ruim { border-color: rgba(239, 68, 68, 0.7); color: #fecaca; }
+#desafio-aviso.zona { border-color: rgba(253, 230, 138, 0.7); color: #fde68a; font-size: 22px; }
+
+/* fora do jogo (menu, visualizador) nada do desafio aparece */
+body:not(.killer-mode) #desafio-hud,
+body:not(.killer-mode) #desafio-seta,
+body:not(.killer-mode) #desafio-contagem,
+body:not(.killer-mode) #desafio-aviso { display: none; }

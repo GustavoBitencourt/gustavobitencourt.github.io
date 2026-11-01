@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>StorKiller – Visualizador 3D</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+
+<body>
+
+  <!-- Loading 3D -->
+  <div id="loading">
+    <div class="loader-ring"></div>
+    <p>Carregando modelo…</p>
+  </div>
+
+  <!-- Tela inicial: a fase 1 (selva) é o fundo, com a cegonha voando (cena 3D) -->
+  <div id="char-select-screen" class="char-select-overlay">
+    <div class="menu-vinheta"></div>
+    <div class="menu-centro">
+      <div class="game-tag">
+        <span class="game-tag-dot"></span>
+        StorKiller 3D
+      </div>
+      <button id="play-killer-btn" class="play-killer-btn" type="button">
+        <span class="play-killer-icon">&#9654;</span>
+        <span>Jogar Cegonha Killer</span>
+      </button>
+      <p class="play-killer-sub">Terceira pessoa com AK-47 &middot; abata os urubus</p>
+    </div>
+    <button id="menu-som-btn" class="menu-som" type="button" title="Silenciar som ambiente">
+      <svg class="menu-som-on" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H2v6h4l5 4V5z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M19 5a10 10 0 0 1 0 14"/></svg>
+      <svg class="menu-som-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H2v6h4l5 4V5z"/><path d="m22 9-6 6"/><path d="m16 9 6 6"/></svg>
+    </button>
+    <aside class="menu-lista">
+      <div class="menu-lista-titulo">Outros modos</div>
+      <ul class="menu-lista-itens" id="menu-list">
+        <!-- Gerado em js/main.js -->
+      </ul>
+    </aside>
+  </div>
+
+  <div id="canvas-container"></div>
+
+  <!-- Title -->
+  <div id="title" class="hud-layer hidden">
+    <h1>StorKiller</h1>
+    <p id="char-active-subtitle">Visualizador 3D &middot; Cegonha</p>
+  </div>
+
+  <!-- Dentro das fases: volta para o menu principal -->
+  <button id="menu-voltar-btn" class="menu-voltar killer-only" type="button" title="Voltar ao menu principal">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M3 10.5 12 3l9 7.5"/>
+      <path d="M5 9.5V21h5v-6h4v6h5V9.5"/>
+    </svg>
+    <span>Menu</span>
+  </button>
+  <button id="pause-btn" class="menu-voltar pause-btn killer-only" type="button" title="Pausar (P)">
+    <svg class="pause-icone-pausar" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg>
+    <svg class="pause-icone-continuar" viewBox="0 0 24 24" fill="currentColor"><path d="M7 4.5v15a1 1 0 0 0 1.5.86l12-7.5a1 1 0 0 0 0-1.72l-12-7.5A1 1 0 0 0 7 4.5z"/></svg>
+    <span class="pause-rotulo">Pausar</span>
+  </button>
+  <div id="pause-aviso" class="killer-only">
+    <div class="pause-aviso-titulo">Pausado</div>
+    <div class="pause-aviso-texto">P ou o botão no canto para continuar</div>
+  </div>
+
+  <!-- Modo Cegonha Killer -->
+  <div id="crosshair" class="killer-only"></div>
+  <div id="damage-flash"></div>
+  <div id="phase-banner" class="killer-only">
+    <div class="phase-banner-title"></div>
+    <div class="phase-banner-text"></div>
+  </div>
+  <div id="killer-hud" class="killer-only">
+    <div class="killer-stat"><span class="killer-stat-label">Fase</span><span id="phase-count">1 · 0/10</span></div>
+    <div class="killer-stat"><span class="killer-stat-label">Urubus abatidos</span><span id="kill-count">0</span></div>
+    <div class="killer-stat"><span class="killer-stat-label">Ataques sofridos</span><span id="damage-count">0</span></div>
+    <div class="killer-stat" id="vulture-speed-stat"><span class="killer-stat-label">Velocidade dos urubus</span><span id="vulture-speed">×1.00</span></div>
+  </div>
+  <div id="car-hint" class="killer-only"></div>
+  <div id="lock-hint" class="killer-only">
+    Clique na tela para controlar a câmera com o mouse
+    <small>Botão esquerdo atira &middot; Botão direito mira &middot; Esc solta o mouse</small>
+  </div>
+
+  <!-- Fly status indicator -->
+  <div id="fly-status" class="hud-layer">
+    <div class="dot"></div>
+    <span>Modo Voo</span>
+  </div>
+
+  <!-- HUD -->
+  <div id="hud" class="hud-layer hidden">
+    <div class="badge badge-interactive" id="change-char-badge" title="Trocar Personagem">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+        stroke-linecap="round" stroke-linejoin="round">
+        <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+        <circle cx="9" cy="7" r="4" />
+        <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+        <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+      </svg>
+      &nbsp;Trocar Personagem
+    </div>
+    <div class="badge">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+        stroke-linecap="round" stroke-linejoin="round">
+        <rect x="5" y="2" width="14" height="20" rx="7" />
+        <line x1="12" y1="2" x2="12" y2="10" />
+      </svg>
+      <span class="viewer-only">Arrastar orbitar &nbsp;&middot;&nbsp; Scroll zoom</span>
+      <span class="killer-only">Mouse olha em volta &nbsp;&middot;&nbsp; Direito mira &nbsp;&middot;&nbsp; Esquerdo atira (sem arma: bica)</span>
+    </div>
+    <div class="badge">
+      <div class="keys">
+        <div class="key">&#8592;</div>
+        <div class="key">&#8594;</div>
+        <div class="key">&#8593;</div>
+        <div class="key">&#8595;</div>
+      </div>
+      &nbsp;Mover
+    </div>
+    <div class="badge" id="fly-badge">
+      <div class="keys">
+        <div class="key space">SPACE</div>
+      </div>
+      &nbsp;Voar / Pousar
+    </div>
+    <div class="badge badge-interactive" id="peck-badge" title="Bicar sem a arma: no chão bica para a frente, no voo dá uma investida (B ou clique esquerdo)">
+      <div class="keys">
+        <div class="key">B</div>
+      </div>
+      &nbsp;Bicar
+    </div>
+    <div class="badge badge-interactive" id="attack-badge" title="Ataque Aéreo / Bote em Voo">
+      <div class="keys">
+        <div class="key">Q</div>
+      </div>
+      &nbsp;Ataque
+    </div>
+    <div class="badge badge-interactive" id="arm-badge" title="Pegar / Soltar a AK-47">
+      <div class="keys">
+        <div class="key">G</div>
+      </div>
+      &nbsp;<span class="badge-label">Pegar Arma</span>
+    </div>
+    <div class="badge badge-interactive" id="shoot-badge" title="Atirar (segure)">
+      <div class="keys">
+        <div class="key">R</div>
+      </div>
+      &nbsp;Atirar
+    </div>
+    <div class="badge badge-interactive" id="sit-badge" title="Sentar / Levantar (no chão)">
+      <div class="keys">
+        <div class="key">X</div>
+      </div>
+      &nbsp;<span class="badge-label">Sentar</span>
+    </div>
+    <div class="badge" id="dance-badge">
+      <div class="keys">
+        <div class="key">C</div>
+      </div>
+      &nbsp;Dançar
+    </div>
+    <div class="badge viewer-only">
+      2&times; clique &rarr; reset
+    </div>
+  </div>
+
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.166.1/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.166.1/examples/jsm/"
+    }
+  }
+  </script>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+
+</html>

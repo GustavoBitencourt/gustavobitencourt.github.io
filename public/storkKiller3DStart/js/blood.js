@@ -1,12 +1,11 @@
 import * as THREE from 'three';
 
-/* ═══════════════════════════════════════════════════════════════════════
+/* ═══════════════════════════════════════
    SANGUE (gosma vermelha)
    Gotas saem do ponto do impacto, caem com gravidade e viram
    manchas irregulares no chão, que somem depois de um tempo.
-═══════════════════════════════════════════════════════════════════════ */
+═══════════════════════════════════════ */
 const GRAVITY = 9.8;
-const GROUND_Y = 0;
 const MAX_DROPS = 260;
 const MAX_SPLATS = 160;
 const SPLAT_LIFE = 14;      // s até a mancha começar a sumir
@@ -26,7 +25,8 @@ function makeSplatGeometry(segments = 22) {
   return geo.rotateX(-Math.PI / 2);
 }
 
-export function createBloodSystem(scene) {
+// groundAt(x, z) → altura do chão (terreno da selva); sem mapa, chão plano em y = 0
+export function createBloodSystem(scene, { groundAt = () => 0 } = {}) {
   const dropGeo = new THREE.SphereGeometry(1, 8, 6);
   const dropMat = new THREE.MeshStandardMaterial({
     color: 0x8a0010, roughness: 0.2, metalness: 0.1, emissive: 0x2a0000,
@@ -45,10 +45,11 @@ export function createBloodSystem(scene) {
   const _dir = new THREE.Vector3();
 
   function addSplat(x, z, size, growTime = 0.12, life = SPLAT_LIFE) {
+    const groundY = groundAt(x, z);
     if (splats.length >= MAX_SPLATS) removeSplat(0);
     const mesh = new THREE.Mesh(splatGeos[Math.floor(Math.random() * splatGeos.length)], splatMat);
     // Pequena variação de altura evita z-fighting entre manchas sobrepostas
-    mesh.position.set(x, GROUND_Y + 0.006 + Math.random() * 0.004, z);
+    mesh.position.set(x, groundY + 0.006 + Math.random() * 0.004, z);
     mesh.rotation.y = Math.random() * Math.PI * 2;
     mesh.scale.setScalar(0.001);
     mesh.receiveShadow = true;
@@ -100,7 +101,7 @@ export function createBloodSystem(scene) {
       if (speed > 1e-4) d.mesh.quaternion.setFromUnitVectors(_up, _dir.copy(d.vel).divideScalar(speed));
       d.mesh.scale.set(d.r, d.r * (1 + speed * 0.18), d.r);
 
-      if (d.mesh.position.y <= GROUND_Y) {
+      if (d.mesh.position.y <= groundAt(d.mesh.position.x, d.mesh.position.z)) {
         addSplat(d.mesh.position.x, d.mesh.position.z, d.r * rand(2.5, 5));
         scene.remove(d.mesh);
         drops.splice(i, 1);
