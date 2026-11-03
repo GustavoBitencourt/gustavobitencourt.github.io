@@ -779,7 +779,7 @@ const Pong = () => {
         onHostLeft();
       } else if (msg.t === 's') {
         const s = stateRef.current;
-        if ((s.mode || 2) !== (msg.q ? 3 : 2)) return;
+        if ((s.mode || 2) !== (msg.q ? msg.q.length : 2)) return;
         if (applyPacked(s, msg)) setScores([...s.scores]);
         syncEffects(s);
         if (msg.f) msg.f.forEach(playSound);
