@@ -14,7 +14,11 @@ import {
   drawGame,
   packState,
   applyPacked,
-  hexTouchToTarget,
+  polyTouchToTarget,
+  botInput,
+  createBotBrain,
+  PLAYER_OPTIONS,
+  FIELD_NAMES,
   effectChips,
   POWERS
 } from './pongPhysics';
@@ -24,7 +28,6 @@ const JOIN_TIMEOUT = 12000;
 const HEARTBEAT_TIMEOUT = 6000;
 const NAME_MAX = 16;
 const NAME_KEY = 'pong-player-name';
-const PLAYER_OPTIONS = [2, 3];
 
 const cleanName = (value) => String(value || '').replace(/\s+/g, ' ').trim().slice(0, NAME_MAX);
 const emptyInput = () => ({ up: false, down: false, left: false, right: false, target: null });
@@ -60,6 +63,7 @@ const Pong = () => {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [pseudoFull, setPseudoFull] = useState(false);
   const [setup, setSetup] = useState(null); // modal: { kind: online|local, players, win }
+  const [localKind, setLocalKind] = useState('coop'); // coop (2 no teclado) | solo (contra bots)
   const [powersOn, setPowersOn] = useState(true); // partida com ou sem balões de poder
   const [effects, setEffects] = useState([]); // poderes ativos (chips)
   const [powerToast, setPowerToast] = useState(null); // { type, owner, id }
@@ -88,6 +92,8 @@ const Pong = () => {
   const myNameRef = useRef(myName);
   const winScoreRef = useRef(winScore);
   const powersRef = useRef(powersOn);
+  const localKindRef = useRef('coop');
+  const botBrainsRef = useRef([]);
   const readyRef = useRef([false, false]);
   const labelsRef = useRef([]);
   const goalTimerRef = useRef(null);
@@ -129,9 +135,9 @@ const Pong = () => {
     setSearchParams(value ? { sala: String(value) } : {}, { replace: true });
   }, [setSearchParams]);
 
-  const showGoal = useCallback((kind, who) => {
+  const showGoal = useCallback((kind, who, penalty = false) => {
     clearTimeout(goalTimerRef.current);
-    setGoalBanner({ kind, who, id: Date.now() });
+    setGoalBanner({ kind, who, penalty, id: Date.now() });
     goalTimerRef.current = setTimeout(() => setGoalBanner(null), (SERVE_DELAY_FRAMES / 60) * 1000);
   }, []);
 
@@ -315,10 +321,10 @@ const Pong = () => {
     const y = Math.max(0, Math.min(h, (e.clientY - rect.top - (rect.height - h * scale) / 2) / scale));
     let side = pointersRef.current.get(e.pointerId);
     if (!side) {
-      side = screenRef.current === 'local' ? (x < w / 2 ? 'left' : 'right') : 'any';
+      side = screenRef.current === 'local' && localKindRef.current === 'coop' ? (x < w / 2 ? 'left' : 'right') : 'any';
       pointersRef.current.set(e.pointerId, side);
     }
-    touchRef.current[side] = modeRef.current === 3 ? hexTouchToTarget(x) : y;
+    touchRef.current[side] = modeRef.current >= 3 ? polyTouchToTarget(x, modeRef.current) : y;
   };
 
   const releasePointer = (e) => {
@@ -398,18 +404,21 @@ const Pong = () => {
       const s = stateRef.current;
       let inputs;
       if (screen === 'local') {
-        inputs = localInputs();
+        // Coop: 2 jogadores no mesmo teclado. Sozinho: você + bots
+        inputs = localKindRef.current === 'coop'
+          ? localInputs()
+          : [myInput(), ...Array.from({ length: s.mode - 1 }, (_, k) => botInput(s, k + 1, botBrainsRef.current[k + 1]))];
       } else {
         inputs = [myInput()];
         for (let i = 1; i < s.mode; i++) inputs.push(guestsRef.current.get(i)?.input || emptyInput());
       }
 
       const event = stepGame(s, inputs);
-      if (event && event.type !== 'nopoint') setScores([...s.scores]);
+      if (event) setScores([...s.scores]);
       let banner = null;
       if (event?.type === 'point') banner = { k: 'goal', w: event.scorer };
-      if (event?.type === 'nopoint') banner = { k: event.reason, w: event.conceded };
-      if (banner) showGoal(banner.k, banner.w);
+      if (event?.type === 'nopoint') banner = { k: event.reason, w: event.conceded, p: !!event.penalty };
+      if (banner) showGoal(banner.k, banner.w, banner.p);
 
       const fx = s.fx;
       s.fx = [];
@@ -775,7 +784,7 @@ const Pong = () => {
         syncEffects(s);
         if (msg.f) msg.f.forEach(playSound);
         if (msg.pw) msg.pw.forEach(showPower);
-        if (msg.g) showGoal(msg.g.k, msg.g.w);
+        if (msg.g) showGoal(msg.g.k, msg.g.w, msg.g.p);
       } else if (msg.t === 'welcome') {
         const players = PLAYER_OPTIONS.includes(msg.mode) ? msg.mode : 2;
         const win = WIN_OPTIONS.includes(msg.win) ? msg.win : DEFAULT_WIN;
@@ -866,14 +875,21 @@ const Pong = () => {
     updatePhase('idle');
   };
 
-  const startLocal = (win, powers = true) => {
+  const startLocal = ({ win, powers = true, local = 'coop', players = 2 }) => {
+    resetOnline();
+    const n = local === 'coop' ? 2 : players;
     powersRef.current = powers;
     setPowersOn(powers);
-    resetOnline();
+    localKindRef.current = local;
+    setLocalKind(local);
+    botBrainsRef.current = Array.from({ length: n }, () => createBotBrain());
     setSetup(null);
     winScoreRef.current = win;
     setWinScore(win);
-    applyMode(2, win);
+    applyMode(n, win);
+    // Sozinho: você é o jogador 0 (seu gol fica embaixo / raquete da esquerda)
+    setMyIndex(local === 'solo' ? 0 : null);
+    myIndexRef.current = local === 'solo' ? 0 : null;
     setScreen('local');
     startMatch();
   };
@@ -910,13 +926,15 @@ const Pong = () => {
   // ---------- Textos ----------
   const roomLabel = room ? room.toUpperCase() : '';
   const isOnline = screen === 'online';
+  const solo = screen === 'local' && localKind === 'solo';
   const names = Array.from({ length: mode }, (_, i) => {
+    if (solo) return i === 0 ? (cleanName(myName) || 'Você') : `Bot ${i}`;
     if (!isOnline) return `Jogador ${i + 1}`;
     return (i === myIndex ? cleanName(myName) : playerNames[i]) || `Jogador ${i + 1}`;
   });
   labelsRef.current = names;
   const winnerName = winner !== null ? names[winner] : '';
-  const youWon = isOnline && winner !== null && winner === myIndex;
+  const youWon = (isOnline || solo) && winner !== null && winner === myIndex;
   const meReady = myIndex !== null && !!ready[myIndex];
   const readyCount = ready.filter(Boolean).length;
   const othersReady = ready.some((v, i) => v && i !== myIndex);
@@ -941,7 +959,7 @@ const Pong = () => {
           <h2>Pong</h2>
           <p>Jogue no mesmo teclado ou online com 2 ou 3 jogadores</p>
           <div className="pong-actions">
-            <button className="pong-btn primary" onClick={() => setSetup({ kind: 'local', players: 2, win: winScore, powers: powersOn })}>
+            <button className="pong-btn primary" onClick={() => setSetup({ kind: 'local', local: localKind, players: localKind === 'solo' ? mode : 2, win: winScore, powers: powersOn })}>
               🎮 Jogar local
             </button>
             <button className="pong-btn secondary" onClick={openLobby}>🌐 Jogar online</button>
@@ -1046,7 +1064,7 @@ const Pong = () => {
       const othersName = names.filter((_, i) => i !== myIndex && ready[i]).join(' e ');
       return (
         <div className="pong-panel">
-          <h2>{isOnline ? (youWon ? 'Você venceu! 🏆' : `${winnerName} venceu!`) : `${winnerName} venceu! 🏆`}</h2>
+          <h2>{isOnline || solo ? (youWon ? 'Você venceu! 🏆' : `${winnerName} venceu!`) : `${winnerName} venceu! 🏆`}</h2>
           <p>{names.map((name, i) => `${name}: ${scores[i] ?? 0}`).join(' | ')}</p>
           {isOnline && (meReady || othersReady) && (
             <p className="pong-waiting">
@@ -1073,10 +1091,15 @@ const Pong = () => {
         : goalBanner.kind === 'own'
           ? `🙈 Gol contra de ${who}!`
           : '🚫 Ninguém tocou na bola';
+      const subtitle = goalBanner.kind === 'goal'
+        ? 'Prepare-se...'
+        : goalBanner.kind === 'own'
+          ? (goalBanner.penalty ? '-1 ponto. Prepare-se...' : 'Sem pontos para perder. Prepare-se...')
+          : 'Não vale ponto. Prepare-se...';
       return (
         <div className="pong-goal" key={goalBanner.id}>
           <strong>{title}</strong>
-          <span>{goalBanner.kind === 'goal' ? 'Prepare-se...' : 'Não vale ponto. Prepare-se...'}</span>
+          <span>{subtitle}</span>
           <div className="pong-goal-bar" />
         </div>
       );
@@ -1090,6 +1113,8 @@ const Pong = () => {
     if (type === 'grow') return `Raquete gigante para ${who}!`;
     if (type === 'invert') return `Controles invertidos para os adversários de ${who}!`;
     if (type === 'shield') return `Escudo no gol de ${who}!`;
+    if (type === 'freeze') return `Raquetes congeladas para os adversários de ${who}!`;
+    if (type === 'shrink') return `Raquetes encolhidas para os adversários de ${who}!`;
     return POWERS[type].label;
   };
 
@@ -1100,7 +1125,7 @@ const Pong = () => {
   const { w: canvasW, h: canvasH } = canvasSize(mode);
   const full = isFullscreen || pseudoFull;
   const myColor = myIndex !== null ? COLOR_NAMES[myIndex] : '';
-  const mySide = mode === 3 ? `${myColor} (seu gol fica embaixo)` : myIndex === 0 ? 'esquerda (ciano)' : 'direita (rosa)';
+  const mySide = mode >= 3 ? `${myColor} (seu gol fica embaixo)` : myIndex === 0 ? 'esquerda (ciano)' : 'direita (rosa)';
 
   return (
     <div className="pong-container">
@@ -1134,13 +1159,13 @@ const Pong = () => {
             </div>
           )}
         </div>
-        <div className={`pong-score players-${mode}`}>
+        <div className={`pong-score players-${mode} ${mode >= 3 ? 'players-poly' : ''}`}>
           {names.map((name, i) => (
             <React.Fragment key={i}>
               {i > 0 && <div className="separator">vs</div>}
               <div className="player-score" style={{ borderColor: COLORS[i], background: `${COLORS[i]}1a` }}>
                 <span className="pong-score-name">{name}</span>
-                {myIndex === i && isOnline && <em className="pong-you">você</em>}
+                {myIndex === i && (isOnline || solo) && <em className="pong-you">você</em>}
                 <strong style={{ color: COLORS[i] }}>{scores[i] ?? 0}</strong>
               </div>
             </React.Fragment>
@@ -1150,7 +1175,7 @@ const Pong = () => {
 
       <div className="pong-game-wrapper">
         <div
-          className={`pong-frame mode-${mode} ${overlay && !passiveOverlay ? 'has-panel' : ''} ${full ? 'is-full' : ''} ${pseudoFull ? 'pseudo-full' : ''}`}
+          className={`pong-frame mode-${mode} ${mode >= 3 ? 'poly' : ''} ${overlay && !passiveOverlay ? 'has-panel' : ''} ${full ? 'is-full' : ''} ${pseudoFull ? 'pseudo-full' : ''}`}
           ref={frameRef}
           onPointerDown={handlePointer}
           onPointerMove={handlePointer}
@@ -1204,17 +1229,17 @@ const Pong = () => {
 
       {isOnline && role && ['countdown', 'playing', 'over'].includes(phase) && (
         <div className="pong-online-bar">
-          <span>🌐 Sala {roomLabel} · Você controla a raquete {mode === 3 ? '' : 'da '}{mySide}</span>
+          <span>🌐 Sala {roomLabel} · Você controla a raquete {mode >= 3 ? '' : 'da '}{mySide}</span>
           <button className="pong-btn small ghost" onClick={openLobby}>Sair da sala</button>
         </div>
       )}
 
-      {isOnline ? (
+      {isOnline || solo ? (
         <div className="pong-instructions">
           <div className="instruction-column" style={{ borderColor: myIndex !== null ? COLORS[myIndex] : undefined }}>
             <h3 style={{ color: myIndex !== null ? COLORS[myIndex] : undefined }}>🎮 Seus controles</h3>
             <ul>
-              {mode === 3 ? (
+              {mode >= 3 ? (
                 <>
                   <li><strong>A / ←</strong> - Mover para a esquerda</li>
                   <li><strong>D / →</strong> - Mover para a direita</li>
@@ -1258,8 +1283,9 @@ const Pong = () => {
           <li>A bola sai devagar após cada gol e acelera a cada rebatida</li>
           <li>Primeiro a chegar em {winScore} gols vence</li>
           <li>Online: crie uma sala e envie o link, ou entre em uma sala aberta</li>
-          <li>3 jogadores: o gol é de quem tocou por último na bola (a bola fica da cor dele). Gol contra não vale</li>
-          <li>🎈 Com poderes ligados, a cada 2 rebatidas surge um balão. Acerte a bola nele: 🔵 gigante, ⚡ rápida, 🐢 lenta, ⚽ mais uma bola, 🌀 efeito, 👻 fantasma, 🌪️ desvio maluco, 📏 raquete gigante, 🔄 inverte os adversários ou 🛡️ escudo no gol</li>
+          <li>3 a 6 jogadores: o gol é de quem tocou por último na bola (a bola fica da cor dele). Gol contra tira 1 ponto de quem fez (sem ficar negativo); bola que ninguém tocou não muda nada</li>
+          <li>Local: jogue em 2 no mesmo teclado (coop) ou sozinho contra bots, de 2 a 6 jogadores</li>
+          <li>🎈 Com poderes ligados, a cada 2 rebatidas surge um balão. Acerte a bola nele: 🔵 gigante, ⚡ rápida, 🐢 lenta, ⚽ mais uma bola, 🌀 efeito, 👻 fantasma, 🌪️ desvio maluco, 🕳️ buraco negro, ✨ teleporte, 📏 raquete gigante, 🤏 encolhe os adversários, ❄️ congela os adversários, 🔄 inverte os adversários ou 🛡️ escudo no gol</li>
           <li>Poderes iguais se acumulam (ex.: rápida 2x → 4x) e todos acabam quando sai um gol</li>
         </ul>
       </div>
@@ -1286,15 +1312,57 @@ const Pong = () => {
                       className={setup.players === option ? 'active' : ''}
                       onClick={() => setSetup((s) => ({ ...s, players: option }))}
                     >
-                      {option === 2 ? '2 · clássico' : '3 · hexágono'}
+                      {option}
                     </button>
                   ))}
                 </div>
-                {setup.players === 3 && (
-                  <p className="pong-modal-hint">
-                    Campo de 3 gols. Faz o ponto quem tocou por último na bola. Começa quando os 3 entrarem.
-                  </p>
-                )}
+                <p className="pong-modal-hint">
+                  {setup.players === 2
+                    ? 'Campo clássico, um de cada lado.'
+                    : `Campo ${FIELD_NAMES[setup.players]} com ${setup.players} gols. Faz o ponto quem tocou por último na bola. Começa quando os ${setup.players} entrarem.`}
+                </p>
+              </div>
+            )}
+
+            {setup.kind === 'local' && (
+              <div className="pong-modal-field">
+                <span>Modo</span>
+                <div className="pong-segment">
+                  {[['coop', '👥 Coop local'], ['solo', '🤖 Sozinho vs bots']].map(([value, label]) => (
+                    <button
+                      key={value}
+                      type="button"
+                      className={setup.local === value ? 'active' : ''}
+                      onClick={() => setSetup((st) => ({ ...st, local: value, players: value === 'coop' ? 2 : Math.max(2, st.players) }))}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                <p className="pong-modal-hint">
+                  {setup.local === 'coop'
+                    ? '2 jogadores no mesmo teclado: W/S e ↑/↓.'
+                    : 'Você contra raquetes controladas pelo computador.'}
+                </p>
+              </div>
+            )}
+
+            {setup.kind === 'local' && setup.local === 'solo' && (
+              <div className="pong-modal-field">
+                <span>Jogadores (você + bots)</span>
+                <div className="pong-segment">
+                  {PLAYER_OPTIONS.map((option) => (
+                    <button
+                      key={option}
+                      type="button"
+                      className={setup.players === option ? 'active' : ''}
+                      onClick={() => setSetup((st) => ({ ...st, players: option }))}
+                    >
+                      {option}
+                    </button>
+                  ))}
+                </div>
+                <p className="pong-modal-hint">Campo {FIELD_NAMES[setup.players]} · {setup.players - 1} {setup.players - 1 === 1 ? 'bot' : 'bots'}</p>
               </div>
             )}
 
@@ -1336,7 +1404,7 @@ const Pong = () => {
               <button
                 className="pong-btn primary"
                 disabled={busy}
-                onClick={() => (setup.kind === 'online' ? createRoom(setup) : startLocal(setup.win, setup.powers))}
+                onClick={() => (setup.kind === 'online' ? createRoom(setup) : startLocal({ win: setup.win, powers: setup.powers, local: setup.local, players: setup.players }))}
               >
                 {setup.kind === 'online' ? (busy ? 'Criando...' : 'Criar sala') : 'Começar'}
               </button>

@@ -794,36 +794,36 @@
 }
 
 /* ---------- Modo 3 jogadores (campo quadrado) ---------- */
-.pong-frame.mode-3 {
+.pong-frame.poly {
   aspect-ratio: 1 / 1;
   width: min(100%, 600px, calc(100vh - 230px));
 }
 
-.pong-frame.mode-3.is-full {
+.pong-frame.poly.is-full {
   width: 100vw;
   aspect-ratio: auto;
 }
 
-.pong-score.players-3 {
+.pong-score.players-poly {
   gap: 12px;
 }
 
-.pong-score.players-3 .player-score {
+.pong-score.players-poly .player-score {
   min-width: 110px;
   padding: 12px 18px;
 }
 
-.pong-score.players-3 .separator {
+.pong-score.players-poly .separator {
   font-size: 1rem;
 }
 
 @media (max-width: 480px) {
-  .pong-score.players-3 .player-score {
+  .pong-score.players-poly .player-score {
     min-width: 0;
     padding: 8px 6px;
   }
 
-  .pong-score.players-3 .separator {
+  .pong-score.players-poly .separator {
     display: none;
   }
 }
@@ -955,8 +955,39 @@
 }
 
 /* No hexágono, os indicadores ficam empilhados no canto inferior esquerdo (área vazia) */
-.pong-frame.mode-3 .pong-effects {
+.pong-frame.poly .pong-effects {
   flex-direction: column;
   align-items: flex-start;
   max-width: 34%;
+}
+
+/* Placar com 4 a 6 jogadores: cartões menores, quebrando linha se precisar */
+.pong-score.players-4,
+.pong-score.players-5,
+.pong-score.players-6 {
+  gap: 8px;
+  max-width: 760px;
+  margin: 0 auto;
+}
+
+.pong-score.players-4 .separator,
+.pong-score.players-5 .separator,
+.pong-score.players-6 .separator {
+  display: none;
+}
+
+.pong-score.players-4 .player-score,
+.pong-score.players-5 .player-score,
+.pong-score.players-6 .player-score {
+  min-width: 96px;
+  padding: 8px 12px;
+}
+
+.pong-score.players-5 .player-score strong,
+.pong-score.players-6 .player-score strong {
+  font-size: 1.5rem;
+}
+
+.pong-segment button {
+  min-width: 44px;
 }
