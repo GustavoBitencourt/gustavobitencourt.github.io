@@ -46,7 +46,12 @@ export const POWERS = {
   invert: { icon: '🔄', label: 'Controles invertidos', color: '#fd79a8', frames: 7 * FPS, owner: true },
   shield: { icon: '🛡️', label: 'Escudo no gol', color: '#feca57', frames: 0, owner: true },
   freeze: { icon: '❄️', label: 'Raquetes congeladas', color: '#74b9ff', frames: Math.round(2.5 * FPS), owner: true },
-  shrink: { icon: '🤏', label: 'Raquetes encolhidas', color: '#e17055', frames: 10 * FPS, owner: true }
+  shrink: { icon: '🤏', label: 'Raquetes encolhidas', color: '#e17055', frames: 10 * FPS, owner: true },
+  reverse: { icon: '↩️', label: 'Bola de ré!', color: '#ff7675', frames: 0 },
+  fog: { icon: '🌫️', label: 'Neblina no meio da quadra!', color: '#b2bec3', frames: 7 * FPS },
+  drunk: { icon: '🥴', label: 'Bola bêbada!', color: '#e84393', frames: 6 * FPS },
+  magnet: { icon: '🧲', label: 'Ímã na raquete', color: '#d63031', frames: 9 * FPS, owner: true },
+  snipe: { icon: '🎯', label: 'Tiro certeiro', color: '#00b894', frames: 0, owner: true }
 };
 export const POWER_TYPES = Object.keys(POWERS);
 
@@ -61,6 +66,13 @@ const MAX_BALLS = 3;
 const CURVE_RATE = 0.016; // rad por quadro, por nível de efeito
 const GRAVITY_PULL = 0.22; // aceleração em direção ao centro (a velocidade é mantida)
 const SHRINK_FACTOR = 0.55;
+const DRUNK_SWAY = 0.07; // rad por quadro no auge do balanço da bola bêbada
+const MAGNET_PULL = 0.2; // aceleração em direção à raquete com ímã (a velocidade é mantida)
+const MAGNET_RANGE = 260; // o ímã só puxa a bola que está chegando perto do gol
+const SNIPE_BOOST = 1.6; // tiro certeiro: velocidade da rebatida multiplicada
+// Anti-loop (3+ jogadores): se as mesmas duas raquetes trocarem a bola mais de MAX_RALLY vezes seguidas,
+// a próxima rebatida sai em direção ao gol de outro jogador
+const MAX_RALLY = 4;
 
 const newEffects = (n) => ({
   big: { stacks: 0, frames: 0 },
@@ -72,7 +84,11 @@ const newEffects = (n) => ({
   invert: filled(n, () => 0),
   freeze: filled(n, () => 0),
   shrink: filled(n, () => 0),
-  shield: filled(n, () => false)
+  shield: filled(n, () => false),
+  fog: 0,
+  drunk: 0,
+  magnet: filled(n, () => 0),
+  snipe: filled(n, () => false)
 });
 
 const ballRadius = (s) => (s.effects.big.stacks > 0 ? BALL_R * BIG_BASE * 2 ** (s.effects.big.stacks - 1) : BALL_R);
@@ -99,10 +115,13 @@ const tickPowers = (s) => {
   e.grow.forEach((g) => countdown(g, 'stacks'));
   if (e.ghost > 0) e.ghost -= 1;
   if (e.gravity > 0) e.gravity -= 1;
+  if (e.fog > 0) e.fog -= 1;
+  if (e.drunk > 0) e.drunk -= 1;
   const dec = (v) => (v > 0 ? v - 1 : 0);
   e.invert = e.invert.map(dec);
   e.freeze = e.freeze.map(dec);
   e.shrink = e.shrink.map(dec);
+  e.magnet = e.magnet.map(dec);
   if (s.balloon) {
     s.balloon.age += 1;
     if (s.balloon.age > BALLOON_LIFE) s.balloon = null;
@@ -184,6 +203,16 @@ const activatePower = (s, requested, ball) => {
   if (type === 'freeze') e.freeze = others(e.freeze, frames);
   if (type === 'shrink') e.shrink = others(e.shrink, frames);
   if (type === 'shield') e.shield[owner] = true;
+  if (type === 'reverse') {
+    s.balls.forEach((b) => {
+      b.dx = -b.dx;
+      b.dy = -b.dy;
+    });
+  }
+  if (type === 'fog') e.fog = frames;
+  if (type === 'drunk') e.drunk = frames;
+  if (type === 'magnet') e.magnet[owner] = frames;
+  if (type === 'snipe') e.snipe[owner] = true;
 
   s.fx.push('power');
   s.pw.push({ t: type, o: owner ?? null });
@@ -205,31 +234,63 @@ const keepHorizontalEnough = (s, b) => {
   if (Math.abs(b.dx) < sp * 0.35) b.dx = Math.sign(b.dx || 1) * sp * 0.35;
 };
 
-// Efeito (curva) e buraco negro mudam a direção da bola, mantendo a velocidade
+// Ponto da face da raquete do jogador i, se a bola b estiver chegando ao gol dele (perto o bastante)
+const magnetTarget = (s, i, b) => {
+  if (s.mode === 2) {
+    const p = i === 0 ? s.player1 : s.player2;
+    const faceX = i === 0 ? p.x + PADDLE_W : p.x;
+    const coming = i === 0 ? b.dx < 0 : b.dx > 0;
+    if (!coming || Math.abs(b.x - faceX) > MAGNET_RANGE) return null;
+    return { x: faceX, y: p.y + classicPaddleH(s, i) / 2 };
+  }
+  const g = polyGeometry(s.mode);
+  const { A, u, n, L } = g.goals[i];
+  if (dot(b.dx, b.dy, n) >= 0 || dot(b.x - A.x, b.y - A.y, n) > MAGNET_RANGE) return null;
+  const along = s.paddles[i] * L;
+  return { x: A.x + u.x * along + n.x * POLY_PADDLE_OFFSET, y: A.y + u.y * along + n.y * POLY_PADDLE_OFFSET };
+};
+
+// Puxa a direção da bola para um ponto, mantendo a velocidade
+const pullToward = (b, x, y, force) => {
+  const sp = Math.hypot(b.dx, b.dy);
+  const gx = x - b.x;
+  const gy = y - b.y;
+  const gl = Math.hypot(gx, gy) || 1;
+  b.dx += (gx / gl) * force;
+  b.dy += (gy / gl) * force;
+  const nl = Math.hypot(b.dx, b.dy) || 1;
+  b.dx *= sp / nl;
+  b.dy *= sp / nl;
+};
+
+// Efeito (curva), buraco negro, bola bêbada e ímã mudam a direção da bola, mantendo a velocidade
 const applyBending = (s) => {
   const { stacks, dir } = s.effects.curve;
   const gravity = s.effects.gravity > 0;
-  if (!stacks && !gravity) return;
+  const drunk = s.effects.drunk > 0;
+  const magnets = s.effects.magnet.map((f, i) => (f > 0 ? i : -1)).filter((i) => i >= 0);
+  if (!stacks && !gravity && !drunk && !magnets.length) return;
   const c = fieldCenter(s);
-  s.balls.forEach((b) => {
+  s.balls.forEach((b, k) => {
     if (b.slow) return;
-    const sp = Math.hypot(b.dx, b.dy);
     if (stacks) {
       const a = CURVE_RATE * stacks * dir;
       const dx = b.dx * Math.cos(a) - b.dy * Math.sin(a);
       b.dy = b.dx * Math.sin(a) + b.dy * Math.cos(a);
       b.dx = dx;
     }
-    if (gravity) {
-      const gx = c.x - b.x;
-      const gy = c.y - b.y;
-      const gl = Math.hypot(gx, gy) || 1;
-      b.dx += (gx / gl) * GRAVITY_PULL;
-      b.dy += (gy / gl) * GRAVITY_PULL;
-      const nl = Math.hypot(b.dx, b.dy);
-      b.dx *= sp / nl;
-      b.dy *= sp / nl;
+    if (gravity) pullToward(b, c.x, c.y, GRAVITY_PULL);
+    if (drunk) {
+      // balança de um lado para o outro, como quem saiu da festa
+      const a = Math.sin(s.tick / 9 + k * 2) * DRUNK_SWAY;
+      const dx = b.dx * Math.cos(a) - b.dy * Math.sin(a);
+      b.dy = b.dx * Math.sin(a) + b.dy * Math.cos(a);
+      b.dx = dx;
     }
+    magnets.forEach((i) => {
+      const p = magnetTarget(s, i, b);
+      if (p) pullToward(b, p.x, p.y, MAGNET_PULL);
+    });
     keepHorizontalEnough(s, b);
   });
 };
@@ -340,6 +401,43 @@ const drawShieldLine = (ctx, x0, y0, x1, y1, color) => {
   ctx.moveTo(x0, y0);
   ctx.lineTo(x1, y1);
   ctx.stroke();
+  ctx.restore();
+};
+
+// Neblina: esconde a bola no meio da quadra
+const drawFog = (ctx, s, cx, cy, w, h, round) => {
+  if (!(s.effects.fog > 0)) return;
+  const a = 0.94 * Math.min(1, s.effects.fog / 30); // some devagar no fim
+  const fog = (alpha) => `rgba(190,200,205,${alpha})`;
+  if (round) {
+    const grad = ctx.createRadialGradient(cx, cy, w * 0.35, cx, cy, w);
+    grad.addColorStop(0, fog(a));
+    grad.addColorStop(1, fog(0));
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(cx, cy, w, 0, Math.PI * 2);
+    ctx.fill();
+  } else {
+    const grad = ctx.createLinearGradient(cx - w, 0, cx + w, 0);
+    grad.addColorStop(0, fog(0));
+    grad.addColorStop(0.3, fog(a));
+    grad.addColorStop(0.7, fog(a));
+    grad.addColorStop(1, fog(0));
+    ctx.fillStyle = grad;
+    ctx.fillRect(cx - w, cy - h / 2, 2 * w, h);
+  }
+};
+
+// Raquete com ímã (vermelho) ou com tiro certeiro carregado (verde) brilha
+const powerGlow = (ctx, s, i, draw) => {
+  const color = s.effects.magnet[i] > 0 ? '#ff4d4d' : s.effects.snipe[i] ? '#2ee6a6' : null;
+  if (!color) return;
+  ctx.save();
+  ctx.strokeStyle = color;
+  ctx.shadowColor = color;
+  ctx.shadowBlur = 14 + Math.sin(s.tick / 5) * 5;
+  ctx.lineWidth = 2.5;
+  draw();
   ctx.restore();
 };
 
@@ -465,6 +563,19 @@ const moveClassicBall = (s, ball, r, mul) => {
         bounceClassic(ball, paddle, h, dir);
         ball.lt = idx;
         s.fx.push('hit');
+        if (s.effects.snipe[idx]) {
+          // Tiro certeiro: rápido, no canto mais longe da raquete do adversário
+          s.effects.snipe[idx] = false;
+          const opp = idx === 0 ? s.player2 : s.player1;
+          const oppCenter = opp.y + classicPaddleH(s, 1 - idx) / 2;
+          const ty = oppCenter < CLASSIC_H / 2 ? CLASSIC_H - 25 : 25;
+          const tx = idx === 0 ? CLASSIC_W : 0;
+          const speed = Math.min(CLASSIC_MAX_SPEED, Math.hypot(ball.dx, ball.dy) * SNIPE_BOOST);
+          const dl = Math.hypot(tx - ball.x, ty - ball.y) || 1;
+          ball.dx = ((tx - ball.x) / dl) * speed;
+          ball.dy = ((ty - ball.y) / dl) * speed;
+          s.fx.push('snipe');
+        }
         onPaddleHit(s, spawnClassicBalloon);
         break;
       }
@@ -542,6 +653,7 @@ const drawClassic = (ctx, s) => {
     const h = classicPaddleH(s, i);
     ctx.fillStyle = COLORS[i];
     ctx.fillRect(p.x, p.y, PADDLE_W, h);
+    powerGlow(ctx, s, i, () => ctx.strokeRect(p.x - 3, p.y - 3, PADDLE_W + 6, h + 6));
     frostOutline(ctx, s, i, () => ctx.strokeRect(p.x - 2, p.y - 2, PADDLE_W + 4, h + 4));
   });
 
@@ -552,6 +664,7 @@ const drawClassic = (ctx, s) => {
   }
 
   s.balls.forEach((ball) => drawBall(ctx, s, ball));
+  drawFog(ctx, s, CLASSIC_W / 2, CLASSIC_H / 2, 190, CLASSIC_H, false);
 };
 
 // =====================================================================
@@ -668,6 +781,27 @@ const reflectOn = (ball, n, d, r) => {
 
 const dot = (ax, ay, b) => ax * b.x + ay * b.y;
 
+// Manda a bola para o ponto t (0..1) do gol j, com a velocidade dada
+const aimAtGoal = (g, ball, j, t, speed) => {
+  const { A, u, L } = g.goals[j];
+  const tx = A.x + u.x * t * L;
+  const ty = A.y + u.y * t * L;
+  const dl = Math.hypot(tx - ball.x, ty - ball.y) || 1;
+  ball.dx = ((tx - ball.x) / dl) * speed;
+  ball.dy = ((ty - ball.y) / dl) * speed;
+};
+
+// Conta as trocas seguidas entre as mesmas duas raquetes (a ordem não importa; a mesma raquete duas vezes também conta)
+const countRally = (ball, prev, i) => {
+  const key = prev === null || prev === undefined ? null : [prev, i].sort().join('-');
+  if (key && key === ball.pair) ball.rally += 1;
+  else {
+    ball.pair = key;
+    ball.rally = key ? 1 : 0;
+  }
+  return ball.rally;
+};
+
 const movePolyBall = (s, g, ball, r, mul) => {
   const steps = substepsFor(ball, mul);
   const spawn = () => {
@@ -704,8 +838,28 @@ const movePolyBall = (s, g, ball, r, mul) => {
       ball.dy = (n.y * Math.cos(angle) + u.y * Math.sin(angle)) * speed;
       ball.x = A.x + u.x * s0 + n.x * (POLY_PADDLE_OFFSET + r);
       ball.y = A.y + u.y * s0 + n.y * (POLY_PADDLE_OFFSET + r);
+      const prev = ball.lt;
       ball.lt = i;
       s.fx.push('hit');
+      const others = (exclude) => Array.from({ length: g.n }, (_, j) => j).filter((j) => !exclude.includes(j));
+      if (s.effects.snipe[i]) {
+        // Tiro certeiro: rápido, no canto do gol de um adversário, longe da raquete dele
+        s.effects.snipe[i] = false;
+        const opps = others([i]);
+        const j = opps[Math.floor(Math.random() * opps.length)];
+        aimAtGoal(g, ball, j, s.paddles[j] < 0.5 ? 0.88 : 0.12, Math.min(POLY_MAX_SPEED * 1.3, speed * SNIPE_BOOST));
+        ball.pair = null;
+        ball.rally = 0;
+        s.fx.push('snipe');
+      } else if (countRally(ball, prev, i) > MAX_RALLY) {
+        // Duas raquetes presas trocando a bola (ex.: num canto): ela sai em direção ao gol de outro jogador
+        const opts = others([prev, i]);
+        const j = opts.length ? opts[Math.floor(Math.random() * opts.length)] : others([i])[0];
+        aimAtGoal(g, ball, j, 0.2 + Math.random() * 0.6, speed);
+        ball.pair = null;
+        ball.rally = 0;
+        s.fx.push('swerve');
+      }
       onPaddleHit(s, spawn);
       break;
     }
@@ -875,6 +1029,10 @@ const drawPoly = (ctx, s, viewIndex = 0, labels = []) => {
     ctx.fillStyle = COLORS[i];
     path();
     ctx.fill();
+    powerGlow(ctx, s, i, () => {
+      path();
+      ctx.stroke();
+    });
     frostOutline(ctx, s, i, () => {
       path();
       ctx.stroke();
@@ -890,6 +1048,7 @@ const drawPoly = (ctx, s, viewIndex = 0, labels = []) => {
 
   // Bolas na cor de quem tocou por último
   s.balls.forEach((ball) => drawBall(ctx, s, ball));
+  drawFog(ctx, s, POLY_C, POLY_C, g.R * 0.6, 0, true);
 
   ctx.restore();
 
@@ -1045,6 +1204,8 @@ export const effectChips = (s) => {
   if (e.curve.stacks) chips.push({ key: 'curve', icon: '🌀', text: `${secs(e.curve.frames)}s`, color: POWERS.curve.color });
   if (e.ghost) chips.push({ key: 'ghost', icon: '👻', text: `${secs(e.ghost)}s`, color: POWERS.ghost.color });
   if (e.gravity) chips.push({ key: 'gravity', icon: '🕳️', text: `${secs(e.gravity)}s`, color: POWERS.gravity.color });
+  if (e.fog) chips.push({ key: 'fog', icon: '🌫️', text: `${secs(e.fog)}s`, color: POWERS.fog.color });
+  if (e.drunk) chips.push({ key: 'drunk', icon: '🥴', text: `${secs(e.drunk)}s`, color: POWERS.drunk.color });
   const perPlayer = (list, key, icon, withTime = true) => list.forEach((f, i) => {
     if (f) chips.push({ key: `${key}-${i}`, icon, text: withTime ? `${secs(f)}s` : '', color: COLORS[i], owner: i });
   });
@@ -1053,6 +1214,8 @@ export const effectChips = (s) => {
   perPlayer(e.freeze, 'freeze', '❄️');
   perPlayer(e.invert, 'invert', '🔄');
   perPlayer(e.shield.map((v) => (v ? 1 : 0)), 'shield', '🛡️', false);
+  perPlayer(e.magnet, 'magnet', '🧲');
+  perPlayer(e.snipe.map((v) => (v ? 1 : 0)), 'snipe', '🎯', false);
   return chips;
 };
 
@@ -1075,7 +1238,11 @@ export const packState = (s) => {
       i: e.invert.map(secs),
       fz: e.freeze.map(secs),
       sk: e.shrink.map(secs),
-      sh: e.shield.map((v) => (v ? 1 : 0))
+      sh: e.shield.map((v) => (v ? 1 : 0)),
+      fg: secs(e.fog),
+      dk: secs(e.drunk),
+      mg: e.magnet.map(secs),
+      sn: e.snipe.map((v) => (v ? 1 : 0))
     },
     bl: s.balloon ? [round1(s.balloon.x), round1(balloonY(s, s.balloon)), POWER_TYPES.indexOf(s.balloon.type), s.balloon.age] : null
   };
@@ -1104,7 +1271,11 @@ export const applyPacked = (s, msg) => {
       invert: arr(e.i),
       freeze: arr(e.fz),
       shrink: arr(e.sk),
-      shield: e.sh.map(Boolean)
+      shield: e.sh.map(Boolean),
+      fog: (e.fg || 0) * FPS,
+      drunk: (e.dk || 0) * FPS,
+      magnet: arr(e.mg),
+      snipe: (e.sn || filled(n, () => 0)).map(Boolean)
     };
   }
   s.balloon = msg.bl ? { x: msg.bl[0], y: msg.bl[1], type: POWER_TYPES[msg.bl[2]], age: msg.bl[3], fixed: true } : null;

@@ -1115,6 +1115,8 @@ const Pong = () => {
     if (type === 'shield') return `Escudo no gol de ${who}!`;
     if (type === 'freeze') return `Raquetes congeladas para os adversários de ${who}!`;
     if (type === 'shrink') return `Raquetes encolhidas para os adversários de ${who}!`;
+    if (type === 'magnet') return `Ímã na raquete de ${who}!`;
+    if (type === 'snipe') return `Tiro certeiro carregado para ${who}!`;
     return POWERS[type].label;
   };
 
@@ -1285,7 +1287,8 @@ const Pong = () => {
           <li>Online: crie uma sala e envie o link, ou entre em uma sala aberta</li>
           <li>3 a 6 jogadores: o gol é de quem tocou por último na bola (a bola fica da cor dele). Gol contra tira 1 ponto de quem fez (sem ficar negativo); bola que ninguém tocou não muda nada</li>
           <li>Local: jogue em 2 no mesmo teclado (coop) ou sozinho contra bots, de 2 a 6 jogadores</li>
-          <li>🎈 Com poderes ligados, a cada 2 rebatidas surge um balão. Acerte a bola nele: 🔵 gigante, ⚡ rápida, 🐢 lenta, ⚽ mais uma bola, 🌀 efeito, 👻 fantasma, 🌪️ desvio maluco, 🕳️ buraco negro, ✨ teleporte, 📏 raquete gigante, 🤏 encolhe os adversários, ❄️ congela os adversários, 🔄 inverte os adversários ou 🛡️ escudo no gol</li>
+          <li>🎈 Com poderes ligados, a cada 2 rebatidas surge um balão. Acerte a bola nele: 🔵 gigante, ⚡ rápida, 🐢 lenta, ⚽ mais uma bola, 🌀 efeito, 👻 fantasma, 🌪️ desvio maluco, 🕳️ buraco negro, ✨ teleporte, 📏 raquete gigante, 🤏 encolhe os adversários, ❄️ congela os adversários, 🔄 inverte os adversários, 🛡️ escudo no gol, ↩️ bola de ré, 🌫️ neblina no meio, 🥴 bola bêbada, 🧲 ímã na sua raquete ou 🎯 tiro certeiro (sua próxima rebatida sai rápida no canto do gol de um adversário)</li>
+          <li>Com 3 ou mais jogadores, se duas raquetes trocarem a bola mais de 4 vezes seguidas, ela sai em direção ao gol de outro jogador</li>
           <li>Poderes iguais se acumulam (ex.: rápida 2x → 4x) e todos acabam quando sai um gol</li>
         </ul>
       </div>

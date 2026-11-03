@@ -63,6 +63,13 @@ const SOUNDS = {
     [440, 660, 880, 1320].forEach((f, i) => tone(f, 0.09, { type: 'square', gain: 0.14, delay: i * 0.05 }));
     tone(1760, 0.2, { type: 'sine', gain: 0.18, delay: 0.2 });
   },
+  // bola saindo do loop entre duas raquetes
+  swerve: () => tone(520, 0.18, { type: 'sine', gain: 0.22, slideTo: 1040 }),
+  // tiro certeiro
+  snipe: () => {
+    tone(1200, 0.12, { type: 'sawtooth', gain: 0.12, slideTo: 300 });
+    tone(1800, 0.06, { type: 'square', gain: 0.1 });
+  },
   beep: () => tone(660, 0.12, { type: 'sine', gain: 0.3 }),
   go: () => tone(990, 0.28, { type: 'sine', gain: 0.32 }),
   win: () => {
