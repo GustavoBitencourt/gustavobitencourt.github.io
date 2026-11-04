@@ -65,7 +65,27 @@ export const POWERS = {
   ice: { icon: '🧊', label: 'Raquetes escorregando', color: '#7ed6df', frames: 8 * FPS, owner: true },
   bomb: { icon: '💣', label: 'Bomba! A bola vai explodir...', color: '#ff3838', frames: 4 * FPS },
   hidden: { icon: '🫥', label: 'Raquetes invisíveis', color: '#95afc0', frames: 6 * FPS, owner: true },
-  swap: { icon: '🔀', label: 'Troca-troca de raquetes!', color: '#e056fd', frames: 0 }
+  swap: { icon: '🔀', label: 'Troca-troca de raquetes!', color: '#e056fd', frames: 0 },
+  split: { icon: '💥', label: 'Estilhaço! Mais duas bolas', color: '#ff6348', frames: 0 },
+  center: { icon: '🧭', label: 'Bola de volta ao centro!', color: '#7bed9f', frames: 0 },
+  boomerang: { icon: '🪃', label: 'Bumerangue', color: '#e1b12c', frames: 0, owner: true },
+  accel: { icon: '📈', label: 'Bola acelerando sem parar!', color: '#ff4757', frames: 5 * FPS },
+  square: { icon: '🟥', label: 'Bola quadrada! Quica torto', color: '#ff6b81', frames: 8 * FPS },
+  pulse: { icon: '💓', label: 'Bola pulsante!', color: '#ff7f50', frames: 8 * FPS },
+  hunt: { icon: '👑', label: 'Caça ao líder!', color: '#ffd32a', frames: 7 * FPS },
+  shieldAll: { icon: '🧱', label: 'Escudo para todos!', color: '#cd6133', frames: 0 },
+  steal: { icon: '🦹', label: 'Ladrão de ponto', color: '#8e44ad', frames: 0, owner: true },
+  dizzy: { icon: '😵', label: 'Quadra tonta!', color: '#c56cf0', frames: 6 * FPS },
+  upside: { icon: '🙃', label: 'Quadra de ponta-cabeça!', color: '#3ae374', frames: 5 * FPS },
+  barrier: { icon: '🚧', label: 'Barreira no meio da quadra!', color: '#ffb142', frames: 9 * FPS },
+  shake: { icon: '📳', label: 'Raquetes tremendo', color: '#d1ccc0', frames: 6 * FPS, owner: true },
+  honey: { icon: '🍯', label: 'Raquete de mel', color: '#f0932b', frames: 9 * FPS, owner: true },
+  rain: { icon: '🌧️', label: 'Chuva de balões!', color: '#70a1ff', frames: 0 },
+  orbit: { icon: '🪐', label: 'Bola em órbita!', color: '#a4b0be', frames: Math.round(2.2 * FPS) },
+  decoys: { icon: '👥', label: 'Bolas falsas!', color: '#dfe4ea', frames: 6 * FPS },
+  bouncy: { icon: '🏀', label: 'Paredes elásticas!', color: '#e67e22', frames: 8 * FPS },
+  repel: { icon: '💫', label: 'Repulsão no meio da quadra!', color: '#18dcff', frames: 7 * FPS },
+  lottery: { icon: '🎰', label: 'Loteria de raquetes!', color: '#fbc531', frames: 8 * FPS }
 };
 // Poderes que só fazem sentido com a bola já rápida: só surgem depois de LATE_HITS rebatidas no ponto
 const LATE_POWERS = ['slow', 'hover'];
@@ -84,7 +104,19 @@ const BIG_BASE = 5; // primeira bola gigante: 5x; cada balão igual dobra de nov
 const MAX_BIG_STACKS = 3; // 5x, 10x, 20x
 const MAX_SPEED_LEVEL = 3; // rápida: 2x, 4x, 8x / lenta: ½, ¼, ⅛
 const MAX_GROW_STACKS = 2;
-const MAX_BALLS = 3;
+const MAX_BALLS = 4;
+const MAX_BALLOONS_RAIN = 4; // chuva de balões pode passar do limite normal
+const ACCEL_RATE = 1.012; // bola acelerando: velocidade multiplicada por quadro
+const HUNT_PULL = 0.2;
+const REPEL_PUSH = 0.24;
+const ORBIT_RATE = 0.075; // rad por quadro
+const BOUNCY_BOOST = 1.12; // paredes elásticas
+const SQUARE_JITTER = 0.4; // bola quadrada: desvio máximo ao quicar (rad)
+const SHAKE_PX = 16; // raquetes tremendo
+const HONEY_HOLD = 36; // raquete de mel: segura a bola por 0,6 s
+const BARRIER_HALF = 48;
+const BARRIER_THICK = 4;
+const DECOY_COUNT = 2;
 const CURVE_RATE = 0.016; // rad por quadro, por nível de efeito
 const GRAVITY_PULL = 0.22; // aceleração em direção ao centro (a velocidade é mantida)
 const SHRINK_FACTOR = 0.55;
@@ -131,11 +163,28 @@ const newEffects = (n) => ({
   portals: 0,
   ice: filled(n, () => 0),
   bomb: 0,
-  hidden: filled(n, () => 0)
+  hidden: filled(n, () => 0),
+  accel: 0,
+  square: 0,
+  pulse: 0,
+  hunt: 0,
+  huntTarget: 0,
+  dizzy: 0,
+  upside: 0,
+  barrier: 0,
+  orbit: 0,
+  orbitDir: 1,
+  bouncy: 0,
+  repel: 0,
+  decoys: 0,
+  shake: filled(n, () => 0),
+  honey: filled(n, () => 0)
 });
 
 const ballRadius = (s) =>
-  (s.effects.big.stacks > 0 ? BALL_R * BIG_BASE * 2 ** (s.effects.big.stacks - 1) : BALL_R) * (s.effects.tiny > 0 ? TINY_FACTOR : 1);
+  (s.effects.big.stacks > 0 ? BALL_R * BIG_BASE * 2 ** (s.effects.big.stacks - 1) : BALL_R) *
+  (s.effects.tiny > 0 ? TINY_FACTOR : 1) *
+  (s.effects.pulse > 0 ? 1.15 + 0.85 * Math.sin(s.tick / 10) : 1); // pulsante: de 0,3x a 2x
 const speedMul = (s) => 2 ** s.effects.speed.level;
 
 // Fator de tamanho da raquete do jogador i (raquete gigante e encolhida)
@@ -174,6 +223,12 @@ const tickPowers = (s) => {
   if (e.portals > 0) e.portals -= 1;
   e.ice = e.ice.map(dec);
   e.hidden = e.hidden.map(dec);
+  e.shake = e.shake.map(dec);
+  e.honey = e.honey.map(dec);
+  ['accel', 'square', 'pulse', 'hunt', 'dizzy', 'upside', 'barrier', 'orbit', 'bouncy', 'repel', 'decoys'].forEach((k) => {
+    if (e[k] > 0) e[k] -= 1;
+  });
+  if (!e.decoys) s.decoys = [];
   if (e.bomb > 0) {
     e.bomb -= 1;
     if (e.bomb === 0) s.boom = true; // explode no próximo passo da bola
@@ -189,6 +244,7 @@ const tickPowers = (s) => {
 const resetPowers = (s) => {
   s.effects = newEffects(s.scores.length);
   s.balloons = [];
+  s.decoys = [];
   s.rallyHits = 0;
 };
 
@@ -247,6 +303,12 @@ const activatePower = (s, requested, ball, silent = false) => {
   const owner = ball.lt;
   // Poderes de jogador precisam de alguém que tenha tocado na bola
   if (POWERS[type].owner && (owner === null || owner === undefined)) type = 'zigzag';
+  // Ladrão sem ninguém para roubar (ou que daria a vitória): vira gol em dobro
+  let victim = null;
+  if (type === 'steal') {
+    victim = leaderIndex(s, owner);
+    if (victim === null || s.scores[owner] + 1 >= s.winScore) type = 'double';
+  }
   const e = s.effects;
   const { frames } = POWERS[type];
   const others = (arr, value) => arr.map((v, i) => (i === owner ? v : value));
@@ -311,6 +373,88 @@ const activatePower = (s, requested, ball, silent = false) => {
   if (type === 'portals') e.portals = frames;
   if (type === 'ice') e.ice = others(e.ice, frames);
   if (type === 'bomb') e.bomb = frames;
+  if (type === 'split') {
+    const speed = Math.max(BALL_SPEED, Math.hypot(ball.dx, ball.dy));
+    const dir = Math.atan2(ball.dy, ball.dx);
+    [-0.6, 0.6].forEach((a) => {
+      if (s.balls.length >= MAX_BALLS) return;
+      s.balls.push({ x: ball.x, y: ball.y, dx: Math.cos(dir + a) * speed, dy: Math.sin(dir + a) * speed, slow: false, lt: ball.lt });
+    });
+  }
+  if (type === 'center') {
+    const c = fieldCenter(s);
+    s.balls.forEach((b) => {
+      b.x = c.x;
+      b.y = c.y;
+      b.held = null;
+      randomizeDirection(s, b);
+    });
+  }
+  if (type === 'boomerang') {
+    // A bola volta para o gol de quem tocou por último
+    const speed = Math.max(BALL_SPEED, Math.hypot(ball.dx, ball.dy));
+    if (s.mode === 2) {
+      const tx = owner === 0 ? 0 : CLASSIC_W;
+      const ty = CLASSIC_H / 2 + (Math.random() - 0.5) * 200;
+      const dl = Math.hypot(tx - ball.x, ty - ball.y) || 1;
+      ball.dx = ((tx - ball.x) / dl) * speed;
+      ball.dy = ((ty - ball.y) / dl) * speed;
+      keepHorizontalEnough(s, ball);
+    } else {
+      aimAtGoal(polyGeometry(s.mode), ball, owner, 0.2 + Math.random() * 0.6, speed);
+    }
+  }
+  if (type === 'accel') e.accel = frames;
+  if (type === 'square') e.square = frames;
+  if (type === 'pulse') e.pulse = frames;
+  if (type === 'hunt') {
+    e.hunt = frames;
+    e.huntTarget = leaderIndex(s, null) ?? Math.floor(Math.random() * s.scores.length);
+  }
+  if (type === 'shieldAll') e.shield = e.shield.map(() => true);
+  if (type === 'steal') {
+    s.scores[victim] -= 1;
+    s.scores[owner] += 1;
+    s.scoreChanged = true;
+  }
+  if (type === 'dizzy') e.dizzy = frames;
+  if (type === 'upside') e.upside = frames;
+  if (type === 'barrier') e.barrier = frames;
+  if (type === 'shake') e.shake = others(e.shake, frames);
+  if (type === 'honey') e.honey[owner] = frames;
+  if (type === 'rain') {
+    for (let k = 0; k < 3 && s.balloons.length < MAX_BALLOONS_RAIN; k++) {
+      const p = balloonSpot(s);
+      s.balloons.push({ ...p, type: randomPower(['rain', ...s.balloons.map((b) => b.type), ...notYet(s)]), age: 0 });
+    }
+  }
+  if (type === 'orbit') {
+    e.orbit = frames;
+    e.orbitDir = Math.random() < 0.5 ? -1 : 1;
+  }
+  if (type === 'decoys') {
+    e.decoys = frames;
+    const speed = Math.max(BALL_SPEED, Math.hypot(ball.dx, ball.dy));
+    const dir = Math.atan2(ball.dy, ball.dx);
+    s.decoys = Array.from({ length: DECOY_COUNT }, (_, k) => {
+      const a = dir + (k === 0 ? -0.5 : 0.5);
+      return { x: ball.x, y: ball.y, dx: Math.cos(a) * speed, dy: Math.sin(a) * speed };
+    });
+  }
+  if (type === 'bouncy') e.bouncy = frames;
+  if (type === 'repel') e.repel = frames;
+  if (type === 'lottery') {
+    // Cada raquete ganha um tamanho sorteado: gigante ou encolhida
+    for (let i = 0; i < s.scores.length; i++) {
+      if (Math.random() < 0.5) {
+        e.grow[i] = { stacks: 1, frames };
+        e.shrink[i] = 0;
+      } else {
+        e.grow[i] = { stacks: 0, frames: 0 };
+        e.shrink[i] = frames;
+      }
+    }
+  }
   if (type === 'hidden') e.hidden = others(e.hidden, frames);
   if (type === 'swap') {
     // Cada raquete vai para a posição da outra (no clássico, troca a altura das duas)
@@ -325,7 +469,26 @@ const activatePower = (s, requested, ball, silent = false) => {
 
   if (silent) return;
   s.fx.push('power');
-  s.pw.push({ t: type, o: owner ?? null });
+  s.pw.push(victim !== null && type === 'steal' ? { t: type, o: owner, v: victim } : { t: type, o: owner ?? null });
+};
+
+// Quem tem mais pontos (sem empate e com pelo menos 1 ponto), ignorando 'skip'
+const leaderIndex = (s, skip) => {
+  let best = null;
+  s.scores.forEach((v, i) => {
+    if (i === skip || v <= 0) return;
+    if (best === null || v > s.scores[best]) best = i;
+  });
+  if (best === null) return null;
+  return s.scores.filter((v, i) => i !== skip && v === s.scores[best]).length > 1 ? null : best;
+};
+
+const balloonSpot = (s) => {
+  if (s.mode === 2) return spawnClassicBalloon();
+  const g = polyGeometry(s.mode);
+  const a = Math.random() * Math.PI * 2;
+  const d = Math.random() * g.spawnR;
+  return { x: POLY_C + Math.cos(a) * d, y: POLY_C + Math.sin(a) * d };
 };
 
 const checkBalloon = (s, ball, r) => {
@@ -423,6 +586,117 @@ const pullToward = (b, x, y, force) => {
 };
 
 const BOMB_BOOST = 1.7;
+// Bola acelerando, caça ao líder, repulsão e órbita
+const applyMorePowers = (s) => {
+  const e = s.effects;
+  if (!e.accel && !e.hunt && !e.repel && !e.orbit) return;
+  const cap = (s.mode === 2 ? CLASSIC_MAX_SPEED : POLY_MAX_SPEED) * 1.3;
+  const c = fieldCenter(s);
+  let target = null;
+  if (e.hunt) {
+    if (s.mode === 2) target = { x: e.huntTarget === 0 ? 0 : CLASSIC_W, y: CLASSIC_H / 2 };
+    else target = polyGeometry(s.mode).goals[e.huntTarget].mid;
+  }
+  s.balls.forEach((b) => {
+    if (b.slow || b.held) return;
+    if (e.accel) {
+      const sp = Math.hypot(b.dx, b.dy) || 1;
+      const next = Math.min(cap, sp * ACCEL_RATE);
+      b.dx *= next / sp;
+      b.dy *= next / sp;
+    }
+    if (target) pullToward(b, target.x, target.y, HUNT_PULL);
+    if (e.repel) pullToward(b, c.x, c.y, -REPEL_PUSH);
+    if (e.orbit) {
+      const a = ORBIT_RATE * e.orbitDir;
+      const dx = b.dx * Math.cos(a) - b.dy * Math.sin(a);
+      b.dy = b.dx * Math.sin(a) + b.dy * Math.cos(a);
+      b.dx = dx;
+    }
+    keepHorizontalEnough(s, b);
+  });
+};
+
+// Paredes elásticas (acelera) e bola quadrada (quica torto)
+const onWallBounce = (s, ball) => {
+  const e = s.effects;
+  if (e.square > 0) {
+    const a = (Math.random() * 2 - 1) * SQUARE_JITTER;
+    const dx = ball.dx * Math.cos(a) - ball.dy * Math.sin(a);
+    ball.dy = ball.dx * Math.sin(a) + ball.dy * Math.cos(a);
+    ball.dx = dx;
+    keepHorizontalEnough(s, ball);
+  }
+  if (e.bouncy > 0) {
+    const cap = (s.mode === 2 ? CLASSIC_MAX_SPEED : POLY_MAX_SPEED) * 1.3;
+    const sp = Math.hypot(ball.dx, ball.dy) || 1;
+    const next = Math.min(cap, sp * BOUNCY_BOOST);
+    ball.dx *= next / sp;
+    ball.dy *= next / sp;
+  }
+};
+
+// Barreira: no clássico sobe e desce no meio; nos polígonos gira em volta do centro
+const barrierSegment = (s) => {
+  if (s.mode === 2) {
+    const y = CLASSIC_H / 2 + Math.sin(s.tick / 40) * 110;
+    return { a: { x: CLASSIC_W / 2, y: y - BARRIER_HALF }, b: { x: CLASSIC_W / 2, y: y + BARRIER_HALF } };
+  }
+  const ang = s.tick / 50;
+  const ux = Math.cos(ang) * BARRIER_HALF * 1.4;
+  const uy = Math.sin(ang) * BARRIER_HALF * 1.4;
+  return { a: { x: POLY_C - ux, y: POLY_C - uy }, b: { x: POLY_C + ux, y: POLY_C + uy } };
+};
+
+const checkBarrier = (s, ball, r) => {
+  if (!(s.effects.barrier > 0)) return;
+  const { a, b } = barrierSegment(s);
+  const vx = b.x - a.x;
+  const vy = b.y - a.y;
+  const t = clamp(((ball.x - a.x) * vx + (ball.y - a.y) * vy) / (vx * vx + vy * vy), 0, 1);
+  const px = a.x + vx * t;
+  const py = a.y + vy * t;
+  const d = Math.hypot(ball.x - px, ball.y - py);
+  const min = r + BARRIER_THICK;
+  if (d >= min || d === 0) return;
+  const n = { x: (ball.x - px) / d, y: (ball.y - py) / d };
+  const vn = dot(ball.dx, ball.dy, n);
+  if (vn < 0) {
+    ball.dx -= 2 * vn * n.x;
+    ball.dy -= 2 * vn * n.y;
+    ball.wallHits = (ball.wallHits || 0) + 1;
+    s.fx.push('wall');
+    keepHorizontalEnough(s, ball);
+  }
+  ball.x = px + n.x * min;
+  ball.y = py + n.y * min;
+};
+
+// Bolas falsas: só quicam por tudo e somem; não fazem gol nem pegam balões
+const stepDecoys = (s) => {
+  if (!s.decoys || !s.decoys.length) return;
+  const r = BALL_R;
+  if (s.mode === 2) {
+    s.decoys.forEach((d) => {
+      d.x += d.dx;
+      d.y += d.dy;
+      if ((d.y < r && d.dy < 0) || (d.y > CLASSIC_H - r && d.dy > 0)) d.dy = -d.dy;
+      if ((d.x < r && d.dx < 0) || (d.x > CLASSIC_W - r && d.dx > 0)) d.dx = -d.dx;
+    });
+    return;
+  }
+  const g = polyGeometry(s.mode);
+  const sides = [...g.goals, ...g.walls];
+  s.decoys.forEach((d) => {
+    d.x += d.dx;
+    d.y += d.dy;
+    sides.forEach(({ A, n }) => {
+      const dist = dot(d.x - A.x, d.y - A.y, n);
+      if (dist < POLY_PADDLE_OFFSET && dot(d.dx, d.dy, n) < 0) reflectOn(d, n, dist, POLY_PADDLE_OFFSET);
+    });
+  });
+};
+
 const explodeBomb = (s) => {
   if (!s.boom) return;
   s.boom = false;
@@ -448,7 +722,7 @@ const applyBending = (s) => {
   if (!stacks && !gravity && !drunk && !magnets.length && wind === null) return;
   const c = fieldCenter(s);
   s.balls.forEach((b, k) => {
-    if (b.slow) return;
+    if (b.slow || b.held) return;
     if (stacks) {
       const a = CURVE_RATE * stacks * dir;
       const dx = b.dx * Math.cos(a) - b.dy * Math.sin(a);
@@ -500,6 +774,7 @@ const effectiveInputs = (s, inputs) => inputs.map((input, i) => {
   if (s.effects.freeze[i] > 0) return { frozen: true };
   const next = s.effects.invert[i] > 0 ? flipInput(input, s.mode) : { ...input };
   next.ice = s.effects.ice[i] > 0;
+  next.shake = s.effects.shake[i] > 0;
   next.speed = (s.effects.turbo[i] > 0 ? TURBO_MUL : 1) * (s.effects.sloth[i] > 0 ? SLOTH_MUL : 1);
   return next;
 });
@@ -553,11 +828,67 @@ const drawBall = (ctx, s, ball) => {
   ctx.shadowColor = fast ? '#ff4757' : color;
   ctx.shadowBlur = fast ? 20 : 12;
   ctx.fillStyle = color;
-  ctx.beginPath();
-  ctx.arc(ball.x, ball.y, r, 0, Math.PI * 2);
-  ctx.fill();
+  if (s.effects.square > 0) {
+    // Bola quadrada, girando
+    ctx.save();
+    ctx.translate(ball.x, ball.y);
+    ctx.rotate(s.tick / 8);
+    ctx.fillRect(-r, -r, 2 * r, 2 * r);
+    ctx.restore();
+  } else {
+    ctx.beginPath();
+    ctx.arc(ball.x, ball.y, r, 0, Math.PI * 2);
+    ctx.fill();
+  }
   ctx.shadowBlur = 0;
   ctx.globalAlpha = 1;
+};
+
+const drawDecoys = (ctx, s) => {
+  if (!s.decoys || !s.decoys.length) return;
+  const lt = s.balls[0]?.lt ?? null;
+  s.decoys.forEach((d) => drawBall(ctx, s, { x: d.x, y: d.y, lt }));
+};
+
+const drawBarrier = (ctx, s) => {
+  if (!(s.effects.barrier > 0)) return;
+  const { a, b } = barrierSegment(s);
+  ctx.save();
+  ctx.globalAlpha = s.effects.barrier < 2 * FPS && Math.floor(s.effects.barrier / 8) % 2 === 0 ? 0.4 : 1;
+  ctx.lineCap = 'round';
+  ctx.strokeStyle = '#ffb142';
+  ctx.shadowColor = '#ffb142';
+  ctx.shadowBlur = 12;
+  ctx.lineWidth = BARRIER_THICK * 2;
+  ctx.beginPath();
+  ctx.moveTo(a.x, a.y);
+  ctx.lineTo(b.x, b.y);
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+  ctx.strokeStyle = '#2d3436';
+  ctx.lineWidth = 3;
+  ctx.setLineDash([8, 8]);
+  ctx.beginPath();
+  ctx.moveTo(a.x, a.y);
+  ctx.lineTo(b.x, b.y);
+  ctx.stroke();
+  ctx.restore();
+};
+
+// Repulsão: ondas saindo do centro
+const drawRepel = (ctx, s, x, y) => {
+  if (!(s.effects.repel > 0)) return;
+  ctx.save();
+  ctx.strokeStyle = 'rgba(24,220,255,0.45)';
+  ctx.lineWidth = 2;
+  for (let k = 0; k < 3; k++) {
+    const rad = ((s.tick * 1.5 + k * 30) % 90) + 6;
+    ctx.globalAlpha = 1 - rad / 96;
+    ctx.beginPath();
+    ctx.arc(x, y, rad, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+  ctx.restore();
 };
 
 const drawGravityWell = (ctx, s, x, y) => {
@@ -790,6 +1121,7 @@ const createClassic = (winScore, powersEnabled) => ({
   balls: [serveClassic(Math.random() < 0.5 ? 1 : -1)],
   effects: newEffects(2),
   balloons: [],
+  decoys: [],
   hits: 0,
   tick: 0,
   serveFrames: 0,
@@ -819,8 +1151,9 @@ const moveClassicPaddle = (s, i, input = {}) => {
   }
   // Escorregando: a raquete demora para acelerar e para frear
   paddle.v = input.ice ? (paddle.v || 0) * ICE_KEEP + move * (1 - ICE_KEEP) : move;
-  const y = clamp(paddle.y + paddle.v, 0, CLASSIC_H - h);
-  if (y !== paddle.y + paddle.v) paddle.v = 0;
+  const jitter = input.shake ? (Math.random() - 0.5) * SHAKE_PX : 0;
+  const y = clamp(paddle.y + paddle.v + jitter, 0, CLASSIC_H - h);
+  if (y !== paddle.y + paddle.v + jitter) paddle.v = 0;
   paddle.y = y;
 };
 
@@ -846,6 +1179,16 @@ const spawnClassicBalloon = () => ({
 });
 
 const moveClassicBall = (s, ball, r, mul) => {
+  if (ball.held) {
+    // Grudada na raquete de mel: acompanha a raquete e depois sai
+    const p = ball.held.i === 0 ? s.player1 : s.player2;
+    const h = classicPaddleH(s, ball.held.i);
+    ball.x = ball.held.i === 0 ? p.x + PADDLE_W + r : p.x - r;
+    ball.y = p.y + clamp(ball.held.off, 0, h);
+    ball.held.frames -= 1;
+    if (ball.held.frames <= 0) ball.held = null;
+    return null;
+  }
   const steps = substepsFor(ball, mul);
   const paddles = [[s.player1, 1, 0], [s.player2, -1, 1]];
 
@@ -857,10 +1200,12 @@ const moveClassicBall = (s, ball, r, mul) => {
     if (ball.y - r <= 0 && ball.dy < 0) {
       ball.y = r;
       ball.dy = -ball.dy;
+      onWallBounce(s, ball);
       s.fx.push('wall');
     } else if (ball.y + r >= CLASSIC_H && ball.dy > 0) {
       ball.y = CLASSIC_H - r;
       ball.dy = -ball.dy;
+      onWallBounce(s, ball);
       s.fx.push('wall');
     }
 
@@ -875,6 +1220,7 @@ const moveClassicBall = (s, ball, r, mul) => {
         bounceClassic(ball, paddle, h, dir);
         ball.lt = idx;
         s.fx.push('hit');
+        if (s.effects.honey[idx] > 0) ball.held = { i: idx, frames: HONEY_HOLD, off: ball.y - paddle.y };
         if (s.effects.snipe[idx]) {
           // Tiro certeiro: rápido, no canto mais longe da raquete do adversário
           s.effects.snipe[idx] = false;
@@ -896,6 +1242,7 @@ const moveClassicBall = (s, ball, r, mul) => {
     checkBalloon(s, ball, r);
     checkBumpers(s, ball, r);
     checkPortals(s, ball, r);
+    checkBarrier(s, ball, r);
 
     // Escudo: defende uma bola na linha do gol
     if (ball.x - r <= 0 && ball.dx < 0 && s.effects.shield[0]) {
@@ -942,7 +1289,9 @@ const stepClassic = (s, rawInputs) => {
   }
 
   explodeBomb(s);
+  stepDecoys(s);
   applyBending(s);
+  applyMorePowers(s);
   const r = ballRadius(s);
   const mul = speedMul(s);
   for (const ball of [...s.balls]) {
@@ -981,6 +1330,8 @@ const drawClassic = (ctx, s) => {
 
   drawBumpers(ctx, s);
   drawPortals(ctx, s);
+  drawBarrier(ctx, s);
+  drawRepel(ctx, s, s.mode === 2 ? CLASSIC_W / 2 : POLY_C, s.mode === 2 ? CLASSIC_H / 2 : POLY_C);
 
   s.balloons.forEach((b) => {
     const by = balloonY(s, b);
@@ -993,6 +1344,7 @@ const drawClassic = (ctx, s) => {
     drawHoverRing(ctx, s, ball);
     drawFuse(ctx, s, ball);
   });
+  drawDecoys(ctx, s);
   drawFog(ctx, s, CLASSIC_W / 2, CLASSIC_H / 2, 190, CLASSIC_H, false);
   drawWind(ctx, s, CLASSIC_W, CLASSIC_H);
   drawBlackout(ctx, s, CLASSIC_W, [s.player1, s.player2].map((p, i) => ({ x: p.x + PADDLE_W / 2, y: p.y + classicPaddleH(s, i) / 2 })));
@@ -1080,6 +1432,7 @@ const createPoly = (n, winScore, powersEnabled) => ({
   balls: [servePolyBall(polyGeometry(n), Math.floor(Math.random() * n))],
   effects: newEffects(n),
   balloons: [],
+  decoys: [],
   hits: 0,
   tick: 0,
   serveFrames: 0,
@@ -1104,8 +1457,9 @@ const movePolyPaddle = (s, g, i, input = {}) => {
   if (!s.pvel) s.pvel = filled(g.n, () => 0);
   // Escorregando: a raquete demora para acelerar e para frear
   s.pvel[i] = input.ice ? s.pvel[i] * ICE_KEEP + move * (1 - ICE_KEEP) : move;
-  const t = clamp(s.paddles[i] + s.pvel[i], half, 1 - half);
-  if (t !== s.paddles[i] + s.pvel[i]) s.pvel[i] = 0;
+  const jitter = input.shake ? ((Math.random() - 0.5) * SHAKE_PX) / g.goals[i].L : 0;
+  const t = clamp(s.paddles[i] + s.pvel[i] + jitter, half, 1 - half);
+  if (t !== s.paddles[i] + s.pvel[i] + jitter) s.pvel[i] = 0;
   s.paddles[i] = t;
 };
 
@@ -1141,6 +1495,18 @@ const countRally = (ball, prev, i) => {
 };
 
 const movePolyBall = (s, g, ball, r, mul) => {
+  if (ball.held) {
+    // Grudada na raquete de mel: acompanha a raquete e depois sai
+    const { A, u, n, L } = g.goals[ball.held.i];
+    const len = polyPaddleLen(s, g, ball.held.i);
+    const c = s.paddles[ball.held.i] * L;
+    const along = clamp(c + ball.held.off, c - len / 2, c + len / 2);
+    ball.x = A.x + u.x * along + n.x * (POLY_PADDLE_OFFSET + r);
+    ball.y = A.y + u.y * along + n.y * (POLY_PADDLE_OFFSET + r);
+    ball.held.frames -= 1;
+    if (ball.held.frames <= 0) ball.held = null;
+    return null;
+  }
   const steps = substepsFor(ball, mul);
   const spawn = () => {
     const a = Math.random() * Math.PI * 2;
@@ -1180,6 +1546,7 @@ const movePolyBall = (s, g, ball, r, mul) => {
       ball.lt = i;
       ball.wallHits = 0;
       s.fx.push('hit');
+      if (s.effects.honey[i] > 0) ball.held = { i, frames: HONEY_HOLD, off: s0 - c };
       const others = (exclude) => Array.from({ length: g.n }, (_, j) => j).filter((j) => !exclude.includes(j));
       if (s.effects.snipe[i]) {
         // Tiro certeiro: rápido, no canto do gol de um adversário, longe da raquete dele
@@ -1209,6 +1576,7 @@ const movePolyBall = (s, g, ball, r, mul) => {
       if (d < r && dot(ball.dx, ball.dy, n) < 0) {
         reflectOn(ball, n, d, r);
         ball.wallHits = (ball.wallHits || 0) + 1;
+        onWallBounce(s, ball);
         s.fx.push('wall');
       }
     }
@@ -1216,6 +1584,7 @@ const movePolyBall = (s, g, ball, r, mul) => {
     checkBalloon(s, ball, r);
     checkBumpers(s, ball, r);
     checkPortals(s, ball, r);
+    checkBarrier(s, ball, r);
 
     // Presa batendo só nas paredes: depois de 5 batidas seguidas sem tocar numa raquete, vai para um gol
     if ((ball.wallHits || 0) >= MAX_WALL_BOUNCES) {
@@ -1293,7 +1662,9 @@ const stepPoly = (s, rawInputs) => {
   }
 
   explodeBomb(s);
+  stepDecoys(s);
   applyBending(s);
+  applyMorePowers(s);
   const r = ballRadius(s);
   const mul = speedMul(s);
   for (const ball of [...s.balls]) {
@@ -1399,6 +1770,8 @@ const drawPoly = (ctx, s, viewIndex = 0, labels = []) => {
 
   drawBumpers(ctx, s);
   drawPortals(ctx, s);
+  drawBarrier(ctx, s);
+  drawRepel(ctx, s, s.mode === 2 ? CLASSIC_W / 2 : POLY_C, s.mode === 2 ? CLASSIC_H / 2 : POLY_C);
 
   // Balões (a posição gira com o campo; são desenhados depois, sempre de pé)
   const balloonsOnScreen = s.balloons.map((b) => ({ b, p: toScreen({ x: b.x, y: balloonY(s, b) }, angle) }));
@@ -1409,6 +1782,7 @@ const drawPoly = (ctx, s, viewIndex = 0, labels = []) => {
     drawHoverRing(ctx, s, ball);
     drawFuse(ctx, s, ball);
   });
+  drawDecoys(ctx, s);
   drawFog(ctx, s, POLY_C, POLY_C, g.R * 0.6, 0, true);
   drawWind(ctx, s, POLY_SIZE, POLY_SIZE);
   drawBlackout(ctx, s, POLY_SIZE, g.goals.map(({ A, u, n, L }, i) => ({
@@ -1551,8 +1925,27 @@ export const canvasSize = (mode) => (mode >= 3 ? { w: POLY_SIZE, h: POLY_SIZE } 
 export const createGameState = (mode, winScore = DEFAULT_WIN, powersEnabled = true) =>
   mode >= 3 ? createPoly(mode, winScore, powersEnabled) : createClassic(winScore, powersEnabled);
 export const stepGame = (state, inputs) => (state.mode >= 3 ? stepPoly(state, inputs) : stepClassic(state, inputs));
-export const drawGame = (ctx, state, viewIndex, labels) =>
+const drawField = (ctx, state, viewIndex, labels) =>
   state.mode >= 3 ? drawPoly(ctx, state, viewIndex, labels) : drawClassic(ctx, state);
+
+export const drawGame = (ctx, state, viewIndex, labels) => {
+  const e = state.effects;
+  const tilt = (e.upside > 0 ? Math.PI : 0) + (e.dizzy > 0 ? Math.sin(state.tick / 18) * 0.22 : 0);
+  if (!tilt) {
+    drawField(ctx, state, viewIndex, labels);
+    return;
+  }
+  const { w, h } = canvasSize(state.mode);
+  ctx.save();
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0, 0, w, h);
+  ctx.translate(w / 2, h / 2);
+  ctx.rotate(tilt);
+  if (e.dizzy > 0) ctx.scale(0.86, 0.86);
+  ctx.translate(-w / 2, -h / 2);
+  drawField(ctx, state, viewIndex, labels);
+  ctx.restore();
+};
 
 const secs = (frames) => Math.ceil(frames / FPS);
 const SPEED_LABELS = { 1: '2x', 2: '4x', 3: '8x', '-1': '½', '-2': '¼', '-3': '⅛' };
@@ -1592,6 +1985,11 @@ export const effectChips = (s) => {
   perPlayer(e.sloth, 'sloth', '🐌');
   perPlayer(e.ice, 'ice', '🧊');
   perPlayer(e.hidden, 'hidden', '🫥');
+  perPlayer(e.shake, 'shake', '📳');
+  perPlayer(e.honey, 'honey', '🍯');
+  ['accel', 'square', 'pulse', 'hunt', 'dizzy', 'upside', 'barrier', 'orbit', 'bouncy', 'repel', 'decoys'].forEach((k) => {
+    if (e[k]) chips.push({ key: k, icon: POWERS[k].icon, text: `${secs(e[k])}s`, color: POWERS[k].color });
+  });
   if (e.bomb) chips.push({ key: 'bomb', icon: '💣', text: `${secs(e.bomb)}s`, color: POWERS.bomb.color });
   perPlayer(e.double.map((v) => (v ? 1 : 0)), 'double', '💰', false);
   return chips;
@@ -1632,8 +2030,13 @@ export const packState = (s) => {
       pt: secs(e.portals),
       ic: e.ice.map(secs),
       bb: e.bomb, // em quadros: o pavio pisca cada vez mais rápido
-      hd: e.hidden.map(secs)
+      hd: e.hidden.map(secs),
+      // em quadros (alguns efeitos animam pelo tempo restante)
+      x2: [e.accel, e.square, e.pulse, e.hunt, e.dizzy, e.upside, e.barrier, e.orbit, e.bouncy, e.repel, e.decoys],
+      sk2: e.shake.map(secs),
+      hn: e.honey.map(secs)
     },
+    dc: (s.decoys || []).map((d) => [round1(d.x), round1(d.y)]),
     bl: s.balloons.map((b) => [round1(b.x), round1(balloonY(s, b)), POWER_TYPES.indexOf(b.type), b.age])
   };
   if (s.mode >= 3) msg.q = s.paddles.map((v) => Math.round(v * 1000) / 1000);
@@ -1677,9 +2080,18 @@ export const applyPacked = (s, msg) => {
       portals: (e.pt || 0) * FPS,
       ice: arr(e.ic),
       bomb: e.bb || 0,
-      hidden: arr(e.hd)
+      hidden: arr(e.hd),
+      shake: arr(e.sk2),
+      honey: arr(e.hn),
+      huntTarget: 0,
+      orbitDir: 1
     };
+    const x2 = e.x2 || [];
+    ['accel', 'square', 'pulse', 'hunt', 'dizzy', 'upside', 'barrier', 'orbit', 'bouncy', 'repel', 'decoys'].forEach((k, idx) => {
+      s.effects[k] = x2[idx] || 0;
+    });
   }
+  s.decoys = (msg.dc || []).map(([x, y]) => ({ x, y, dx: 0, dy: 0 }));
   s.balloons = (msg.bl || []).map(([x, y, type, age]) => ({ x, y, type: POWER_TYPES[type], age, fixed: true }));
   if (s.mode >= 3 && msg.q) s.paddles = msg.q;
   if (s.mode === 2) {
