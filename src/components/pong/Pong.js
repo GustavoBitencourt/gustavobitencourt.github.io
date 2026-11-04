@@ -145,7 +145,7 @@ const Pong = () => {
     const type = typeof evt === 'string' ? evt : evt?.t;
     if (!POWERS[type]) return;
     clearTimeout(powerTimerRef.current);
-    setPowerToast({ type, owner: evt?.o ?? null, id: Date.now() });
+    setPowerToast({ type, owner: evt?.o ?? null, picks: evt?.k, id: Date.now() });
     powerTimerRef.current = setTimeout(() => setPowerToast(null), 1800);
   }, []);
 
@@ -1108,8 +1108,10 @@ const Pong = () => {
     return null;
   };
 
-  const powerLabel = ({ type, owner }) => {
+  const powerLabel = ({ type, owner, picks }) => {
     const who = owner !== null && owner !== undefined ? names[owner] : '';
+    if (type === 'mystery') return `Surpresa: ${(picks || []).map((t) => POWERS[t]?.icon).join(' + ')}!`;
+    if (type === 'turbo') return `Raquete turbo para ${who}!`;
     if (type === 'grow') return `Raquete gigante para ${who}!`;
     if (type === 'invert') return `Controles invertidos para os adversários de ${who}!`;
     if (type === 'shield') return `Escudo no gol de ${who}!`;
@@ -1287,7 +1289,7 @@ const Pong = () => {
           <li>Online: crie uma sala e envie o link, ou entre em uma sala aberta</li>
           <li>3 a 6 jogadores: o gol é de quem tocou por último na bola (a bola fica da cor dele). Gol contra tira 1 ponto de quem fez (sem ficar negativo); bola que ninguém tocou não muda nada</li>
           <li>Local: jogue em 2 no mesmo teclado (coop) ou sozinho contra bots, de 2 a 6 jogadores</li>
-          <li>🎈 Com poderes ligados, a cada 2 rebatidas surge um balão. Acerte a bola nele: 🔵 gigante, ⚡ rápida, 🐢 lenta, ⚽ mais uma bola, 🌀 efeito, 👻 fantasma, 🌪️ desvio maluco, 🕳️ buraco negro, ✨ teleporte, 📏 raquete gigante, 🤏 encolhe os adversários, ❄️ congela os adversários, 🔄 inverte os adversários, 🛡️ escudo no gol, ↩️ bola de ré, 🌫️ neblina no meio, 🥴 bola bêbada, 🧲 ímã na sua raquete ou 🎯 tiro certeiro (sua próxima rebatida sai rápida no canto do gol de um adversário)</li>
+          <li>🎈 Com poderes ligados, a cada 2 rebatidas surge um balão (às vezes dois; até 2 na tela). Acerte a bola nele: 🔵 gigante, ⚡ rápida, 🐢 lenta, ⚽ mais uma bola, 🌀 efeito, 👻 fantasma (some e só aparece piscando), 🎱 bumpers de pinball, ⏸️ bola parada no ar, 🎲 surpresa (2 poderes de uma vez), 🚀 raquete turbo, 🌪️ desvio maluco, 🕳️ buraco negro, ✨ teleporte, 📏 raquete gigante, 🤏 encolhe os adversários, ❄️ congela os adversários, 🔄 inverte os adversários, 🛡️ escudo no gol, ↩️ bola de ré, 🌫️ neblina no meio, 🥴 bola bêbada, 🧲 ímã na sua raquete ou 🎯 tiro certeiro (sua próxima rebatida sai rápida no canto do gol de um adversário)</li>
           <li>Com 3 ou mais jogadores, se duas raquetes trocarem a bola mais de 4 vezes seguidas, ela sai em direção ao gol de outro jogador</li>
           <li>Poderes iguais se acumulam (ex.: rápida 2x → 4x) e todos acabam quando sai um gol</li>
         </ul>

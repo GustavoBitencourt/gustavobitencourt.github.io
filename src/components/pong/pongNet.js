@@ -1,15 +1,15 @@
 // Rede do Pong online via PeerJS (WebRTC P2P, servidor de sinalização público e gratuito).
 //
 // Cada sala tem um código aleatório de 4 caracteres (ex.: "ab3f"):
-//   gbpong-v5-sala-ab3f  -> peer do anfitrião, usado para entrar na sala (link #/pong?sala=ab3f)
+//   gbpong-v6-sala-ab3f  -> peer do anfitrião, usado para entrar na sala (link #/pong?sala=ab3f)
 //
 // O servidor público não permite listar peers, então para a sala aparecer no lobby
 // o anfitrião também ocupa uma "vaga de anúncio" numerada:
-//   gbpong-v5-vaga-1 ... gbpong-v5-vaga-N -> responde com { código, jogadores, nome do anfitrião }
+//   gbpong-v6-vaga-1 ... gbpong-v6-vaga-N -> responde com { código, jogadores, nome do anfitrião }
 // Se todas as vagas estiverem ocupadas, a sala continua funcionando pelo link, só não aparece na lista.
 import Peer from 'peerjs';
 
-const PREFIX = 'gbpong-v5-';
+const PREFIX = 'gbpong-v6-';
 export const MAX_SLOTS = 12;
 const PROBE_TIMEOUT = 5000;
 const CODE_CHARS = 'abcdefghjkmnpqrstuvwxyz23456789'; // sem 0/o, 1/l/i para evitar confusão

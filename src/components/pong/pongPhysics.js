@@ -3,7 +3,7 @@
 //  - 3 a 6 jogadores: polígono com N gols iguais alternados com N paredes, todos à mesma
 //    distância do centro (3 = hexágono, 4 = octógono, 5 = decágono, 6 = dodecágono).
 //    Cada jogador vê o próprio gol embaixo.
-// Os modos compartilham o formato de estado: { mode, scores, balls, effects, balloon, fx, pw, ... }
+// Os modos compartilham o formato de estado: { mode, scores, balls, effects, balloons, fx, pw, ... }
 // e stepGame devolve null ou { type: 'point' | 'over' | 'nopoint', scorer, conceded, reason, penalty }.
 //
 // Colisões usam círculo x retângulo em subpassos: pega a raquete inteira (inclusive as quinas)
@@ -51,13 +51,22 @@ export const POWERS = {
   fog: { icon: '🌫️', label: 'Neblina no meio da quadra!', color: '#b2bec3', frames: 7 * FPS },
   drunk: { icon: '🥴', label: 'Bola bêbada!', color: '#e84393', frames: 6 * FPS },
   magnet: { icon: '🧲', label: 'Ímã na raquete', color: '#d63031', frames: 9 * FPS, owner: true },
-  snipe: { icon: '🎯', label: 'Tiro certeiro', color: '#00b894', frames: 0, owner: true }
+  snipe: { icon: '🎯', label: 'Tiro certeiro', color: '#00b894', frames: 0, owner: true },
+  turbo: { icon: '🚀', label: 'Raquete turbo', color: '#ffeaa7', frames: 10 * FPS, owner: true },
+  bumpers: { icon: '🎱', label: 'Pinball! Bumpers na quadra', color: '#fd9644', frames: 9 * FPS },
+  hover: { icon: '⏸️', label: 'Bola parada no ar!', color: '#81ecec', frames: Math.round(1.3 * FPS) },
+  mystery: { icon: '🎲', label: 'Surpresa!', color: '#f368e0', frames: 0 }
 };
 export const POWER_TYPES = Object.keys(POWERS);
 
 const BALLOON_R = 18;
 const BALLOON_LIFE = 12 * FPS;
 const HITS_PER_BALLOON = 2;
+const MAX_BALLOONS = 2; // até 2 balões na tela ao mesmo tempo
+const DOUBLE_BALLOON_CHANCE = 0.35; // às vezes surgem 2 de uma vez
+const BALLOON_GAP = 90; // distância mínima entre dois balões
+const BUMPER_R = 20;
+const TURBO_MUL = 2; // raquete turbo: 2x mais rápida
 const BIG_BASE = 5; // primeira bola gigante: 5x; cada balão igual dobra de novo
 const MAX_BIG_STACKS = 3; // 5x, 10x, 20x
 const MAX_SPEED_LEVEL = 3; // rápida: 2x, 4x, 8x / lenta: ½, ¼, ⅛
@@ -88,7 +97,10 @@ const newEffects = (n) => ({
   fog: 0,
   drunk: 0,
   magnet: filled(n, () => 0),
-  snipe: filled(n, () => false)
+  snipe: filled(n, () => false),
+  turbo: filled(n, () => 0),
+  bumpers: 0,
+  hover: 0
 });
 
 const ballRadius = (s) => (s.effects.big.stacks > 0 ? BALL_R * BIG_BASE * 2 ** (s.effects.big.stacks - 1) : BALL_R);
@@ -122,23 +134,38 @@ const tickPowers = (s) => {
   e.freeze = e.freeze.map(dec);
   e.shrink = e.shrink.map(dec);
   e.magnet = e.magnet.map(dec);
-  if (s.balloon) {
-    s.balloon.age += 1;
-    if (s.balloon.age > BALLOON_LIFE) s.balloon = null;
-  }
+  e.turbo = e.turbo.map(dec);
+  if (e.bumpers > 0) e.bumpers -= 1;
+  s.balloons.forEach((b) => {
+    b.age += 1;
+  });
+  s.balloons = s.balloons.filter((b) => b.age <= BALLOON_LIFE);
 };
 
 // Gol: tudo volta ao normal
 const resetPowers = (s) => {
   s.effects = newEffects(s.scores.length);
-  s.balloon = null;
+  s.balloons = [];
 };
 
+const randomPower = (exclude = []) => {
+  const options = POWER_TYPES.filter((t) => !exclude.includes(t));
+  return options[Math.floor(Math.random() * options.length)];
+};
+
+// A cada 2 rebatidas surge um balão (às vezes dois), até 2 na tela, longe um do outro
 const onPaddleHit = (s, spawnBalloon) => {
   s.hits += 1;
-  if (s.powersEnabled && s.hits % HITS_PER_BALLOON === 0 && !s.balloon) {
-    const pos = spawnBalloon();
-    s.balloon = { ...pos, type: POWER_TYPES[Math.floor(Math.random() * POWER_TYPES.length)], age: 0 };
+  if (!s.powersEnabled || s.hits % HITS_PER_BALLOON !== 0) return;
+  const wanted = Math.random() < DOUBLE_BALLOON_CHANCE ? 2 : 1;
+  for (let k = 0; k < wanted && s.balloons.length < MAX_BALLOONS; k++) {
+    let pos = null;
+    for (let tries = 0; tries < 12 && !pos; tries++) {
+      const p = spawnBalloon();
+      if (s.balloons.every((b) => Math.hypot(b.x - p.x, b.y - p.y) >= BALLOON_GAP)) pos = p;
+    }
+    if (!pos) return;
+    s.balloons.push({ ...pos, type: randomPower(s.balloons.map((b) => b.type)), age: 0 });
   }
 };
 
@@ -155,8 +182,20 @@ const randomizeDirection = (s, ball) => {
   ball.slow = false;
 };
 
-const activatePower = (s, requested, ball) => {
+const activatePower = (s, requested, ball, silent = false) => {
   let type = requested;
+  if (type === 'mystery') {
+    // Surpresa: dois poderes aleatórios de uma vez
+    // (sem ninguém ter tocado na bola, só sorteia poderes que não dependem de dono)
+    const ownerless = ball.lt === null || ball.lt === undefined;
+    const skip = ['mystery', ...(ownerless ? POWER_TYPES.filter((t) => POWERS[t].owner) : [])];
+    const picks = [randomPower(skip)];
+    picks.push(randomPower([...skip, picks[0]]));
+    picks.forEach((t) => activatePower(s, t, ball, true));
+    s.fx.push('power');
+    s.pw.push({ t: 'mystery', o: ball.lt ?? null, k: picks });
+    return;
+  }
   const owner = ball.lt;
   // Poderes de jogador precisam de alguém que tenha tocado na bola
   if (POWERS[type].owner && (owner === null || owner === undefined)) type = 'zigzag';
@@ -213,18 +252,50 @@ const activatePower = (s, requested, ball) => {
   if (type === 'drunk') e.drunk = frames;
   if (type === 'magnet') e.magnet[owner] = frames;
   if (type === 'snipe') e.snipe[owner] = true;
+  if (type === 'turbo') e.turbo[owner] = frames;
+  if (type === 'bumpers') e.bumpers = frames;
+  if (type === 'hover') e.hover = frames;
 
+  if (silent) return;
   s.fx.push('power');
   s.pw.push({ t: type, o: owner ?? null });
 };
 
 const checkBalloon = (s, ball, r) => {
-  const b = s.balloon;
-  if (!b) return;
-  if (Math.hypot(ball.x - b.x, ball.y - balloonY(s, b)) < r + BALLOON_R) {
-    s.balloon = null;
-    activatePower(s, b.type, ball);
-  }
+  const hit = s.balloons.find((b) => Math.hypot(ball.x - b.x, ball.y - balloonY(s, b)) < r + BALLOON_R);
+  if (!hit) return;
+  s.balloons = s.balloons.filter((b) => b !== hit);
+  activatePower(s, hit.type, ball);
+};
+
+// Bumpers de pinball: posições fixas perto do meio da quadra
+const bumperSpots = (s) => {
+  if (s.mode === 2) return [{ x: CLASSIC_W / 2, y: CLASSIC_H / 2 }, { x: CLASSIC_W / 2 - 120, y: 110 }, { x: CLASSIC_W / 2 + 120, y: CLASSIC_H - 110 }];
+  return [0, 1, 2].map((k) => {
+    const a = -Math.PI / 2 + (k * 2 * Math.PI) / 3;
+    return { x: POLY_C + Math.cos(a) * 85, y: POLY_C + Math.sin(a) * 85 };
+  });
+};
+
+// Bola quica nos bumpers (mantém a velocidade, sai um pouco mais rápida)
+const checkBumpers = (s, ball, r) => {
+  if (!(s.effects.bumpers > 0)) return;
+  bumperSpots(s).forEach((p) => {
+    const dx = ball.x - p.x;
+    const dy = ball.y - p.y;
+    const d = Math.hypot(dx, dy);
+    if (d >= r + BUMPER_R || d === 0) return;
+    const n = { x: dx / d, y: dy / d };
+    const vn = dot(ball.dx, ball.dy, n);
+    if (vn < 0) {
+      ball.dx -= 2 * vn * n.x;
+      ball.dy -= 2 * vn * n.y;
+      s.fx.push('wall');
+    }
+    ball.x = p.x + n.x * (r + BUMPER_R);
+    ball.y = p.y + n.y * (r + BUMPER_R);
+    keepHorizontalEnough(s, ball);
+  });
 };
 
 // No clássico, não deixa a bola ficar vertical demais
@@ -321,7 +392,9 @@ const flipInput = (input = {}, mode) => ({
 
 const effectiveInputs = (s, inputs) => inputs.map((input, i) => {
   if (s.effects.freeze[i] > 0) return { frozen: true };
-  return s.effects.invert[i] > 0 ? flipInput(input, s.mode) : input;
+  const next = s.effects.invert[i] > 0 ? flipInput(input, s.mode) : { ...input };
+  next.speed = s.effects.turbo[i] > 0 ? TURBO_MUL : 1;
+  return next;
 });
 
 const balloonIcon = (ctx, x, y, type) => {
@@ -364,8 +437,11 @@ const balloonBody = (ctx, x, y, type, age) => {
 const drawBall = (ctx, s, ball) => {
   const color = ball.lt !== null && ball.lt !== undefined ? COLORS[ball.lt] : BALL_COLOR;
   const r = ballRadius(s) + (s.mode >= 3 ? 1 : 0);
-  // Fantasma: quase invisível, pisca de vez em quando
-  if (s.effects.ghost > 0) ctx.globalAlpha = s.tick % 45 < 7 ? 0.9 : 0.08;
+  // Fantasma: some por completo e só aparece num piscar rápido de vez em quando
+  if (s.effects.ghost > 0) {
+    if (s.tick % 50 >= 6) return;
+    ctx.globalAlpha = 0.9;
+  }
   const fast = s.effects.speed.level > 0;
   ctx.shadowColor = fast ? '#ff4757' : color;
   ctx.shadowBlur = fast ? 20 : 12;
@@ -428,9 +504,43 @@ const drawFog = (ctx, s, cx, cy, w, h, round) => {
   }
 };
 
-// Raquete com ímã (vermelho) ou com tiro certeiro carregado (verde) brilha
+const drawBumpers = (ctx, s) => {
+  if (!(s.effects.bumpers > 0)) return;
+  const fading = s.effects.bumpers < 2 * FPS && Math.floor(s.effects.bumpers / 8) % 2 === 0;
+  bumperSpots(s).forEach((p, k) => {
+    const pulse = 1 + Math.sin(s.tick / 7 + k) * 0.06;
+    ctx.globalAlpha = fading ? 0.4 : 1;
+    const grad = ctx.createRadialGradient(p.x - 6, p.y - 6, 2, p.x, p.y, BUMPER_R * pulse);
+    grad.addColorStop(0, '#ffffff');
+    grad.addColorStop(0.35, '#fd9644');
+    grad.addColorStop(1, '#c0392b');
+    ctx.shadowColor = '#fd9644';
+    ctx.shadowBlur = 14;
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, BUMPER_R * pulse, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.strokeStyle = 'rgba(255,255,255,0.7)';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+  });
+};
+
+// Bola parada no ar: anel pulsando em volta
+const drawHoverRing = (ctx, s, ball) => {
+  if (!(s.effects.hover > 0) || s.effects.ghost > 0) return;
+  ctx.strokeStyle = 'rgba(129,236,236,0.8)';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.arc(ball.x, ball.y, ballRadius(s) + 6 + Math.sin(s.tick / 4) * 3, 0, Math.PI * 2);
+  ctx.stroke();
+};
+
+// Raquete com ímã (vermelho), tiro certeiro carregado (verde) ou turbo (amarelo) brilha
 const powerGlow = (ctx, s, i, draw) => {
-  const color = s.effects.magnet[i] > 0 ? '#ff4d4d' : s.effects.snipe[i] ? '#2ee6a6' : null;
+  const color = s.effects.magnet[i] > 0 ? '#ff4d4d' : s.effects.snipe[i] ? '#2ee6a6' : s.effects.turbo[i] > 0 ? '#ffeaa7' : null;
   if (!color) return;
   ctx.save();
   ctx.strokeStyle = color;
@@ -483,7 +593,7 @@ const createClassic = (winScore, powersEnabled) => ({
   player2: { x: CLASSIC_W - 30, y: CLASSIC_H / 2 - PADDLE_H / 2, h: PADDLE_H },
   balls: [serveClassic(Math.random() < 0.5 ? 1 : -1)],
   effects: newEffects(2),
-  balloon: null,
+  balloons: [],
   hits: 0,
   tick: 0,
   serveFrames: 0,
@@ -501,12 +611,13 @@ const moveClassicPaddle = (s, i, input = {}) => {
     paddle.h = h;
   }
   if (!input.frozen) {
+    const speed = PADDLE_SPEED * (input.speed || 1);
     if (input.target !== null && input.target !== undefined) {
-      const max = PADDLE_SPEED * (input.bot ? input.botSpeed || 0.8 : 1.5);
+      const max = speed * (input.bot ? input.botSpeed || 0.8 : 1.5);
       paddle.y += clamp(input.target - (paddle.y + h / 2), -max, max);
     } else {
-      if (input.up) paddle.y -= PADDLE_SPEED;
-      if (input.down) paddle.y += PADDLE_SPEED;
+      if (input.up) paddle.y -= speed;
+      if (input.down) paddle.y += speed;
     }
   }
   paddle.y = clamp(paddle.y, 0, CLASSIC_H - h);
@@ -582,6 +693,7 @@ const moveClassicBall = (s, ball, r, mul) => {
     }
 
     checkBalloon(s, ball, r);
+    checkBumpers(s, ball, r);
 
     // Escudo: defende uma bola na linha do gol
     if (ball.x - r <= 0 && ball.dx < 0 && s.effects.shield[0]) {
@@ -618,6 +730,11 @@ const stepClassic = (s, rawInputs) => {
 
   if (s.serveFrames > 0) {
     s.serveFrames -= 1;
+    return null;
+  }
+  // Bola parada no ar: as raquetes se mexem, a bola espera
+  if (s.effects.hover > 0) {
+    s.effects.hover -= 1;
     return null;
   }
 
@@ -657,13 +774,18 @@ const drawClassic = (ctx, s) => {
     frostOutline(ctx, s, i, () => ctx.strokeRect(p.x - 2, p.y - 2, PADDLE_W + 4, h + 4));
   });
 
-  if (s.balloon) {
-    const by = balloonY(s, s.balloon);
-    balloonBody(ctx, s.balloon.x, by, s.balloon.type, s.balloon.age || 0);
-    balloonIcon(ctx, s.balloon.x, by, s.balloon.type);
-  }
+  drawBumpers(ctx, s);
 
-  s.balls.forEach((ball) => drawBall(ctx, s, ball));
+  s.balloons.forEach((b) => {
+    const by = balloonY(s, b);
+    balloonBody(ctx, b.x, by, b.type, b.age || 0);
+    balloonIcon(ctx, b.x, by, b.type);
+  });
+
+  s.balls.forEach((ball) => {
+    drawBall(ctx, s, ball);
+    drawHoverRing(ctx, s, ball);
+  });
   drawFog(ctx, s, CLASSIC_W / 2, CLASSIC_H / 2, 190, CLASSIC_H, false);
 };
 
@@ -747,7 +869,7 @@ const createPoly = (n, winScore, powersEnabled) => ({
   paddles: filled(n, () => 0.5),
   balls: [servePolyBall(polyGeometry(n), Math.floor(Math.random() * n))],
   effects: newEffects(n),
-  balloon: null,
+  balloons: [],
   hits: 0,
   tick: 0,
   serveFrames: 0,
@@ -760,12 +882,13 @@ const movePolyPaddle = (s, g, i, input = {}) => {
   const half = polyPaddleLen(s, g, i) / 2 / g.goals[i].L;
   let t = s.paddles[i];
   if (!input.frozen) {
+    const speed = g.paddleSpeed * (input.speed || 1);
     if (input.target !== null && input.target !== undefined) {
-      const max = g.paddleSpeed * (input.bot ? input.botSpeed || 0.8 : 1.5);
+      const max = speed * (input.bot ? input.botSpeed || 0.8 : 1.5);
       t += clamp(input.target - t, -max, max);
     } else {
-      if (input.left) t += g.paddleSpeed;
-      if (input.right) t -= g.paddleSpeed;
+      if (input.left) t += speed;
+      if (input.right) t -= speed;
     }
   }
   s.paddles[i] = clamp(t, half, 1 - half);
@@ -874,6 +997,7 @@ const movePolyBall = (s, g, ball, r, mul) => {
     }
 
     checkBalloon(s, ball, r);
+    checkBumpers(s, ball, r);
 
     for (let i = 0; i < g.n; i++) {
       const { A, n } = g.goals[i];
@@ -933,6 +1057,11 @@ const stepPoly = (s, rawInputs) => {
 
   if (s.serveFrames > 0) {
     s.serveFrames -= 1;
+    return null;
+  }
+  // Bola parada no ar: as raquetes se mexem, a bola espera
+  if (s.effects.hover > 0) {
+    s.effects.hover -= 1;
     return null;
   }
 
@@ -1039,23 +1168,24 @@ const drawPoly = (ctx, s, viewIndex = 0, labels = []) => {
     });
   });
 
-  // Balão (o corpo gira com o campo; o ícone é desenhado depois, sempre de pé)
-  let balloonScreen = null;
-  if (s.balloon) {
-    const by = balloonY(s, s.balloon);
-    balloonScreen = toScreen({ x: s.balloon.x, y: by }, angle);
-  }
+  drawBumpers(ctx, s);
+
+  // Balões (a posição gira com o campo; são desenhados depois, sempre de pé)
+  const balloonsOnScreen = s.balloons.map((b) => ({ b, p: toScreen({ x: b.x, y: balloonY(s, b) }, angle) }));
 
   // Bolas na cor de quem tocou por último
-  s.balls.forEach((ball) => drawBall(ctx, s, ball));
+  s.balls.forEach((ball) => {
+    drawBall(ctx, s, ball);
+    drawHoverRing(ctx, s, ball);
+  });
   drawFog(ctx, s, POLY_C, POLY_C, g.R * 0.6, 0, true);
 
   ctx.restore();
 
-  if (balloonScreen) {
-    balloonBody(ctx, balloonScreen.x, balloonScreen.y, s.balloon.type, s.balloon.age || 0);
-    balloonIcon(ctx, balloonScreen.x, balloonScreen.y, s.balloon.type);
-  }
+  balloonsOnScreen.forEach(({ b, p }) => {
+    balloonBody(ctx, p.x, p.y, b.type, b.age || 0);
+    balloonIcon(ctx, p.x, p.y, b.type);
+  });
 
   // Nomes e placar de cada gol (texto sempre na horizontal)
   ctx.textBaseline = 'middle';
@@ -1206,6 +1336,8 @@ export const effectChips = (s) => {
   if (e.gravity) chips.push({ key: 'gravity', icon: '🕳️', text: `${secs(e.gravity)}s`, color: POWERS.gravity.color });
   if (e.fog) chips.push({ key: 'fog', icon: '🌫️', text: `${secs(e.fog)}s`, color: POWERS.fog.color });
   if (e.drunk) chips.push({ key: 'drunk', icon: '🥴', text: `${secs(e.drunk)}s`, color: POWERS.drunk.color });
+  if (e.bumpers) chips.push({ key: 'bumpers', icon: '🎱', text: `${secs(e.bumpers)}s`, color: POWERS.bumpers.color });
+  if (e.hover) chips.push({ key: 'hover', icon: '⏸️', text: `${secs(e.hover)}s`, color: POWERS.hover.color });
   const perPlayer = (list, key, icon, withTime = true) => list.forEach((f, i) => {
     if (f) chips.push({ key: `${key}-${i}`, icon, text: withTime ? `${secs(f)}s` : '', color: COLORS[i], owner: i });
   });
@@ -1216,6 +1348,7 @@ export const effectChips = (s) => {
   perPlayer(e.shield.map((v) => (v ? 1 : 0)), 'shield', '🛡️', false);
   perPlayer(e.magnet, 'magnet', '🧲');
   perPlayer(e.snipe.map((v) => (v ? 1 : 0)), 'snipe', '🎯', false);
+  perPlayer(e.turbo, 'turbo', '🚀');
   return chips;
 };
 
@@ -1242,9 +1375,12 @@ export const packState = (s) => {
       fg: secs(e.fog),
       dk: secs(e.drunk),
       mg: e.magnet.map(secs),
-      sn: e.snipe.map((v) => (v ? 1 : 0))
+      sn: e.snipe.map((v) => (v ? 1 : 0)),
+      tb: e.turbo.map(secs),
+      bm: secs(e.bumpers),
+      hv: e.hover // em quadros: dura pouco mais de 1 s
     },
-    bl: s.balloon ? [round1(s.balloon.x), round1(balloonY(s, s.balloon)), POWER_TYPES.indexOf(s.balloon.type), s.balloon.age] : null
+    bl: s.balloons.map((b) => [round1(b.x), round1(balloonY(s, b)), POWER_TYPES.indexOf(b.type), b.age])
   };
   if (s.mode >= 3) msg.q = s.paddles.map((v) => Math.round(v * 1000) / 1000);
   else {
@@ -1275,10 +1411,13 @@ export const applyPacked = (s, msg) => {
       fog: (e.fg || 0) * FPS,
       drunk: (e.dk || 0) * FPS,
       magnet: arr(e.mg),
-      snipe: (e.sn || filled(n, () => 0)).map(Boolean)
+      snipe: (e.sn || filled(n, () => 0)).map(Boolean),
+      turbo: arr(e.tb),
+      bumpers: (e.bm || 0) * FPS,
+      hover: e.hv || 0
     };
   }
-  s.balloon = msg.bl ? { x: msg.bl[0], y: msg.bl[1], type: POWER_TYPES[msg.bl[2]], age: msg.bl[3], fixed: true } : null;
+  s.balloons = (msg.bl || []).map(([x, y, type, age]) => ({ x, y, type: POWER_TYPES[type], age, fixed: true }));
   if (s.mode >= 3 && msg.q) s.paddles = msg.q;
   if (s.mode === 2) {
     s.player1.y = msg.a;
