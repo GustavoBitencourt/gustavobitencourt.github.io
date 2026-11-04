@@ -55,8 +55,16 @@ export const POWERS = {
   turbo: { icon: '🚀', label: 'Raquete turbo', color: '#ffeaa7', frames: 10 * FPS, owner: true },
   bumpers: { icon: '🎱', label: 'Pinball! Bumpers na quadra', color: '#fd9644', frames: 9 * FPS },
   hover: { icon: '⏸️', label: 'Bola parada no ar!', color: '#81ecec', frames: Math.round(1.3 * FPS) },
-  mystery: { icon: '🎲', label: 'Surpresa!', color: '#f368e0', frames: 0 }
+  mystery: { icon: '🎲', label: 'Surpresa!', color: '#f368e0', frames: 0 },
+  tiny: { icon: '🔹', label: 'Bola mini!', color: '#48dbfb', frames: 10 * FPS },
+  wind: { icon: '💨', label: 'Ventania na quadra!', color: '#c8d6e5', frames: 8 * FPS },
+  blackout: { icon: '🔦', label: 'Apagão!', color: '#576574', frames: 6 * FPS },
+  sloth: { icon: '🐌', label: 'Raquetes lentas', color: '#10ac84', frames: 8 * FPS, owner: true },
+  disguise: { icon: '🎭', label: 'Bola disfarçada!', color: '#ff9ff3', frames: 7 * FPS }
 };
+// Poderes que só fazem sentido com a bola já rápida: só surgem depois de LATE_HITS rebatidas no ponto
+const LATE_POWERS = ['slow', 'hover'];
+const LATE_HITS = 10;
 export const POWER_TYPES = Object.keys(POWERS);
 
 const BALLOON_R = 18;
@@ -78,7 +86,12 @@ const SHRINK_FACTOR = 0.55;
 const DRUNK_SWAY = 0.07; // rad por quadro no auge do balanço da bola bêbada
 const MAGNET_PULL = 0.2; // aceleração em direção à raquete com ímã (a velocidade é mantida)
 const MAGNET_RANGE = 260; // o ímã só puxa a bola que está chegando perto do gol
-const SNIPE_BOOST = 1.6; // tiro certeiro: velocidade da rebatida multiplicada
+const SNIPE_BOOST = 2.4; // tiro certeiro: velocidade da rebatida multiplicada
+const SNIPE_MAX = 2; // tiro certeiro pode passar do limite normal de velocidade (até 2x)
+const TINY_FACTOR = 0.5; // bola mini: metade do tamanho
+const WIND_FORCE = 0.12; // ventania: empurra a direção da bola (a velocidade é mantida)
+const SLOTH_MUL = 0.45; // raquetes lentas: velocidade das raquetes dos adversários
+const LIGHT_R = 105; // apagão: raio da luz em volta de cada raquete
 // Anti-loop (3+ jogadores): se as mesmas duas raquetes trocarem a bola mais de MAX_RALLY vezes seguidas,
 // a próxima rebatida sai em direção ao gol de outro jogador
 const MAX_RALLY = 4;
@@ -100,10 +113,16 @@ const newEffects = (n) => ({
   snipe: filled(n, () => false),
   turbo: filled(n, () => 0),
   bumpers: 0,
-  hover: 0
+  hover: 0,
+  tiny: 0,
+  wind: { frames: 0, angle: 0 },
+  blackout: 0,
+  sloth: filled(n, () => 0),
+  disguise: 0
 });
 
-const ballRadius = (s) => (s.effects.big.stacks > 0 ? BALL_R * BIG_BASE * 2 ** (s.effects.big.stacks - 1) : BALL_R);
+const ballRadius = (s) =>
+  (s.effects.big.stacks > 0 ? BALL_R * BIG_BASE * 2 ** (s.effects.big.stacks - 1) : BALL_R) * (s.effects.tiny > 0 ? TINY_FACTOR : 1);
 const speedMul = (s) => 2 ** s.effects.speed.level;
 
 // Fator de tamanho da raquete do jogador i (raquete gigante e encolhida)
@@ -135,6 +154,11 @@ const tickPowers = (s) => {
   e.shrink = e.shrink.map(dec);
   e.magnet = e.magnet.map(dec);
   e.turbo = e.turbo.map(dec);
+  e.sloth = e.sloth.map(dec);
+  if (e.tiny > 0) e.tiny -= 1;
+  if (e.wind.frames > 0) e.wind.frames -= 1;
+  if (e.blackout > 0) e.blackout -= 1;
+  if (e.disguise > 0) e.disguise -= 1;
   if (e.bumpers > 0) e.bumpers -= 1;
   s.balloons.forEach((b) => {
     b.age += 1;
@@ -146,7 +170,11 @@ const tickPowers = (s) => {
 const resetPowers = (s) => {
   s.effects = newEffects(s.scores.length);
   s.balloons = [];
+  s.rallyHits = 0;
 };
+
+// Poderes que ainda não podem surgir neste ponto
+const notYet = (s) => ((s.rallyHits || 0) < LATE_HITS ? LATE_POWERS : []);
 
 const randomPower = (exclude = []) => {
   const options = POWER_TYPES.filter((t) => !exclude.includes(t));
@@ -156,6 +184,7 @@ const randomPower = (exclude = []) => {
 // A cada 2 rebatidas surge um balão (às vezes dois), até 2 na tela, longe um do outro
 const onPaddleHit = (s, spawnBalloon) => {
   s.hits += 1;
+  s.rallyHits = (s.rallyHits || 0) + 1;
   if (!s.powersEnabled || s.hits % HITS_PER_BALLOON !== 0) return;
   const wanted = Math.random() < DOUBLE_BALLOON_CHANCE ? 2 : 1;
   for (let k = 0; k < wanted && s.balloons.length < MAX_BALLOONS; k++) {
@@ -165,7 +194,7 @@ const onPaddleHit = (s, spawnBalloon) => {
       if (s.balloons.every((b) => Math.hypot(b.x - p.x, b.y - p.y) >= BALLOON_GAP)) pos = p;
     }
     if (!pos) return;
-    s.balloons.push({ ...pos, type: randomPower(s.balloons.map((b) => b.type)), age: 0 });
+    s.balloons.push({ ...pos, type: randomPower([...s.balloons.map((b) => b.type), ...notYet(s)]), age: 0 });
   }
 };
 
@@ -188,7 +217,7 @@ const activatePower = (s, requested, ball, silent = false) => {
     // Surpresa: dois poderes aleatórios de uma vez
     // (sem ninguém ter tocado na bola, só sorteia poderes que não dependem de dono)
     const ownerless = ball.lt === null || ball.lt === undefined;
-    const skip = ['mystery', ...(ownerless ? POWER_TYPES.filter((t) => POWERS[t].owner) : [])];
+    const skip = ['mystery', ...notYet(s), ...(ownerless ? POWER_TYPES.filter((t) => POWERS[t].owner) : [])];
     const picks = [randomPower(skip)];
     picks.push(randomPower([...skip, picks[0]]));
     picks.forEach((t) => activatePower(s, t, ball, true));
@@ -255,6 +284,11 @@ const activatePower = (s, requested, ball, silent = false) => {
   if (type === 'turbo') e.turbo[owner] = frames;
   if (type === 'bumpers') e.bumpers = frames;
   if (type === 'hover') e.hover = frames;
+  if (type === 'tiny') e.tiny = frames;
+  if (type === 'wind') e.wind = { frames, angle: Math.random() * Math.PI * 2 };
+  if (type === 'blackout') e.blackout = frames;
+  if (type === 'sloth') e.sloth = others(e.sloth, frames);
+  if (type === 'disguise') e.disguise = frames;
 
   if (silent) return;
   s.fx.push('power');
@@ -340,7 +374,8 @@ const applyBending = (s) => {
   const gravity = s.effects.gravity > 0;
   const drunk = s.effects.drunk > 0;
   const magnets = s.effects.magnet.map((f, i) => (f > 0 ? i : -1)).filter((i) => i >= 0);
-  if (!stacks && !gravity && !drunk && !magnets.length) return;
+  const wind = s.effects.wind.frames > 0 ? s.effects.wind.angle : null;
+  if (!stacks && !gravity && !drunk && !magnets.length && wind === null) return;
   const c = fieldCenter(s);
   s.balls.forEach((b, k) => {
     if (b.slow) return;
@@ -362,6 +397,7 @@ const applyBending = (s) => {
       const p = magnetTarget(s, i, b);
       if (p) pullToward(b, p.x, p.y, MAGNET_PULL);
     });
+    if (wind !== null) pullToward(b, b.x + Math.cos(wind) * 100, b.y + Math.sin(wind) * 100, WIND_FORCE);
     keepHorizontalEnough(s, b);
   });
 };
@@ -393,7 +429,7 @@ const flipInput = (input = {}, mode) => ({
 const effectiveInputs = (s, inputs) => inputs.map((input, i) => {
   if (s.effects.freeze[i] > 0) return { frozen: true };
   const next = s.effects.invert[i] > 0 ? flipInput(input, s.mode) : { ...input };
-  next.speed = s.effects.turbo[i] > 0 ? TURBO_MUL : 1;
+  next.speed = (s.effects.turbo[i] > 0 ? TURBO_MUL : 1) * (s.effects.sloth[i] > 0 ? SLOTH_MUL : 1);
   return next;
 });
 
@@ -435,7 +471,11 @@ const balloonBody = (ctx, x, y, type, age) => {
 };
 
 const drawBall = (ctx, s, ball) => {
-  const color = ball.lt !== null && ball.lt !== undefined ? COLORS[ball.lt] : BALL_COLOR;
+  let color = ball.lt !== null && ball.lt !== undefined ? COLORS[ball.lt] : BALL_COLOR;
+  if (s.effects.disguise > 0) {
+    const palette = [BALL_COLOR, ...COLORS.slice(0, s.mode)];
+    color = palette[Math.floor(s.tick / 10) % palette.length];
+  }
   const r = ballRadius(s) + (s.mode >= 3 ? 1 : 0);
   // Fantasma: some por completo e só aparece num piscar rápido de vez em quando
   if (s.effects.ghost > 0) {
@@ -526,6 +566,46 @@ const drawBumpers = (ctx, s) => {
     ctx.stroke();
     ctx.globalAlpha = 1;
   });
+};
+
+// Ventania: riscos atravessando a quadra na direção do vento
+const drawWind = (ctx, s, w, h) => {
+  if (!(s.effects.wind.frames > 0)) return;
+  const { angle } = s.effects.wind;
+  const cos = Math.cos(angle);
+  const sin = Math.sin(angle);
+  ctx.save();
+  ctx.strokeStyle = 'rgba(200,214,229,0.35)';
+  ctx.lineWidth = 2;
+  ctx.lineCap = 'round';
+  for (let k = 0; k < 14; k++) {
+    // posição pseudoaleatória fixa por risco, andando com o tempo
+    const along = ((s.tick * 4 + k * 173) % (w + h)) - h / 2;
+    const across = ((k * 97) % h) - h / 2;
+    const x = w / 2 + cos * (along - w / 2) - sin * across;
+    const y = h / 2 + sin * (along - w / 2) + cos * across;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(x - cos * 26, y - sin * 26);
+    ctx.stroke();
+  }
+  ctx.restore();
+};
+
+// Apagão: tudo escuro, só com luz em volta de cada raquete
+const drawBlackout = (ctx, s, size, lights) => {
+  if (!(s.effects.blackout > 0)) return;
+  const a = 0.95 * Math.min(1, s.effects.blackout / 30); // volta a luz devagar no fim
+  ctx.save();
+  ctx.fillStyle = `rgba(0,0,0,${a})`;
+  ctx.beginPath();
+  ctx.rect(-size, -size, size * 3, size * 3);
+  lights.forEach((p) => {
+    ctx.moveTo(p.x + LIGHT_R, p.y);
+    ctx.arc(p.x, p.y, LIGHT_R, 0, Math.PI * 2, true);
+  });
+  ctx.fill('evenodd');
+  ctx.restore();
 };
 
 // Bola parada no ar: anel pulsando em volta
@@ -681,7 +761,7 @@ const moveClassicBall = (s, ball, r, mul) => {
           const oppCenter = opp.y + classicPaddleH(s, 1 - idx) / 2;
           const ty = oppCenter < CLASSIC_H / 2 ? CLASSIC_H - 25 : 25;
           const tx = idx === 0 ? CLASSIC_W : 0;
-          const speed = Math.min(CLASSIC_MAX_SPEED, Math.hypot(ball.dx, ball.dy) * SNIPE_BOOST);
+          const speed = Math.min(CLASSIC_MAX_SPEED * SNIPE_MAX, Math.max(BALL_SPEED, Math.hypot(ball.dx, ball.dy)) * SNIPE_BOOST);
           const dl = Math.hypot(tx - ball.x, ty - ball.y) || 1;
           ball.dx = ((tx - ball.x) / dl) * speed;
           ball.dy = ((ty - ball.y) / dl) * speed;
@@ -787,6 +867,8 @@ const drawClassic = (ctx, s) => {
     drawHoverRing(ctx, s, ball);
   });
   drawFog(ctx, s, CLASSIC_W / 2, CLASSIC_H / 2, 190, CLASSIC_H, false);
+  drawWind(ctx, s, CLASSIC_W, CLASSIC_H);
+  drawBlackout(ctx, s, CLASSIC_W, [s.player1, s.player2].map((p, i) => ({ x: p.x + PADDLE_W / 2, y: p.y + classicPaddleH(s, i) / 2 })));
 };
 
 // =====================================================================
@@ -970,7 +1052,7 @@ const movePolyBall = (s, g, ball, r, mul) => {
         s.effects.snipe[i] = false;
         const opps = others([i]);
         const j = opps[Math.floor(Math.random() * opps.length)];
-        aimAtGoal(g, ball, j, s.paddles[j] < 0.5 ? 0.88 : 0.12, Math.min(POLY_MAX_SPEED * 1.3, speed * SNIPE_BOOST));
+        aimAtGoal(g, ball, j, s.paddles[j] < 0.5 ? 0.88 : 0.12, Math.min(POLY_MAX_SPEED * SNIPE_MAX, speed * SNIPE_BOOST));
         ball.pair = null;
         ball.rally = 0;
         s.fx.push('snipe');
@@ -1179,6 +1261,11 @@ const drawPoly = (ctx, s, viewIndex = 0, labels = []) => {
     drawHoverRing(ctx, s, ball);
   });
   drawFog(ctx, s, POLY_C, POLY_C, g.R * 0.6, 0, true);
+  drawWind(ctx, s, POLY_SIZE, POLY_SIZE);
+  drawBlackout(ctx, s, POLY_SIZE, g.goals.map(({ A, u, n, L }, i) => ({
+    x: A.x + u.x * s.paddles[i] * L + n.x * POLY_PADDLE_OFFSET,
+    y: A.y + u.y * s.paddles[i] * L + n.y * POLY_PADDLE_OFFSET
+  })));
 
   ctx.restore();
 
@@ -1337,6 +1424,10 @@ export const effectChips = (s) => {
   if (e.fog) chips.push({ key: 'fog', icon: '🌫️', text: `${secs(e.fog)}s`, color: POWERS.fog.color });
   if (e.drunk) chips.push({ key: 'drunk', icon: '🥴', text: `${secs(e.drunk)}s`, color: POWERS.drunk.color });
   if (e.bumpers) chips.push({ key: 'bumpers', icon: '🎱', text: `${secs(e.bumpers)}s`, color: POWERS.bumpers.color });
+  if (e.tiny) chips.push({ key: 'tiny', icon: '🔹', text: `${secs(e.tiny)}s`, color: POWERS.tiny.color });
+  if (e.wind.frames) chips.push({ key: 'wind', icon: '💨', text: `${secs(e.wind.frames)}s`, color: POWERS.wind.color });
+  if (e.blackout) chips.push({ key: 'blackout', icon: '🔦', text: `${secs(e.blackout)}s`, color: POWERS.blackout.color });
+  if (e.disguise) chips.push({ key: 'disguise', icon: '🎭', text: `${secs(e.disguise)}s`, color: POWERS.disguise.color });
   if (e.hover) chips.push({ key: 'hover', icon: '⏸️', text: `${secs(e.hover)}s`, color: POWERS.hover.color });
   const perPlayer = (list, key, icon, withTime = true) => list.forEach((f, i) => {
     if (f) chips.push({ key: `${key}-${i}`, icon, text: withTime ? `${secs(f)}s` : '', color: COLORS[i], owner: i });
@@ -1349,6 +1440,7 @@ export const effectChips = (s) => {
   perPlayer(e.magnet, 'magnet', '🧲');
   perPlayer(e.snipe.map((v) => (v ? 1 : 0)), 'snipe', '🎯', false);
   perPlayer(e.turbo, 'turbo', '🚀');
+  perPlayer(e.sloth, 'sloth', '🐌');
   return chips;
 };
 
@@ -1378,7 +1470,12 @@ export const packState = (s) => {
       sn: e.snipe.map((v) => (v ? 1 : 0)),
       tb: e.turbo.map(secs),
       bm: secs(e.bumpers),
-      hv: e.hover // em quadros: dura pouco mais de 1 s
+      hv: e.hover, // em quadros: dura pouco mais de 1 s
+      tn: secs(e.tiny),
+      wd: [secs(e.wind.frames), Math.round(e.wind.angle * 100) / 100],
+      bo: e.blackout, // em quadros: a luz volta devagar no fim
+      sl: e.sloth.map(secs),
+      dg: secs(e.disguise)
     },
     bl: s.balloons.map((b) => [round1(b.x), round1(balloonY(s, b)), POWER_TYPES.indexOf(b.type), b.age])
   };
@@ -1414,7 +1511,12 @@ export const applyPacked = (s, msg) => {
       snipe: (e.sn || filled(n, () => 0)).map(Boolean),
       turbo: arr(e.tb),
       bumpers: (e.bm || 0) * FPS,
-      hover: e.hv || 0
+      hover: e.hv || 0,
+      tiny: (e.tn || 0) * FPS,
+      wind: { frames: (e.wd?.[0] || 0) * FPS, angle: e.wd?.[1] || 0 },
+      blackout: e.bo || 0,
+      sloth: arr(e.sl),
+      disguise: (e.dg || 0) * FPS
     };
   }
   s.balloons = (msg.bl || []).map(([x, y, type, age]) => ({ x, y, type: POWER_TYPES[type], age, fixed: true }));
