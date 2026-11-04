@@ -60,7 +60,9 @@ export const POWERS = {
   wind: { icon: '💨', label: 'Ventania na quadra!', color: '#c8d6e5', frames: 8 * FPS },
   blackout: { icon: '🔦', label: 'Apagão!', color: '#576574', frames: 6 * FPS },
   sloth: { icon: '🐌', label: 'Raquetes lentas', color: '#10ac84', frames: 8 * FPS, owner: true },
-  disguise: { icon: '🎭', label: 'Bola disfarçada!', color: '#ff9ff3', frames: 7 * FPS }
+  double: { icon: '💰', label: 'Gol em dobro', color: '#f9ca24', frames: 0, owner: true },
+  portals: { icon: '🌌', label: 'Portais na quadra!', color: '#a55eea', frames: 9 * FPS },
+  ice: { icon: '🧊', label: 'Raquetes escorregando', color: '#7ed6df', frames: 8 * FPS, owner: true }
 };
 // Poderes que só fazem sentido com a bola já rápida: só surgem depois de LATE_HITS rebatidas no ponto
 const LATE_POWERS = ['slow', 'hover'];
@@ -69,9 +71,9 @@ export const POWER_TYPES = Object.keys(POWERS);
 
 const BALLOON_R = 18;
 const BALLOON_LIFE = 12 * FPS;
-const HITS_PER_BALLOON = 2;
+const HITS_PER_BALLOON = 3;
 const MAX_BALLOONS = 2; // até 2 balões na tela ao mesmo tempo
-const DOUBLE_BALLOON_CHANCE = 0.35; // às vezes surgem 2 de uma vez
+const DOUBLE_BALLOON_CHANCE = 0.2; // às vezes surgem 2 de uma vez
 const BALLOON_GAP = 90; // distância mínima entre dois balões
 const BUMPER_R = 20;
 const TURBO_MUL = 2; // raquete turbo: 2x mais rápida
@@ -91,6 +93,10 @@ const SNIPE_MAX = 2; // tiro certeiro pode passar do limite normal de velocidade
 const TINY_FACTOR = 0.5; // bola mini: metade do tamanho
 const WIND_FORCE = 0.12; // ventania: empurra a direção da bola (a velocidade é mantida)
 const SLOTH_MUL = 0.45; // raquetes lentas: velocidade das raquetes dos adversários
+const ICE_KEEP = 0.94; // raquete escorregando: quanto do movimento anterior continua
+const PORTAL_R = 20;
+const PORTAL_COOLDOWN = 25; // quadros até a bola poder usar um portal de novo
+const MAX_WALL_BOUNCES = 5; // 3+ jogadores: depois de 5 batidas seguidas sem raquete, a bola vai para um gol
 const LIGHT_R = 105; // apagão: raio da luz em volta de cada raquete
 // Anti-loop (3+ jogadores): se as mesmas duas raquetes trocarem a bola mais de MAX_RALLY vezes seguidas,
 // a próxima rebatida sai em direção ao gol de outro jogador
@@ -118,7 +124,9 @@ const newEffects = (n) => ({
   wind: { frames: 0, angle: 0 },
   blackout: 0,
   sloth: filled(n, () => 0),
-  disguise: 0
+  double: filled(n, () => false),
+  portals: 0,
+  ice: filled(n, () => 0)
 });
 
 const ballRadius = (s) =>
@@ -158,7 +166,8 @@ const tickPowers = (s) => {
   if (e.tiny > 0) e.tiny -= 1;
   if (e.wind.frames > 0) e.wind.frames -= 1;
   if (e.blackout > 0) e.blackout -= 1;
-  if (e.disguise > 0) e.disguise -= 1;
+  if (e.portals > 0) e.portals -= 1;
+  e.ice = e.ice.map(dec);
   if (e.bumpers > 0) e.bumpers -= 1;
   s.balloons.forEach((b) => {
     b.age += 1;
@@ -288,7 +297,9 @@ const activatePower = (s, requested, ball, silent = false) => {
   if (type === 'wind') e.wind = { frames, angle: Math.random() * Math.PI * 2 };
   if (type === 'blackout') e.blackout = frames;
   if (type === 'sloth') e.sloth = others(e.sloth, frames);
-  if (type === 'disguise') e.disguise = frames;
+  if (type === 'double') e.double[owner] = true;
+  if (type === 'portals') e.portals = frames;
+  if (type === 'ice') e.ice = others(e.ice, frames);
 
   if (silent) return;
   s.fx.push('power');
@@ -311,6 +322,26 @@ const bumperSpots = (s) => {
   });
 };
 
+// Portais: um par fixo; a bola entra num e sai do outro com a mesma velocidade
+const portalSpots = (s) => {
+  if (s.mode === 2) return [{ x: 190, y: 95 }, { x: CLASSIC_W - 190, y: CLASSIC_H - 95 }];
+  return [{ x: POLY_C - 87, y: POLY_C - 50 }, { x: POLY_C + 87, y: POLY_C - 50 }]; // entre os bumpers
+};
+
+const checkPortals = (s, ball, r) => {
+  if (!(s.effects.portals > 0)) return;
+  if (s.tick - (ball.portalAt ?? -999) < PORTAL_COOLDOWN) return;
+  const spots = portalSpots(s);
+  const k = spots.findIndex((p) => Math.hypot(ball.x - p.x, ball.y - p.y) < PORTAL_R);
+  if (k < 0) return;
+  const out = spots[1 - k];
+  const sp = Math.hypot(ball.dx, ball.dy) || 1;
+  ball.x = out.x + (ball.dx / sp) * (PORTAL_R + r + 2);
+  ball.y = out.y + (ball.dy / sp) * (PORTAL_R + r + 2);
+  ball.portalAt = s.tick;
+  s.fx.push('swerve');
+};
+
 // Bola quica nos bumpers (mantém a velocidade, sai um pouco mais rápida)
 const checkBumpers = (s, ball, r) => {
   if (!(s.effects.bumpers > 0)) return;
@@ -328,6 +359,7 @@ const checkBumpers = (s, ball, r) => {
     }
     ball.x = p.x + n.x * (r + BUMPER_R);
     ball.y = p.y + n.y * (r + BUMPER_R);
+    ball.wallHits = (ball.wallHits || 0) + 1;
     keepHorizontalEnough(s, ball);
   });
 };
@@ -429,6 +461,7 @@ const flipInput = (input = {}, mode) => ({
 const effectiveInputs = (s, inputs) => inputs.map((input, i) => {
   if (s.effects.freeze[i] > 0) return { frozen: true };
   const next = s.effects.invert[i] > 0 ? flipInput(input, s.mode) : { ...input };
+  next.ice = s.effects.ice[i] > 0;
   next.speed = (s.effects.turbo[i] > 0 ? TURBO_MUL : 1) * (s.effects.sloth[i] > 0 ? SLOTH_MUL : 1);
   return next;
 });
@@ -471,11 +504,7 @@ const balloonBody = (ctx, x, y, type, age) => {
 };
 
 const drawBall = (ctx, s, ball) => {
-  let color = ball.lt !== null && ball.lt !== undefined ? COLORS[ball.lt] : BALL_COLOR;
-  if (s.effects.disguise > 0) {
-    const palette = [BALL_COLOR, ...COLORS.slice(0, s.mode)];
-    color = palette[Math.floor(s.tick / 10) % palette.length];
-  }
+  const color = ball.lt !== null && ball.lt !== undefined ? COLORS[ball.lt] : BALL_COLOR;
   const r = ballRadius(s) + (s.mode >= 3 ? 1 : 0);
   // Fantasma: some por completo e só aparece num piscar rápido de vez em quando
   if (s.effects.ghost > 0) {
@@ -542,6 +571,37 @@ const drawFog = (ctx, s, cx, cy, w, h, round) => {
     ctx.fillStyle = grad;
     ctx.fillRect(cx - w, cy - h / 2, 2 * w, h);
   }
+};
+
+const drawPortals = (ctx, s) => {
+  if (!(s.effects.portals > 0)) return;
+  const fading = s.effects.portals < 2 * FPS && Math.floor(s.effects.portals / 8) % 2 === 0;
+  portalSpots(s).forEach((p, k) => {
+    const color = k === 0 ? '#ff9f43' : '#4dabf7';
+    ctx.save();
+    ctx.globalAlpha = fading ? 0.4 : 1;
+    ctx.translate(p.x, p.y);
+    ctx.rotate((s.tick / 12) * (k === 0 ? 1 : -1));
+    const grad = ctx.createRadialGradient(0, 0, 2, 0, 0, PORTAL_R);
+    grad.addColorStop(0, 'rgba(0,0,0,0.9)');
+    grad.addColorStop(0.7, color);
+    grad.addColorStop(1, 'rgba(255,255,255,0.2)');
+    ctx.fillStyle = grad;
+    ctx.shadowColor = color;
+    ctx.shadowBlur = 16;
+    ctx.beginPath();
+    ctx.arc(0, 0, PORTAL_R, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.strokeStyle = 'rgba(255,255,255,0.75)';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([6, 5]);
+    ctx.beginPath();
+    ctx.arc(0, 0, PORTAL_R - 3, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.restore();
+  });
 };
 
 const drawBumpers = (ctx, s) => {
@@ -690,17 +750,22 @@ const moveClassicPaddle = (s, i, input = {}) => {
     paddle.y += ((paddle.h || h) - h) / 2;
     paddle.h = h;
   }
+  let move = 0;
   if (!input.frozen) {
     const speed = PADDLE_SPEED * (input.speed || 1);
     if (input.target !== null && input.target !== undefined) {
       const max = speed * (input.bot ? input.botSpeed || 0.8 : 1.5);
-      paddle.y += clamp(input.target - (paddle.y + h / 2), -max, max);
+      move = clamp(input.target - (paddle.y + h / 2), -max, max);
     } else {
-      if (input.up) paddle.y -= speed;
-      if (input.down) paddle.y += speed;
+      if (input.up) move -= speed;
+      if (input.down) move += speed;
     }
   }
-  paddle.y = clamp(paddle.y, 0, CLASSIC_H - h);
+  // Escorregando: a raquete demora para acelerar e para frear
+  paddle.v = input.ice ? (paddle.v || 0) * ICE_KEEP + move * (1 - ICE_KEEP) : move;
+  const y = clamp(paddle.y + paddle.v, 0, CLASSIC_H - h);
+  if (y !== paddle.y + paddle.v) paddle.v = 0;
+  paddle.y = y;
 };
 
 const bounceClassic = (ball, paddle, h, direction) => {
@@ -774,6 +839,7 @@ const moveClassicBall = (s, ball, r, mul) => {
 
     checkBalloon(s, ball, r);
     checkBumpers(s, ball, r);
+    checkPortals(s, ball, r);
 
     // Escudo: defende uma bola na linha do gol
     if (ball.x - r <= 0 && ball.dx < 0 && s.effects.shield[0]) {
@@ -790,13 +856,14 @@ const moveClassicBall = (s, ball, r, mul) => {
 
     if (ball.x + r < 0 || ball.x - r > CLASSIC_W) {
       const scorer = ball.x < CLASSIC_W / 2 ? 1 : 0;
-      s.scores[scorer] += 1;
+      const double = s.effects.double[scorer];
+      s.scores[scorer] += double ? 2 : 1;
       resetPowers(s);
       // Saque vai para quem sofreu o gol
       s.balls = [serveClassic(scorer === 0 ? 1 : -1)];
       s.serveFrames = SERVE_DELAY_FRAMES;
       s.fx.push('goal');
-      return { type: s.scores[scorer] >= s.winScore ? 'over' : 'point', scorer, conceded: 1 - scorer };
+      return { type: s.scores[scorer] >= s.winScore ? 'over' : 'point', scorer, conceded: 1 - scorer, double };
     }
   }
   return null;
@@ -855,6 +922,7 @@ const drawClassic = (ctx, s) => {
   });
 
   drawBumpers(ctx, s);
+  drawPortals(ctx, s);
 
   s.balloons.forEach((b) => {
     const by = balloonY(s, b);
@@ -962,18 +1030,23 @@ const createPoly = (n, winScore, powersEnabled) => ({
 // Esquerda/direita na tela de cada jogador (gol embaixo): esquerda aumenta t
 const movePolyPaddle = (s, g, i, input = {}) => {
   const half = polyPaddleLen(s, g, i) / 2 / g.goals[i].L;
-  let t = s.paddles[i];
+  let move = 0;
   if (!input.frozen) {
     const speed = g.paddleSpeed * (input.speed || 1);
     if (input.target !== null && input.target !== undefined) {
       const max = speed * (input.bot ? input.botSpeed || 0.8 : 1.5);
-      t += clamp(input.target - t, -max, max);
+      move = clamp(input.target - s.paddles[i], -max, max);
     } else {
-      if (input.left) t += speed;
-      if (input.right) t -= speed;
+      if (input.left) move += speed;
+      if (input.right) move -= speed;
     }
   }
-  s.paddles[i] = clamp(t, half, 1 - half);
+  if (!s.pvel) s.pvel = filled(g.n, () => 0);
+  // Escorregando: a raquete demora para acelerar e para frear
+  s.pvel[i] = input.ice ? s.pvel[i] * ICE_KEEP + move * (1 - ICE_KEEP) : move;
+  const t = clamp(s.paddles[i] + s.pvel[i], half, 1 - half);
+  if (t !== s.paddles[i] + s.pvel[i]) s.pvel[i] = 0;
+  s.paddles[i] = t;
 };
 
 const reflectOn = (ball, n, d, r) => {
@@ -1045,6 +1118,7 @@ const movePolyBall = (s, g, ball, r, mul) => {
       ball.y = A.y + u.y * s0 + n.y * (POLY_PADDLE_OFFSET + r);
       const prev = ball.lt;
       ball.lt = i;
+      ball.wallHits = 0;
       s.fx.push('hit');
       const others = (exclude) => Array.from({ length: g.n }, (_, j) => j).filter((j) => !exclude.includes(j));
       if (s.effects.snipe[i]) {
@@ -1074,12 +1148,22 @@ const movePolyBall = (s, g, ball, r, mul) => {
       const d = dot(ball.x - A.x, ball.y - A.y, n);
       if (d < r && dot(ball.dx, ball.dy, n) < 0) {
         reflectOn(ball, n, d, r);
+        ball.wallHits = (ball.wallHits || 0) + 1;
         s.fx.push('wall');
       }
     }
 
     checkBalloon(s, ball, r);
     checkBumpers(s, ball, r);
+    checkPortals(s, ball, r);
+
+    // Presa batendo só nas paredes: depois de 5 batidas seguidas sem tocar numa raquete, vai para um gol
+    if ((ball.wallHits || 0) >= MAX_WALL_BOUNCES) {
+      ball.wallHits = 0;
+      const j = Math.floor(Math.random() * g.n);
+      aimAtGoal(g, ball, j, 0.2 + Math.random() * 0.6, Math.max(SERVE_SPEED, Math.hypot(ball.dx, ball.dy)));
+      s.fx.push('swerve');
+    }
 
     for (let i = 0; i < g.n; i++) {
       const { A, n } = g.goals[i];
@@ -1097,6 +1181,7 @@ const movePolyBall = (s, g, ball, r, mul) => {
       if (d >= -r) continue;
 
       const scorer = ball.lt;
+      const double = scorer !== null && scorer !== undefined && s.effects.double[scorer];
       s.serveFrames = SERVE_DELAY_FRAMES;
       resetPowers(s);
 
@@ -1116,10 +1201,10 @@ const movePolyBall = (s, g, ball, r, mul) => {
         return { type: 'nopoint', scorer: null, conceded: i, reason: 'own', penalty };
       }
 
-      s.scores[scorer] += 1;
+      s.scores[scorer] += double ? 2 : 1;
       s.fx.push('goal');
       s.balls = [servePolyBall(g, i)];
-      return { type: s.scores[scorer] >= s.winScore ? 'over' : 'point', scorer, conceded: i };
+      return { type: s.scores[scorer] >= s.winScore ? 'over' : 'point', scorer, conceded: i, double };
     }
   }
 
@@ -1251,6 +1336,7 @@ const drawPoly = (ctx, s, viewIndex = 0, labels = []) => {
   });
 
   drawBumpers(ctx, s);
+  drawPortals(ctx, s);
 
   // Balões (a posição gira com o campo; são desenhados depois, sempre de pé)
   const balloonsOnScreen = s.balloons.map((b) => ({ b, p: toScreen({ x: b.x, y: balloonY(s, b) }, angle) }));
@@ -1427,7 +1513,7 @@ export const effectChips = (s) => {
   if (e.tiny) chips.push({ key: 'tiny', icon: '🔹', text: `${secs(e.tiny)}s`, color: POWERS.tiny.color });
   if (e.wind.frames) chips.push({ key: 'wind', icon: '💨', text: `${secs(e.wind.frames)}s`, color: POWERS.wind.color });
   if (e.blackout) chips.push({ key: 'blackout', icon: '🔦', text: `${secs(e.blackout)}s`, color: POWERS.blackout.color });
-  if (e.disguise) chips.push({ key: 'disguise', icon: '🎭', text: `${secs(e.disguise)}s`, color: POWERS.disguise.color });
+  if (e.portals) chips.push({ key: 'portals', icon: '🌌', text: `${secs(e.portals)}s`, color: POWERS.portals.color });
   if (e.hover) chips.push({ key: 'hover', icon: '⏸️', text: `${secs(e.hover)}s`, color: POWERS.hover.color });
   const perPlayer = (list, key, icon, withTime = true) => list.forEach((f, i) => {
     if (f) chips.push({ key: `${key}-${i}`, icon, text: withTime ? `${secs(f)}s` : '', color: COLORS[i], owner: i });
@@ -1441,6 +1527,8 @@ export const effectChips = (s) => {
   perPlayer(e.snipe.map((v) => (v ? 1 : 0)), 'snipe', '🎯', false);
   perPlayer(e.turbo, 'turbo', '🚀');
   perPlayer(e.sloth, 'sloth', '🐌');
+  perPlayer(e.ice, 'ice', '🧊');
+  perPlayer(e.double.map((v) => (v ? 1 : 0)), 'double', '💰', false);
   return chips;
 };
 
@@ -1475,7 +1563,9 @@ export const packState = (s) => {
       wd: [secs(e.wind.frames), Math.round(e.wind.angle * 100) / 100],
       bo: e.blackout, // em quadros: a luz volta devagar no fim
       sl: e.sloth.map(secs),
-      dg: secs(e.disguise)
+      db: e.double.map((v) => (v ? 1 : 0)),
+      pt: secs(e.portals),
+      ic: e.ice.map(secs)
     },
     bl: s.balloons.map((b) => [round1(b.x), round1(balloonY(s, b)), POWER_TYPES.indexOf(b.type), b.age])
   };
@@ -1516,7 +1606,9 @@ export const applyPacked = (s, msg) => {
       wind: { frames: (e.wd?.[0] || 0) * FPS, angle: e.wd?.[1] || 0 },
       blackout: e.bo || 0,
       sloth: arr(e.sl),
-      disguise: (e.dg || 0) * FPS
+      double: (e.db || filled(n, () => 0)).map(Boolean),
+      portals: (e.pt || 0) * FPS,
+      ice: arr(e.ic)
     };
   }
   s.balloons = (msg.bl || []).map(([x, y, type, age]) => ({ x, y, type: POWER_TYPES[type], age, fixed: true }));
