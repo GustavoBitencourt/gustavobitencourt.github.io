@@ -62,7 +62,10 @@ export const POWERS = {
   sloth: { icon: '🐌', label: 'Raquetes lentas', color: '#10ac84', frames: 8 * FPS, owner: true },
   double: { icon: '💰', label: 'Gol em dobro', color: '#f9ca24', frames: 0, owner: true },
   portals: { icon: '🌌', label: 'Portais na quadra!', color: '#a55eea', frames: 9 * FPS },
-  ice: { icon: '🧊', label: 'Raquetes escorregando', color: '#7ed6df', frames: 8 * FPS, owner: true }
+  ice: { icon: '🧊', label: 'Raquetes escorregando', color: '#7ed6df', frames: 8 * FPS, owner: true },
+  bomb: { icon: '💣', label: 'Bomba! A bola vai explodir...', color: '#ff3838', frames: 4 * FPS },
+  hidden: { icon: '🫥', label: 'Raquetes invisíveis', color: '#95afc0', frames: 6 * FPS, owner: true },
+  swap: { icon: '🔀', label: 'Troca-troca de raquetes!', color: '#e056fd', frames: 0 }
 };
 // Poderes que só fazem sentido com a bola já rápida: só surgem depois de LATE_HITS rebatidas no ponto
 const LATE_POWERS = ['slow', 'hover'];
@@ -126,7 +129,9 @@ const newEffects = (n) => ({
   sloth: filled(n, () => 0),
   double: filled(n, () => false),
   portals: 0,
-  ice: filled(n, () => 0)
+  ice: filled(n, () => 0),
+  bomb: 0,
+  hidden: filled(n, () => 0)
 });
 
 const ballRadius = (s) =>
@@ -168,6 +173,11 @@ const tickPowers = (s) => {
   if (e.blackout > 0) e.blackout -= 1;
   if (e.portals > 0) e.portals -= 1;
   e.ice = e.ice.map(dec);
+  e.hidden = e.hidden.map(dec);
+  if (e.bomb > 0) {
+    e.bomb -= 1;
+    if (e.bomb === 0) s.boom = true; // explode no próximo passo da bola
+  }
   if (e.bumpers > 0) e.bumpers -= 1;
   s.balloons.forEach((b) => {
     b.age += 1;
@@ -300,6 +310,18 @@ const activatePower = (s, requested, ball, silent = false) => {
   if (type === 'double') e.double[owner] = true;
   if (type === 'portals') e.portals = frames;
   if (type === 'ice') e.ice = others(e.ice, frames);
+  if (type === 'bomb') e.bomb = frames;
+  if (type === 'hidden') e.hidden = others(e.hidden, frames);
+  if (type === 'swap') {
+    // Cada raquete vai para a posição da outra (no clássico, troca a altura das duas)
+    if (s.mode === 2) {
+      const y = s.player1.y;
+      s.player1.y = s.player2.y;
+      s.player2.y = y;
+    } else {
+      s.paddles = s.paddles.map((_, i) => s.paddles[(i + 1) % s.paddles.length]);
+    }
+  }
 
   if (silent) return;
   s.fx.push('power');
@@ -398,6 +420,22 @@ const pullToward = (b, x, y, force) => {
   const nl = Math.hypot(b.dx, b.dy) || 1;
   b.dx *= sp / nl;
   b.dy *= sp / nl;
+};
+
+const BOMB_BOOST = 1.7;
+const explodeBomb = (s) => {
+  if (!s.boom) return;
+  s.boom = false;
+  const cap = s.mode === 2 ? CLASSIC_MAX_SPEED * 1.4 : POLY_MAX_SPEED * 1.4;
+  s.balls.forEach((b) => {
+    randomizeDirection(s, b);
+    const sp = Math.hypot(b.dx, b.dy) || 1;
+    const next = Math.min(cap, sp * BOMB_BOOST);
+    b.dx *= next / sp;
+    b.dy *= next / sp;
+    b.wallHits = 0;
+  });
+  s.fx.push('snipe');
 };
 
 // Efeito (curva), buraco negro, bola bêbada e ímã mudam a direção da bola, mantendo a velocidade
@@ -604,6 +642,8 @@ const drawPortals = (ctx, s) => {
   });
 };
 
+const paddleHidden = (s, i) => s.effects.hidden[i] > 0 && s.tick % 50 >= 5;
+
 const drawBumpers = (ctx, s) => {
   if (!(s.effects.bumpers > 0)) return;
   const fading = s.effects.bumpers < 2 * FPS && Math.floor(s.effects.bumpers / 8) % 2 === 0;
@@ -669,6 +709,22 @@ const drawBlackout = (ctx, s, size, lights) => {
 };
 
 // Bola parada no ar: anel pulsando em volta
+// Bomba: anel vermelho que pisca cada vez mais rápido
+const drawFuse = (ctx, s, ball) => {
+  if (!(s.effects.bomb > 0) || s.effects.ghost > 0) return;
+  const rate = s.effects.bomb > 2 * FPS ? 14 : s.effects.bomb > FPS ? 7 : 3;
+  if (Math.floor(s.tick / rate) % 2) return;
+  ctx.save();
+  ctx.strokeStyle = '#ff3838';
+  ctx.shadowColor = '#ff3838';
+  ctx.shadowBlur = 14;
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.arc(ball.x, ball.y, ballRadius(s) + 5, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.restore();
+};
+
 const drawHoverRing = (ctx, s, ball) => {
   if (!(s.effects.hover > 0) || s.effects.ghost > 0) return;
   ctx.strokeStyle = 'rgba(129,236,236,0.8)';
@@ -885,6 +941,7 @@ const stepClassic = (s, rawInputs) => {
     return null;
   }
 
+  explodeBomb(s);
   applyBending(s);
   const r = ballRadius(s);
   const mul = speedMul(s);
@@ -914,6 +971,7 @@ const drawClassic = (ctx, s) => {
   if (s.effects.shield[1]) drawShieldLine(ctx, CLASSIC_W - 3, 0, CLASSIC_W - 3, CLASSIC_H, COLORS[1]);
 
   [s.player1, s.player2].forEach((p, i) => {
+    if (paddleHidden(s, i)) return;
     const h = classicPaddleH(s, i);
     ctx.fillStyle = COLORS[i];
     ctx.fillRect(p.x, p.y, PADDLE_W, h);
@@ -933,6 +991,7 @@ const drawClassic = (ctx, s) => {
   s.balls.forEach((ball) => {
     drawBall(ctx, s, ball);
     drawHoverRing(ctx, s, ball);
+    drawFuse(ctx, s, ball);
   });
   drawFog(ctx, s, CLASSIC_W / 2, CLASSIC_H / 2, 190, CLASSIC_H, false);
   drawWind(ctx, s, CLASSIC_W, CLASSIC_H);
@@ -962,7 +1021,8 @@ const makeSide = (A, B) => {
 const geometryCache = {};
 const polyGeometry = (n) => {
   if (geometryCache[n]) return geometryCache[n];
-  const R = n === 3 ? 285 : 235; // a partir de 4 jogadores sobra margem para os nomes nas laterais
+  // a partir de 4 jogadores sobra margem para os nomes nas laterais (o de 4 é um pouco maior)
+  const R = n === 3 ? 285 : n === 4 ? 255 : 235;
   const step = (2 * Math.PI) / n;
   const goalAngle = n === 3 ? step / 2 : step * 0.62; // a partir de 4 jogadores os gols ficam maiores que as paredes
   const at = (a) => ({ x: POLY_C + R * Math.cos(a), y: POLY_C + R * Math.sin(a) });
@@ -1232,6 +1292,7 @@ const stepPoly = (s, rawInputs) => {
     return null;
   }
 
+  explodeBomb(s);
   applyBending(s);
   const r = ballRadius(s);
   const mul = speedMul(s);
@@ -1316,6 +1377,7 @@ const drawPoly = (ctx, s, viewIndex = 0, labels = []) => {
     const d0 = POLY_PADDLE_OFFSET - POLY_PADDLE_THICK;
     const d1 = POLY_PADDLE_OFFSET;
     const pt = (sv, d) => ({ x: A.x + u.x * sv + n.x * d, y: A.y + u.y * sv + n.y * d });
+    if (paddleHidden(s, i)) return;
     const corners = [pt(s0, d0), pt(s1, d0), pt(s1, d1), pt(s0, d1)];
     const path = () => {
       ctx.beginPath();
@@ -1345,6 +1407,7 @@ const drawPoly = (ctx, s, viewIndex = 0, labels = []) => {
   s.balls.forEach((ball) => {
     drawBall(ctx, s, ball);
     drawHoverRing(ctx, s, ball);
+    drawFuse(ctx, s, ball);
   });
   drawFog(ctx, s, POLY_C, POLY_C, g.R * 0.6, 0, true);
   drawWind(ctx, s, POLY_SIZE, POLY_SIZE);
@@ -1365,7 +1428,7 @@ const drawPoly = (ctx, s, viewIndex = 0, labels = []) => {
   g.goals.forEach(({ mid, n }, i) => {
     const p = toScreen(mid, angle);
     const raw = labels[i] || `Jogador ${i + 1}`;
-    const max = g.n <= 4 ? 12 : 9;
+    const max = g.n === 4 ? 10 : g.n < 4 ? 12 : 9; // no de 4 o campo é maior e sobra menos espaço nas laterais
     const name = raw.length > max ? `${raw.slice(0, max - 1)}…` : raw;
     const text = `${name} · ${s.scores[i]}`;
     ctx.fillStyle = COLORS[i];
@@ -1528,6 +1591,8 @@ export const effectChips = (s) => {
   perPlayer(e.turbo, 'turbo', '🚀');
   perPlayer(e.sloth, 'sloth', '🐌');
   perPlayer(e.ice, 'ice', '🧊');
+  perPlayer(e.hidden, 'hidden', '🫥');
+  if (e.bomb) chips.push({ key: 'bomb', icon: '💣', text: `${secs(e.bomb)}s`, color: POWERS.bomb.color });
   perPlayer(e.double.map((v) => (v ? 1 : 0)), 'double', '💰', false);
   return chips;
 };
@@ -1565,7 +1630,9 @@ export const packState = (s) => {
       sl: e.sloth.map(secs),
       db: e.double.map((v) => (v ? 1 : 0)),
       pt: secs(e.portals),
-      ic: e.ice.map(secs)
+      ic: e.ice.map(secs),
+      bb: e.bomb, // em quadros: o pavio pisca cada vez mais rápido
+      hd: e.hidden.map(secs)
     },
     bl: s.balloons.map((b) => [round1(b.x), round1(balloonY(s, b)), POWER_TYPES.indexOf(b.type), b.age])
   };
@@ -1608,7 +1675,9 @@ export const applyPacked = (s, msg) => {
       sloth: arr(e.sl),
       double: (e.db || filled(n, () => 0)).map(Boolean),
       portals: (e.pt || 0) * FPS,
-      ice: arr(e.ic)
+      ice: arr(e.ic),
+      bomb: e.bb || 0,
+      hidden: arr(e.hd)
     };
   }
   s.balloons = (msg.bl || []).map(([x, y, type, age]) => ({ x, y, type: POWER_TYPES[type], age, fixed: true }));

@@ -1112,6 +1112,7 @@ const Pong = () => {
     const who = owner !== null && owner !== undefined ? names[owner] : '';
     if (type === 'mystery') return `Surpresa: ${(picks || []).map((t) => POWERS[t]?.icon).join(' + ')}!`;
     if (type === 'turbo') return `Raquete turbo para ${who}!`;
+    if (type === 'hidden') return `Raquetes invisíveis para os adversários de ${who}!`;
     if (type === 'ice') return `Raquetes escorregando para os adversários de ${who}!`;
     if (type === 'double') return `O próximo gol de ${who} vale 2 pontos!`;
     if (type === 'sloth') return `Raquetes lentas para os adversários de ${who}!`;
@@ -1292,7 +1293,7 @@ const Pong = () => {
           <li>Online: crie uma sala e envie o link, ou entre em uma sala aberta</li>
           <li>3 a 6 jogadores: o gol é de quem tocou por último na bola (a bola fica da cor dele). Gol contra tira 1 ponto de quem fez (sem ficar negativo); bola que ninguém tocou não muda nada</li>
           <li>Local: jogue em 2 no mesmo teclado (coop) ou sozinho contra bots, de 2 a 6 jogadores</li>
-          <li>🎈 Com poderes ligados, a cada 3 rebatidas surge um balão (às vezes dois; até 2 na tela). Acerte a bola nele: 🔵 gigante, ⚡ rápida, 🐢 lenta, ⚽ mais uma bola, 🔹 bola mini, 💨 ventania, 🔦 apagão (só dá para ver perto das raquetes), 🐌 raquetes lentas para os adversários, 💰 gol em dobro (seu próximo gol vale 2), 🌌 portais, 🧊 raquetes dos adversários escorregando, 🌀 efeito, 👻 fantasma (some e só aparece piscando), 🎱 bumpers de pinball, ⏸️ bola parada no ar (🐢 e ⏸️ só aparecem depois de 10 rebatidas no ponto), 🎲 surpresa (2 poderes de uma vez), 🚀 raquete turbo, 🌪️ desvio maluco, 🕳️ buraco negro, ✨ teleporte, 📏 raquete gigante, 🤏 encolhe os adversários, ❄️ congela os adversários, 🔄 inverte os adversários, 🛡️ escudo no gol, ↩️ bola de ré, 🌫️ neblina no meio, 🥴 bola bêbada, 🧲 ímã na sua raquete ou 🎯 tiro certeiro (sua próxima rebatida sai rápida no canto do gol de um adversário)</li>
+          <li>🎈 Com poderes ligados, a cada 3 rebatidas surge um balão (às vezes dois; até 2 na tela). Acerte a bola nele: 🔵 gigante, ⚡ rápida, 🐢 lenta, ⚽ mais uma bola, 🔹 bola mini, 💨 ventania, 🔦 apagão (só dá para ver perto das raquetes), 🐌 raquetes lentas para os adversários, 💰 gol em dobro (seu próximo gol vale 2), 🌌 portais, 💣 bomba (a bola explode e sai disparada), 🫥 raquetes dos adversários invisíveis, 🔀 troca-troca de raquetes, 🧊 raquetes dos adversários escorregando, 🌀 efeito, 👻 fantasma (some e só aparece piscando), 🎱 bumpers de pinball, ⏸️ bola parada no ar (🐢 e ⏸️ só aparecem depois de 10 rebatidas no ponto), 🎲 surpresa (2 poderes de uma vez), 🚀 raquete turbo, 🌪️ desvio maluco, 🕳️ buraco negro, ✨ teleporte, 📏 raquete gigante, 🤏 encolhe os adversários, ❄️ congela os adversários, 🔄 inverte os adversários, 🛡️ escudo no gol, ↩️ bola de ré, 🌫️ neblina no meio, 🥴 bola bêbada, 🧲 ímã na sua raquete ou 🎯 tiro certeiro (sua próxima rebatida sai rápida no canto do gol de um adversário)</li>
           <li>Com 3 ou mais jogadores, se duas raquetes trocarem a bola mais de 4 vezes seguidas, ela sai em direção ao gol de outro jogador; e se a bola bater 5 vezes seguidas nas paredes sem tocar numa raquete, ela muda de direção rumo a um gol</li>
           <li>Poderes iguais se acumulam (ex.: rápida 2x → 4x) e todos acabam quando sai um gol</li>
         </ul>
