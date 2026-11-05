@@ -85,7 +85,17 @@ export const POWERS = {
   decoys: { icon: '👥', label: 'Bolas falsas!', color: '#dfe4ea', frames: 6 * FPS },
   bouncy: { icon: '🏀', label: 'Paredes elásticas!', color: '#e67e22', frames: 8 * FPS },
   repel: { icon: '💫', label: 'Repulsão no meio da quadra!', color: '#18dcff', frames: 7 * FPS },
-  lottery: { icon: '🎰', label: 'Loteria de raquetes!', color: '#fbc531', frames: 8 * FPS }
+  lottery: { icon: '🎰', label: 'Loteria de raquetes!', color: '#fbc531', frames: 8 * FPS },
+  rewind: { icon: '⏪', label: 'Rebobinar! A bola volta 1 segundo', color: '#7f8fa6', frames: 0 },
+  hop: { icon: '🐇', label: 'Bola saltitante!', color: '#f8a5c2', frames: 6 * FPS },
+  spotlight: { icon: '🔆', label: 'Holofote! Só a bola está iluminada', color: '#f6e58d', frames: 6 * FPS },
+  target: { icon: '🏹', label: 'Alvo bônus na quadra: vale 1 ponto!', color: '#eb4d4b', frames: 9 * FPS },
+  mines: { icon: '🧨', label: 'Campo minado!', color: '#e15f41', frames: 9 * FPS },
+  straight: { icon: '📐', label: 'Rebatidas retas!', color: '#63cdda', frames: 7 * FPS },
+  yoyo: { icon: '🪀', label: 'Bola ioiô!', color: '#cf6a87', frames: 5 * FPS },
+  remote: { icon: '🕹️', label: 'Controles trocados! Cada um controla a raquete do vizinho', color: '#778beb', frames: 6 * FPS },
+  zoom: { icon: '🔭', label: 'Zoom na bola!', color: '#596275', frames: 5 * FPS },
+  meteor: { icon: '☄️', label: 'Meteoro! Bola gigante e rápida', color: '#ff793f', frames: 7 * FPS }
 };
 // Poderes que só fazem sentido com a bola já rápida: só surgem depois de LATE_HITS rebatidas no ponto
 const LATE_POWERS = ['slow', 'hover'];
@@ -117,6 +127,15 @@ const HONEY_HOLD = 36; // raquete de mel: segura a bola por 0,6 s
 const BARRIER_HALF = 48;
 const BARRIER_THICK = 4;
 const DECOY_COUNT = 2;
+const TRAIL_FRAMES = 60; // rebobinar: 1 s de histórico da bola
+const HOP_EVERY = 50; // bola saltitante: um pulo a cada 50 quadros
+const HOP_DIST = 70;
+const SPOT_R = 75; // holofote: raio da luz em volta da bola
+const TARGET_R = 16;
+const MINE_R = 11;
+const MINE_COUNT = 3;
+const YOYO_EVERY = 70; // ioiô: inverte a bola a cada 70 quadros
+const ZOOM = 1.6;
 const CURVE_RATE = 0.016; // rad por quadro, por nível de efeito
 const GRAVITY_PULL = 0.22; // aceleração em direção ao centro (a velocidade é mantida)
 const SHRINK_FACTOR = 0.55;
@@ -136,6 +155,8 @@ const LIGHT_R = 105; // apagão: raio da luz em volta de cada raquete
 // Anti-loop (3+ jogadores): se as mesmas duas raquetes trocarem a bola mais de MAX_RALLY vezes seguidas,
 // a próxima rebatida sai em direção ao gol de outro jogador
 const MAX_RALLY = 4;
+
+const X3_KEYS = ['hop', 'spotlight', 'target', 'mines', 'straight', 'yoyo', 'remote', 'zoom'];
 
 const newEffects = (n) => ({
   big: { stacks: 0, frames: 0 },
@@ -178,7 +199,17 @@ const newEffects = (n) => ({
   repel: 0,
   decoys: 0,
   shake: filled(n, () => 0),
-  honey: filled(n, () => 0)
+  honey: filled(n, () => 0),
+  hop: 0,
+  spotlight: 0,
+  target: 0,
+  mines: 0,
+  straight: 0,
+  yoyo: 0,
+  remote: 0,
+  zoom: 0,
+  targetPos: null,
+  minePos: []
 });
 
 const ballRadius = (s) =>
@@ -225,9 +256,11 @@ const tickPowers = (s) => {
   e.hidden = e.hidden.map(dec);
   e.shake = e.shake.map(dec);
   e.honey = e.honey.map(dec);
-  ['accel', 'square', 'pulse', 'hunt', 'dizzy', 'upside', 'barrier', 'orbit', 'bouncy', 'repel', 'decoys'].forEach((k) => {
+  ['accel', 'square', 'pulse', 'hunt', 'dizzy', 'upside', 'barrier', 'orbit', 'bouncy', 'repel', 'decoys', ...X3_KEYS].forEach((k) => {
     if (e[k] > 0) e[k] -= 1;
   });
+  if (!e.target) e.targetPos = null;
+  if (!e.mines) e.minePos = [];
   if (!e.decoys) s.decoys = [];
   if (e.bomb > 0) {
     e.bomb -= 1;
@@ -443,6 +476,33 @@ const activatePower = (s, requested, ball, silent = false) => {
   }
   if (type === 'bouncy') e.bouncy = frames;
   if (type === 'repel') e.repel = frames;
+  if (type === 'rewind') {
+    s.balls.forEach((b) => {
+      if (b.held || !b.trail || !b.trail.length) return;
+      [b.x, b.y] = b.trail[0];
+      b.trail = [];
+    });
+  }
+  if (type === 'hop') e.hop = frames;
+  if (type === 'spotlight') e.spotlight = frames;
+  if (type === 'target') {
+    e.target = frames;
+    e.targetPos = balloonSpot(s);
+  }
+  if (type === 'mines') {
+    e.mines = frames;
+    e.minePos = Array.from({ length: MINE_COUNT }, () => balloonSpot(s));
+  }
+  if (type === 'straight') e.straight = frames;
+  if (type === 'yoyo') e.yoyo = frames;
+  if (type === 'remote') e.remote = frames;
+  if (type === 'zoom') e.zoom = frames;
+  if (type === 'meteor') {
+    e.big.stacks = Math.min(MAX_BIG_STACKS, e.big.stacks + 1);
+    e.big.frames = Math.max(e.big.frames, frames);
+    e.speed.level = clamp(e.speed.level + 1, -MAX_SPEED_LEVEL, MAX_SPEED_LEVEL);
+    e.speed.frames = e.speed.level === 0 ? 0 : Math.max(e.speed.frames, frames);
+  }
   if (type === 'lottery') {
     // Cada raquete ganha um tamanho sorteado: gigante ou encolhida
     for (let i = 0; i < s.scores.length; i++) {
@@ -617,6 +677,74 @@ const applyMorePowers = (s) => {
   });
 };
 
+// Ponto dentro da quadra, longe das raquetes e das paredes (para a bola saltitante)
+const insideField = (s, x, y, r) => {
+  if (s.mode === 2) return x > 45 && x < CLASSIC_W - 45 && y > r && y < CLASSIC_H - r;
+  const g = polyGeometry(s.mode);
+  return g.goals.every(({ A, n }) => dot(x - A.x, y - A.y, n) > POLY_PADDLE_OFFSET + r + 6)
+    && g.walls.every(({ A, n }) => dot(x - A.x, y - A.y, n) > r + 2);
+};
+
+// Histórico (rebobinar), bola saltitante e ioiô
+const applyEvenMore = (s) => {
+  const e = s.effects;
+  const r = ballRadius(s);
+  s.balls.forEach((b) => {
+    if (b.held) return;
+    b.trail = b.trail || [];
+    b.trail.push([b.x, b.y]);
+    if (b.trail.length > TRAIL_FRAMES) b.trail.shift();
+    if (e.hop > 0 && e.hop % HOP_EVERY === 0) {
+      const sp = Math.hypot(b.dx, b.dy) || 1;
+      const nx = b.x + (b.dx / sp) * HOP_DIST;
+      const ny = b.y + (b.dy / sp) * HOP_DIST;
+      if (insideField(s, nx, ny, r)) {
+        b.x = nx;
+        b.y = ny;
+        s.fx.push('wall');
+      }
+    }
+    if (e.yoyo > 0 && e.yoyo % YOYO_EVERY === 0) {
+      b.dx = -b.dx;
+      b.dy = -b.dy;
+    }
+  });
+};
+
+// Alvo bônus: a bola de quem tocou por último acerta e ganha 1 ponto (sem decidir a partida)
+const checkTarget = (s, ball, r) => {
+  const e = s.effects;
+  if (!(e.target > 0) || !e.targetPos) return;
+  if (Math.hypot(ball.x - e.targetPos.x, ball.y - e.targetPos.y) >= r + TARGET_R) return;
+  const who = ball.lt;
+  e.target = 0;
+  e.targetPos = null;
+  if (who === null || who === undefined) return;
+  const scored = s.scores[who] + 1 < s.winScore;
+  if (scored) {
+    s.scores[who] += 1;
+    s.scoreChanged = true;
+  }
+  s.fx.push('power');
+  s.pw.push({ t: 'target', o: who, h: scored ? 1 : 2 });
+};
+
+// Campo minado: a mina explode e manda a bola para outro lado, mais rápida
+const checkMines = (s, ball, r) => {
+  const e = s.effects;
+  if (!(e.mines > 0) || !e.minePos.length) return;
+  const k = e.minePos.findIndex((m) => Math.hypot(ball.x - m.x, ball.y - m.y) < r + MINE_R);
+  if (k < 0) return;
+  e.minePos = e.minePos.filter((_, j) => j !== k);
+  randomizeDirection(s, ball);
+  const cap = (s.mode === 2 ? CLASSIC_MAX_SPEED : POLY_MAX_SPEED) * 1.3;
+  const sp = Math.hypot(ball.dx, ball.dy) || 1;
+  const next = Math.min(cap, sp * 1.3);
+  ball.dx *= next / sp;
+  ball.dy *= next / sp;
+  s.fx.push('snipe');
+};
+
 // Paredes elásticas (acelera) e bola quadrada (quica torto)
 const onWallBounce = (s, ball) => {
   const e = s.effects;
@@ -770,7 +898,13 @@ const flipInput = (input = {}, mode) => ({
   target: input.target === null || input.target === undefined ? null : mode === 2 ? CLASSIC_H - input.target : 1 - input.target
 });
 
-const effectiveInputs = (s, inputs) => inputs.map((input, i) => {
+const effectiveInputs = (s, rawInputs) => {
+  // Controles trocados: cada um controla a raquete do vizinho
+  const inputs = s.effects.remote > 0 ? rawInputs.map((_, i) => rawInputs[(i + 1) % rawInputs.length]) : rawInputs;
+  return mapInputs(s, inputs);
+};
+
+const mapInputs = (s, inputs) => inputs.map((input, i) => {
   if (s.effects.freeze[i] > 0) return { frozen: true };
   const next = s.effects.invert[i] > 0 ? flipInput(input, s.mode) : { ...input };
   next.ice = s.effects.ice[i] > 0;
@@ -842,6 +976,60 @@ const drawBall = (ctx, s, ball) => {
   }
   ctx.shadowBlur = 0;
   ctx.globalAlpha = 1;
+};
+
+const drawTarget = (ctx, s) => {
+  const p = s.effects.target > 0 ? s.effects.targetPos : null;
+  if (!p) return;
+  const pulse = 1 + Math.sin(s.tick / 6) * 0.08;
+  ['#eb4d4b', '#ffffff', '#eb4d4b'].forEach((color, k) => {
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, TARGET_R * pulse * (1 - k * 0.32), 0, Math.PI * 2);
+    ctx.fill();
+  });
+};
+
+const drawMines = (ctx, s) => {
+  if (!(s.effects.mines > 0)) return;
+  s.effects.minePos.forEach((m) => {
+    ctx.save();
+    ctx.translate(m.x, m.y);
+    ctx.strokeStyle = '#636e72';
+    ctx.lineWidth = 3;
+    for (let k = 0; k < 8; k++) {
+      const a = (k * Math.PI) / 4;
+      ctx.beginPath();
+      ctx.moveTo(Math.cos(a) * MINE_R * 0.6, Math.sin(a) * MINE_R * 0.6);
+      ctx.lineTo(Math.cos(a) * (MINE_R + 4), Math.sin(a) * (MINE_R + 4));
+      ctx.stroke();
+    }
+    ctx.fillStyle = '#2d3436';
+    ctx.beginPath();
+    ctx.arc(0, 0, MINE_R, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = Math.floor(s.tick / 15) % 2 ? '#ff3838' : '#5c1010';
+    ctx.beginPath();
+    ctx.arc(0, 0, 3.5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  });
+};
+
+// Holofote: tudo escuro, só com luz em volta das bolas
+const drawSpotlight = (ctx, s, size) => {
+  if (!(s.effects.spotlight > 0)) return;
+  const a = 0.95 * Math.min(1, s.effects.spotlight / 30);
+  ctx.save();
+  ctx.fillStyle = `rgba(0,0,0,${a})`;
+  ctx.beginPath();
+  ctx.rect(-size, -size, size * 3, size * 3);
+  s.balls.forEach((b) => {
+    ctx.moveTo(b.x + SPOT_R, b.y);
+    ctx.arc(b.x, b.y, SPOT_R, 0, Math.PI * 2, true);
+  });
+  ctx.fill('evenodd');
+  ctx.restore();
 };
 
 const drawDecoys = (ctx, s) => {
@@ -1218,6 +1406,11 @@ const moveClassicBall = (s, ball, r, mul) => {
       if (towardGoal && notBehind && circleHitsRect(ball.x, ball.y, r, paddle.x, paddle.y, PADDLE_W, h)) {
         ball.x = dir > 0 ? paddle.x + PADDLE_W + r : paddle.x - r;
         bounceClassic(ball, paddle, h, dir);
+        if (s.effects.straight > 0) {
+          const sp = Math.hypot(ball.dx, ball.dy);
+          ball.dy = (Math.random() - 0.5) * 0.6;
+          ball.dx = dir * Math.sqrt(sp * sp - ball.dy * ball.dy);
+        }
         ball.lt = idx;
         s.fx.push('hit');
         if (s.effects.honey[idx] > 0) ball.held = { i: idx, frames: HONEY_HOLD, off: ball.y - paddle.y };
@@ -1243,6 +1436,8 @@ const moveClassicBall = (s, ball, r, mul) => {
     checkBumpers(s, ball, r);
     checkPortals(s, ball, r);
     checkBarrier(s, ball, r);
+    checkTarget(s, ball, r);
+    checkMines(s, ball, r);
 
     // Escudo: defende uma bola na linha do gol
     if (ball.x - r <= 0 && ball.dx < 0 && s.effects.shield[0]) {
@@ -1292,6 +1487,7 @@ const stepClassic = (s, rawInputs) => {
   stepDecoys(s);
   applyBending(s);
   applyMorePowers(s);
+  applyEvenMore(s);
   const r = ballRadius(s);
   const mul = speedMul(s);
   for (const ball of [...s.balls]) {
@@ -1331,6 +1527,8 @@ const drawClassic = (ctx, s) => {
   drawBumpers(ctx, s);
   drawPortals(ctx, s);
   drawBarrier(ctx, s);
+  drawTarget(ctx, s);
+  drawMines(ctx, s);
   drawRepel(ctx, s, s.mode === 2 ? CLASSIC_W / 2 : POLY_C, s.mode === 2 ? CLASSIC_H / 2 : POLY_C);
 
   s.balloons.forEach((b) => {
@@ -1347,6 +1545,7 @@ const drawClassic = (ctx, s) => {
   drawDecoys(ctx, s);
   drawFog(ctx, s, CLASSIC_W / 2, CLASSIC_H / 2, 190, CLASSIC_H, false);
   drawWind(ctx, s, CLASSIC_W, CLASSIC_H);
+  drawSpotlight(ctx, s, CLASSIC_W);
   drawBlackout(ctx, s, CLASSIC_W, [s.player1, s.player2].map((p, i) => ({ x: p.x + PADDLE_W / 2, y: p.y + classicPaddleH(s, i) / 2 })));
 };
 
@@ -1535,7 +1734,7 @@ const movePolyBall = (s, g, ball, r, mul) => {
       if (vn >= 0 || !notBehind || Math.hypot(s0 - cs, d0 - cd) >= r) continue;
 
       const offset = clamp((s0 - c) / (len / 2), -1, 1);
-      const angle = offset * 0.95; // até ~55° de desvio
+      const angle = s.effects.straight > 0 ? 0 : offset * 0.95; // até ~55° de desvio (reto com o poder)
       const speed = ball.slow ? BALL_SPEED : Math.min(POLY_MAX_SPEED, Math.hypot(ball.dx, ball.dy) * 1.05);
       ball.slow = false;
       ball.dx = (n.x * Math.cos(angle) + u.x * Math.sin(angle)) * speed;
@@ -1585,6 +1784,8 @@ const movePolyBall = (s, g, ball, r, mul) => {
     checkBumpers(s, ball, r);
     checkPortals(s, ball, r);
     checkBarrier(s, ball, r);
+    checkTarget(s, ball, r);
+    checkMines(s, ball, r);
 
     // Presa batendo só nas paredes: depois de 5 batidas seguidas sem tocar numa raquete, vai para um gol
     if ((ball.wallHits || 0) >= MAX_WALL_BOUNCES) {
@@ -1665,6 +1866,7 @@ const stepPoly = (s, rawInputs) => {
   stepDecoys(s);
   applyBending(s);
   applyMorePowers(s);
+  applyEvenMore(s);
   const r = ballRadius(s);
   const mul = speedMul(s);
   for (const ball of [...s.balls]) {
@@ -1771,6 +1973,8 @@ const drawPoly = (ctx, s, viewIndex = 0, labels = []) => {
   drawBumpers(ctx, s);
   drawPortals(ctx, s);
   drawBarrier(ctx, s);
+  drawTarget(ctx, s);
+  drawMines(ctx, s);
   drawRepel(ctx, s, s.mode === 2 ? CLASSIC_W / 2 : POLY_C, s.mode === 2 ? CLASSIC_H / 2 : POLY_C);
 
   // Balões (a posição gira com o campo; são desenhados depois, sempre de pé)
@@ -1785,6 +1989,7 @@ const drawPoly = (ctx, s, viewIndex = 0, labels = []) => {
   drawDecoys(ctx, s);
   drawFog(ctx, s, POLY_C, POLY_C, g.R * 0.6, 0, true);
   drawWind(ctx, s, POLY_SIZE, POLY_SIZE);
+  drawSpotlight(ctx, s, POLY_SIZE);
   drawBlackout(ctx, s, POLY_SIZE, g.goals.map(({ A, u, n, L }, i) => ({
     x: A.x + u.x * s.paddles[i] * L + n.x * POLY_PADDLE_OFFSET,
     y: A.y + u.y * s.paddles[i] * L + n.y * POLY_PADDLE_OFFSET
@@ -1931,7 +2136,13 @@ const drawField = (ctx, state, viewIndex, labels) =>
 export const drawGame = (ctx, state, viewIndex, labels) => {
   const e = state.effects;
   const tilt = (e.upside > 0 ? Math.PI : 0) + (e.dizzy > 0 ? Math.sin(state.tick / 18) * 0.22 : 0);
-  if (!tilt) {
+  // Zoom: segue a bola (na posição em que ela aparece na tela de quem está vendo)
+  let focus = null;
+  if (e.zoom > 0 && state.balls[0]) {
+    const b = state.balls[0];
+    focus = state.mode >= 3 ? toScreen(b, -(viewIndex || 0) * polyGeometry(state.mode).step) : { x: b.x, y: b.y };
+  }
+  if (!tilt && !focus) {
     drawField(ctx, state, viewIndex, labels);
     return;
   }
@@ -1942,7 +2153,14 @@ export const drawGame = (ctx, state, viewIndex, labels) => {
   ctx.translate(w / 2, h / 2);
   ctx.rotate(tilt);
   if (e.dizzy > 0) ctx.scale(0.86, 0.86);
-  ctx.translate(-w / 2, -h / 2);
+  if (focus) {
+    // aproxima devagar no começo e afasta no fim
+    const z = 1 + (ZOOM - 1) * Math.min(1, e.zoom / 20, (POWERS.zoom.frames - e.zoom) / 20 + 0.05);
+    ctx.scale(z, z);
+    ctx.translate(-clamp(focus.x, w / (2 * z), w - w / (2 * z)), -clamp(focus.y, h / (2 * z), h - h / (2 * z)));
+  } else {
+    ctx.translate(-w / 2, -h / 2);
+  }
   drawField(ctx, state, viewIndex, labels);
   ctx.restore();
 };
@@ -1987,7 +2205,7 @@ export const effectChips = (s) => {
   perPlayer(e.hidden, 'hidden', '🫥');
   perPlayer(e.shake, 'shake', '📳');
   perPlayer(e.honey, 'honey', '🍯');
-  ['accel', 'square', 'pulse', 'hunt', 'dizzy', 'upside', 'barrier', 'orbit', 'bouncy', 'repel', 'decoys'].forEach((k) => {
+  ['accel', 'square', 'pulse', 'hunt', 'dizzy', 'upside', 'barrier', 'orbit', 'bouncy', 'repel', 'decoys', ...X3_KEYS].forEach((k) => {
     if (e[k]) chips.push({ key: k, icon: POWERS[k].icon, text: `${secs(e[k])}s`, color: POWERS[k].color });
   });
   if (e.bomb) chips.push({ key: 'bomb', icon: '💣', text: `${secs(e.bomb)}s`, color: POWERS.bomb.color });
@@ -2034,7 +2252,10 @@ export const packState = (s) => {
       // em quadros (alguns efeitos animam pelo tempo restante)
       x2: [e.accel, e.square, e.pulse, e.hunt, e.dizzy, e.upside, e.barrier, e.orbit, e.bouncy, e.repel, e.decoys],
       sk2: e.shake.map(secs),
-      hn: e.honey.map(secs)
+      hn: e.honey.map(secs),
+      x3: X3_KEYS.map((k) => e[k]), // em quadros
+      tp: e.targetPos ? [round1(e.targetPos.x), round1(e.targetPos.y)] : null,
+      mp: e.minePos.map((m) => [round1(m.x), round1(m.y)])
     },
     dc: (s.decoys || []).map((d) => [round1(d.x), round1(d.y)]),
     bl: s.balloons.map((b) => [round1(b.x), round1(balloonY(s, b)), POWER_TYPES.indexOf(b.type), b.age])
@@ -2086,6 +2307,12 @@ export const applyPacked = (s, msg) => {
       huntTarget: 0,
       orbitDir: 1
     };
+    const x3 = e.x3 || [];
+    X3_KEYS.forEach((k, idx) => {
+      s.effects[k] = x3[idx] || 0;
+    });
+    s.effects.targetPos = e.tp ? { x: e.tp[0], y: e.tp[1] } : null;
+    s.effects.minePos = (e.mp || []).map(([x, y]) => ({ x, y }));
     const x2 = e.x2 || [];
     ['accel', 'square', 'pulse', 'hunt', 'dizzy', 'upside', 'barrier', 'orbit', 'bouncy', 'repel', 'decoys'].forEach((k, idx) => {
       s.effects[k] = x2[idx] || 0;

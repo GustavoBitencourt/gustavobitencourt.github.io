@@ -145,7 +145,7 @@ const Pong = () => {
     const type = typeof evt === 'string' ? evt : evt?.t;
     if (!POWERS[type]) return;
     clearTimeout(powerTimerRef.current);
-    setPowerToast({ type, owner: evt?.o ?? null, picks: evt?.k, victim: evt?.v ?? null, id: Date.now() });
+    setPowerToast({ type, owner: evt?.o ?? null, picks: evt?.k, victim: evt?.v ?? null, hit: evt?.h ?? 0, id: Date.now() });
     powerTimerRef.current = setTimeout(() => setPowerToast(null), 1800);
   }, []);
 
@@ -252,6 +252,16 @@ const Pong = () => {
       window.removeEventListener('keydown', onKey);
     };
   }, [pseudoFull]);
+
+  // Ao sair da partida (menu, lista de salas) ou abrir o modal de nova sala, sai da tela cheia:
+  // senão essas telas ficam escondidas atrás do tabuleiro
+  useEffect(() => {
+    const inGame = screen === 'local' || screen === 'online';
+    if (inGame && !setup) return;
+    setPseudoFull(false);
+    const el = document.fullscreenElement || document.webkitFullscreenElement;
+    if (el) Promise.resolve((document.exitFullscreen || document.webkitExitFullscreen).call(document)).catch(() => {});
+  }, [screen, setup]);
 
   const toggleFullscreen = () => {
     const el = frameRef.current;
@@ -1111,8 +1121,10 @@ const Pong = () => {
     return null;
   };
 
-  const powerLabel = ({ type, owner, picks, victim }) => {
+  const powerLabel = ({ type, owner, picks, victim, hit }) => {
     const who = owner !== null && owner !== undefined ? names[owner] : '';
+    if (type === 'target' && hit === 1) return `${who} acertou o alvo: +1 ponto!`;
+    if (type === 'target' && hit === 2) return `${who} acertou o alvo! (não vale o ponto da vitória)`;
     if (type === 'steal') return `${who} roubou 1 ponto de ${victim !== null && victim !== undefined ? names[victim] : '?'}!`;
     if (type === 'boomerang') return `Bumerangue: a bola volta para ${who}!`;
     if (type === 'honey') return `Raquete de mel para ${who}: segura a bola!`;
@@ -1300,7 +1312,7 @@ const Pong = () => {
           <li>Online: crie uma sala e envie o link, ou entre em uma sala aberta</li>
           <li>3 a 6 jogadores: o gol é de quem tocou por último na bola (a bola fica da cor dele). Gol contra tira 1 ponto de quem fez (sem ficar negativo); bola que ninguém tocou não muda nada</li>
           <li>Local: jogue em 2 no mesmo teclado (coop) ou sozinho contra bots, de 2 a 6 jogadores</li>
-          <li>🎈 Com poderes ligados, a cada 3 rebatidas surge um balão (às vezes dois; até 2 na tela). Acerte a bola nele: 🔵 gigante, ⚡ rápida, 🐢 lenta, ⚽ mais uma bola, 🔹 bola mini, 💨 ventania, 🔦 apagão (só dá para ver perto das raquetes), 🐌 raquetes lentas para os adversários, 💰 gol em dobro (seu próximo gol vale 2), 🌌 portais, 💣 bomba (a bola explode e sai disparada), 🫥 raquetes dos adversários invisíveis, 🔀 troca-troca de raquetes, 💥 estilhaço (+2 bolas), 🧭 volta ao centro, 🪃 bumerangue (a bola volta para quem tocou), 📈 bola acelerando, 🟥 bola quadrada (quica torto), 💓 bola pulsante, 👑 caça ao líder (a bola persegue o gol de quem está ganhando), 🧱 escudo para todos, 🦹 ladrão de ponto (rouba 1 ponto do líder), 😵 quadra tonta, 🙃 quadra de ponta-cabeça, 🚧 barreira no meio, 📳 raquetes dos adversários tremendo, 🍯 raquete de mel (segura a bola um instante), 🌧️ chuva de balões, 🪐 órbita, 👥 bolas falsas, 🏀 paredes elásticas, 💫 repulsão no meio, 🎰 loteria de tamanhos de raquete, 🧊 raquetes dos adversários escorregando, 🌀 efeito, 👻 fantasma (some e só aparece piscando), 🎱 bumpers de pinball, ⏸️ bola parada no ar (🐢 e ⏸️ só aparecem depois de 10 rebatidas no ponto), 🎲 surpresa (2 poderes de uma vez), 🚀 raquete turbo, 🌪️ desvio maluco, 🕳️ buraco negro, ✨ teleporte, 📏 raquete gigante, 🤏 encolhe os adversários, ❄️ congela os adversários, 🔄 inverte os adversários, 🛡️ escudo no gol, ↩️ bola de ré, 🌫️ neblina no meio, 🥴 bola bêbada, 🧲 ímã na sua raquete ou 🎯 tiro certeiro (sua próxima rebatida sai rápida no canto do gol de um adversário)</li>
+          <li>🎈 Com poderes ligados, a cada 3 rebatidas surge um balão (às vezes dois; até 2 na tela). Acerte a bola nele: 🔵 gigante, ⚡ rápida, 🐢 lenta, ⚽ mais uma bola, 🔹 bola mini, 💨 ventania, 🔦 apagão (só dá para ver perto das raquetes), 🐌 raquetes lentas para os adversários, 💰 gol em dobro (seu próximo gol vale 2), 🌌 portais, 💣 bomba (a bola explode e sai disparada), 🫥 raquetes dos adversários invisíveis, 🔀 troca-troca de raquetes, 💥 estilhaço (+2 bolas), 🧭 volta ao centro, 🪃 bumerangue (a bola volta para quem tocou), 📈 bola acelerando, 🟥 bola quadrada (quica torto), 💓 bola pulsante, 👑 caça ao líder (a bola persegue o gol de quem está ganhando), 🧱 escudo para todos, 🦹 ladrão de ponto (rouba 1 ponto do líder), 😵 quadra tonta, 🙃 quadra de ponta-cabeça, 🚧 barreira no meio, 📳 raquetes dos adversários tremendo, 🍯 raquete de mel (segura a bola um instante), 🌧️ chuva de balões, 🪐 órbita, 👥 bolas falsas, 🏀 paredes elásticas, 💫 repulsão no meio, 🎰 loteria de tamanhos de raquete, ⏪ rebobinar (a bola volta 1 s), 🐇 bola saltitante, 🔆 holofote (só a bola fica iluminada), 🏹 alvo bônus (+1 ponto para quem acertar), 🧨 campo minado, 📐 rebatidas retas, 🪀 bola ioiô, 🕹️ controles trocados, 🔭 zoom na bola, ☄️ meteoro (gigante e rápida), 🧊 raquetes dos adversários escorregando, 🌀 efeito, 👻 fantasma (some e só aparece piscando), 🎱 bumpers de pinball, ⏸️ bola parada no ar (🐢 e ⏸️ só aparecem depois de 10 rebatidas no ponto), 🎲 surpresa (2 poderes de uma vez), 🚀 raquete turbo, 🌪️ desvio maluco, 🕳️ buraco negro, ✨ teleporte, 📏 raquete gigante, 🤏 encolhe os adversários, ❄️ congela os adversários, 🔄 inverte os adversários, 🛡️ escudo no gol, ↩️ bola de ré, 🌫️ neblina no meio, 🥴 bola bêbada, 🧲 ímã na sua raquete ou 🎯 tiro certeiro (sua próxima rebatida sai rápida no canto do gol de um adversário)</li>
           <li>Com 3 ou mais jogadores, se duas raquetes trocarem a bola mais de 4 vezes seguidas, ela sai em direção ao gol de outro jogador; e se a bola bater 5 vezes seguidas nas paredes sem tocar numa raquete, ela muda de direção rumo a um gol</li>
           <li>Poderes iguais se acumulam (ex.: rápida 2x → 4x) e todos acabam quando sai um gol</li>
         </ul>
