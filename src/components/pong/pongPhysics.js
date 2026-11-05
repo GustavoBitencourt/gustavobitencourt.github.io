@@ -95,8 +95,25 @@ export const POWERS = {
   yoyo: { icon: '🪀', label: 'Bola ioiô!', color: '#cf6a87', frames: 5 * FPS },
   remote: { icon: '🕹️', label: 'Controles trocados! Cada um controla a raquete do vizinho', color: '#778beb', frames: 6 * FPS },
   zoom: { icon: '🔭', label: 'Zoom na bola!', color: '#596275', frames: 5 * FPS },
-  meteor: { icon: '☄️', label: 'Meteoro! Bola gigante e rápida', color: '#ff793f', frames: 7 * FPS }
+  meteor: { icon: '☄️', label: 'Meteoro! Bola gigante e rápida', color: '#ff793f', frames: 7 * FPS },
+  mud: { icon: '🩹', label: 'Paredes de lama! Freiam a bola', color: '#a0522d', frames: 8 * FPS },
+  zap: { icon: '🌩️', label: 'Bola elétrica! Ziguezague brusco', color: '#f9e79f', frames: 5 * FPS },
+  freezeAll: { icon: '🥶', label: 'Congelamento geral!', color: '#aed6f1', frames: Math.round(1.5 * FPS) },
+  turboAll: { icon: '🏎️', label: 'Todas as raquetes turbo!', color: '#f5b041', frames: 8 * FPS },
+  growAll: { icon: '🍄', label: 'Cogumelo! Todas as raquetes crescem', color: '#e74c3c', frames: 10 * FPS },
+  shrinkAll: { icon: '🐜', label: 'Formiga! Todas as raquetes encolhem', color: '#7d6608', frames: 8 * FPS },
+  invertAll: { icon: '🔃', label: 'Tudo invertido! Controles de todos trocados', color: '#d2b4de', frames: 5 * FPS },
+  gift: { icon: '🎁', label: 'Presente', color: '#ff6b81', frames: 0, owner: true },
+  prank: { icon: '🤡', label: 'Pegadinha', color: '#f1948a', frames: 6 * FPS, owner: true },
+  cleanse: { icon: '🧹', label: 'Faxina! Todos os poderes foram limpos', color: '#d5dbdb', frames: 0 },
+  earth: { icon: '🌍', label: 'Gravidade! A bola cai para baixo', color: '#2e86c1', frames: 7 * FPS },
+  traffic: { icon: '🚦', label: 'Semáforo! A bola para e anda', color: '#27ae60', frames: 6 * FPS },
+  friendly: { icon: '🤝', label: 'Bola amigável! Ela procura as raquetes', color: '#82e0aa', frames: 7 * FPS },
+  calm: { icon: '😌', label: 'Calmaria! A bola volta à velocidade normal', color: '#a9cce3', frames: 0 },
+  nitro: { icon: '🔥', label: 'Nitro! Bola na velocidade máxima', color: '#ff5733', frames: 0 }
 };
+const GIFT_POWERS = ['grow', 'shield', 'magnet', 'snipe', 'turbo', 'honey', 'double'];
+const X4_KEYS = ['mud', 'zap', 'earth', 'traffic', 'friendly'];
 // Poderes que só fazem sentido com a bola já rápida: só surgem depois de LATE_HITS rebatidas no ponto
 const LATE_POWERS = ['slow', 'hover'];
 const LATE_HITS = 10;
@@ -141,6 +158,13 @@ const MINE_R = 11;
 const MINE_COUNT = 3;
 const YOYO_EVERY = 70; // ioiô: inverte a bola a cada 70 quadros
 const ZOOM = 1.6;
+const MUD_BRAKE = 0.8; // paredes de lama: velocidade multiplicada a cada batida
+const ZAP_EVERY = 18; // bola elétrica: um tranco a cada 18 quadros
+const ZAP_ANGLE = 0.7;
+const EARTH_PULL = 0.13;
+const FRIENDLY_PULL = 0.16;
+const TRAFFIC_CYCLE = 60; // semáforo: em cada ciclo de 1 s, a bola fica parada nos primeiros 22 quadros
+const TRAFFIC_STOP = 22;
 const CURVE_RATE = 0.016; // rad por quadro, por nível de efeito
 const GRAVITY_PULL = 0.22; // aceleração em direção ao centro (a velocidade é mantida)
 const SHRINK_FACTOR = 0.55;
@@ -214,7 +238,12 @@ const newEffects = (n) => ({
   remote: 0,
   zoom: 0,
   targetPos: null,
-  minePos: []
+  minePos: [],
+  mud: 0,
+  zap: 0,
+  earth: 0,
+  traffic: 0,
+  friendly: 0,
 });
 
 const ballRadius = (s) =>
@@ -261,7 +290,7 @@ const tickPowers = (s) => {
   e.hidden = e.hidden.map(dec);
   e.shake = e.shake.map(dec);
   e.honey = e.honey.map(dec);
-  ['accel', 'square', 'pulse', 'hunt', 'dizzy', 'upside', 'barrier', 'orbit', 'bouncy', 'repel', 'decoys', ...X3_KEYS].forEach((k) => {
+  ['accel', 'square', 'pulse', 'hunt', 'dizzy', 'upside', 'barrier', 'orbit', 'bouncy', 'repel', 'decoys', ...X3_KEYS, ...X4_KEYS].forEach((k) => {
     if (e[k] > 0) e[k] -= 1;
   });
   if (!e.target) e.targetPos = null;
@@ -483,6 +512,41 @@ const activatePower = (s, requested, ball, silent = false) => {
   }
   if (type === 'bouncy') e.bouncy = frames;
   if (type === 'repel') e.repel = frames;
+  const everyone = (frames2) => s.scores.map(() => frames2);
+  if (type === 'mud') e.mud = frames;
+  if (type === 'zap') e.zap = frames;
+  if (type === 'freezeAll') e.freeze = everyone(frames);
+  if (type === 'turboAll') e.turbo = everyone(frames);
+  if (type === 'growAll') {
+    e.grow = e.grow.map((g) => ({ stacks: Math.min(MAX_GROW_STACKS, g.stacks + 1), frames }));
+  }
+  if (type === 'shrinkAll') e.shrink = everyone(frames);
+  if (type === 'invertAll') e.invert = everyone(frames);
+  if (type === 'gift') {
+    // Presente: um poder bom sorteado para quem tocou por último
+    const pick = GIFT_POWERS[Math.floor(Math.random() * GIFT_POWERS.length)];
+    activatePower(s, pick, ball, true);
+    s.fx.push('power');
+    s.pw.push({ t: 'gift', o: owner, k: [pick] });
+    return;
+  }
+  if (type === 'prank') {
+    // Pegadinha: o poder sai pela culatra para quem pegou
+    e.shrink[owner] = frames;
+    e.invert[owner] = frames;
+  }
+  if (type === 'earth') e.earth = frames;
+  if (type === 'traffic') e.traffic = frames;
+  if (type === 'friendly') e.friendly = frames;
+  if (type === 'calm' || type === 'nitro') {
+    const target = type === 'calm' ? BALL_SPEED : (s.mode === 2 ? CLASSIC_MAX_SPEED : POLY_MAX_SPEED) * 1.2;
+    s.balls.forEach((b) => {
+      const sp = Math.hypot(b.dx, b.dy) || 1;
+      b.dx *= target / sp;
+      b.dy *= target / sp;
+      b.slow = false;
+    });
+  }
   if (type === 'rewind') {
     s.balls.forEach((b) => {
       if (b.held || !b.trail || !b.trail.length) return;
@@ -532,6 +596,12 @@ const activatePower = (s, requested, ball, silent = false) => {
     } else {
       s.paddles = s.paddles.map((_, i) => s.paddles[(i + 1) % s.paddles.length]);
     }
+  }
+
+  // Faxina: limpa todos os poderes ativos (as bolas e os balões continuam)
+  if (type === 'cleanse') {
+    s.effects = newEffects(s.scores.length);
+    s.decoys = [];
   }
 
   if (silent) return;
@@ -718,6 +788,29 @@ const applyEvenMore = (s) => {
   });
 };
 
+// Bola elétrica, gravidade e bola amigável
+const applyMore2 = (s) => {
+  const e = s.effects;
+  if (!e.zap && !e.earth && !e.friendly) return;
+  s.balls.forEach((b) => {
+    if (b.slow || b.held) return;
+    if (e.zap > 0 && e.zap % ZAP_EVERY === 0) {
+      const a = (Math.floor(e.zap / ZAP_EVERY) % 2 ? 1 : -1) * ZAP_ANGLE;
+      const dx = b.dx * Math.cos(a) - b.dy * Math.sin(a);
+      b.dy = b.dx * Math.sin(a) + b.dy * Math.cos(a);
+      b.dx = dx;
+    }
+    if (e.earth) pullToward(b, b.x, b.y + 100, EARTH_PULL);
+    if (e.friendly) {
+      for (let i = 0; i < s.scores.length; i++) {
+        const p = magnetTarget(s, i, b);
+        if (p) pullToward(b, p.x, p.y, FRIENDLY_PULL);
+      }
+    }
+    keepHorizontalEnough(s, b);
+  });
+};
+
 // Alvo bônus: a bola de quem tocou por último acerta e ganha 1 ponto (sem decidir a partida)
 const checkTarget = (s, ball, r) => {
   const e = s.effects;
@@ -761,6 +854,12 @@ const onWallBounce = (s, ball) => {
     ball.dy = ball.dx * Math.sin(a) + ball.dy * Math.cos(a);
     ball.dx = dx;
     keepHorizontalEnough(s, ball);
+  }
+  if (e.mud > 0) {
+    const sp = Math.hypot(ball.dx, ball.dy) || 1;
+    const next = Math.max(SERVE_SPEED, sp * MUD_BRAKE);
+    ball.dx *= next / sp;
+    ball.dy *= next / sp;
   }
   if (e.bouncy > 0) {
     const cap = (s.mode === 2 ? CLASSIC_MAX_SPEED : POLY_MAX_SPEED) * 1.3;
@@ -1251,6 +1350,32 @@ const drawFuse = (ctx, s, ball) => {
   ctx.restore();
 };
 
+const drawTraffic = (ctx, s, ball) => {
+  const e = s.effects;
+  if (e.ghost > 0) return;
+  const r = ballRadius(s);
+  if (e.traffic > 0) {
+    const red = e.traffic % TRAFFIC_CYCLE < TRAFFIC_STOP;
+    ctx.strokeStyle = red ? '#ff4757' : '#2ed573';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(ball.x, ball.y, r + 7, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+  if (e.zap > 0) {
+    ctx.strokeStyle = '#f9e79f';
+    ctx.lineWidth = 1.5;
+    for (let k = 0; k < 3; k++) {
+      const a = s.tick * 0.7 + k * 2.1;
+      ctx.beginPath();
+      ctx.moveTo(ball.x + Math.cos(a) * (r + 2), ball.y + Math.sin(a) * (r + 2));
+      ctx.lineTo(ball.x + Math.cos(a + 0.3) * (r + 7), ball.y + Math.sin(a + 0.3) * (r + 7));
+      ctx.lineTo(ball.x + Math.cos(a - 0.2) * (r + 11), ball.y + Math.sin(a - 0.2) * (r + 11));
+      ctx.stroke();
+    }
+  }
+};
+
 const drawHoverRing = (ctx, s, ball) => {
   if (!(s.effects.hover > 0) || s.effects.ghost > 0) return;
   ctx.strokeStyle = 'rgba(129,236,236,0.8)';
@@ -1490,12 +1615,15 @@ const stepClassic = (s, rawInputs) => {
     s.effects.hover -= 1;
     return null;
   }
+  // Semáforo: no vermelho a bola espera
+  if (s.effects.traffic > 0 && s.effects.traffic % TRAFFIC_CYCLE < TRAFFIC_STOP) return null;
 
   explodeBomb(s);
   stepDecoys(s);
   applyBending(s);
   applyMorePowers(s);
   applyEvenMore(s);
+  applyMore2(s);
   const r = ballRadius(s);
   const mul = speedMul(s);
   for (const ball of [...s.balls]) {
@@ -1549,6 +1677,7 @@ const drawClassic = (ctx, s) => {
     drawBall(ctx, s, ball);
     drawHoverRing(ctx, s, ball);
     drawFuse(ctx, s, ball);
+    drawTraffic(ctx, s, ball);
   });
   drawDecoys(ctx, s);
   drawFog(ctx, s, CLASSIC_W / 2, CLASSIC_H / 2, 190, CLASSIC_H, false);
@@ -1872,12 +2001,15 @@ const stepPoly = (s, rawInputs) => {
     s.effects.hover -= 1;
     return null;
   }
+  // Semáforo: no vermelho a bola espera
+  if (s.effects.traffic > 0 && s.effects.traffic % TRAFFIC_CYCLE < TRAFFIC_STOP) return null;
 
   explodeBomb(s);
   stepDecoys(s);
   applyBending(s);
   applyMorePowers(s);
   applyEvenMore(s);
+  applyMore2(s);
   const r = ballRadius(s);
   const mul = speedMul(s);
   for (const ball of [...s.balls]) {
@@ -1996,6 +2128,7 @@ const drawPoly = (ctx, s, viewIndex = 0, labels = []) => {
     drawBall(ctx, s, ball);
     drawHoverRing(ctx, s, ball);
     drawFuse(ctx, s, ball);
+    drawTraffic(ctx, s, ball);
   });
   drawDecoys(ctx, s);
   drawFog(ctx, s, POLY_C, POLY_C, g.R * 0.6, 0, true);
@@ -2216,7 +2349,7 @@ export const effectChips = (s) => {
   perPlayer(e.hidden, 'hidden', '🫥');
   perPlayer(e.shake, 'shake', '📳');
   perPlayer(e.honey, 'honey', '🍯');
-  ['accel', 'square', 'pulse', 'hunt', 'dizzy', 'upside', 'barrier', 'orbit', 'bouncy', 'repel', 'decoys', ...X3_KEYS].forEach((k) => {
+  ['accel', 'square', 'pulse', 'hunt', 'dizzy', 'upside', 'barrier', 'orbit', 'bouncy', 'repel', 'decoys', ...X3_KEYS, ...X4_KEYS].forEach((k) => {
     if (e[k]) chips.push({ key: k, icon: POWERS[k].icon, text: `${secs(e[k])}s`, color: POWERS[k].color });
   });
   if (e.bomb) chips.push({ key: 'bomb', icon: '💣', text: `${secs(e.bomb)}s`, color: POWERS.bomb.color });
@@ -2265,6 +2398,7 @@ export const packState = (s) => {
       sk2: e.shake.map(secs),
       hn: e.honey.map(secs),
       x3: X3_KEYS.map((k) => e[k]), // em quadros
+      x4: X4_KEYS.map((k) => e[k]),
       tp: e.targetPos ? [round1(e.targetPos.x), round1(e.targetPos.y)] : null,
       mp: e.minePos.map((m) => [round1(m.x), round1(m.y)])
     },
@@ -2318,6 +2452,10 @@ export const applyPacked = (s, msg) => {
       huntTarget: 0,
       orbitDir: 1
     };
+    const x4 = e.x4 || [];
+    X4_KEYS.forEach((k, idx) => {
+      s.effects[k] = x4[idx] || 0;
+    });
     const x3 = e.x3 || [];
     X3_KEYS.forEach((k, idx) => {
       s.effects[k] = x3[idx] || 0;
