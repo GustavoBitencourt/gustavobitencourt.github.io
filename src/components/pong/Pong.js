@@ -33,6 +33,15 @@ const cleanName = (value) => String(value || '').replace(/\s+/g, ' ').trim().sli
 const emptyInput = () => ({ up: false, down: false, left: false, right: false, target: null });
 const filled = (n, value) => Array.from({ length: n }, () => value);
 
+// Opções de poderes: sem, com e Caos (raquetes enormes e 3x mais balões)
+const POWER_MODES = [
+  [false, 'Sem poderes'],
+  [true, '🎈 Com poderes'],
+  ['chaos', '🌪️ Caos']
+];
+const normPowers = (v) => (v === 'chaos' ? 'chaos' : v !== false);
+const powersName = (v) => (v === 'chaos' ? '🌪️ Caos' : v ? '🎈 Com poderes' : 'Sem poderes');
+
 const Pong = () => {
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -801,8 +810,8 @@ const Pong = () => {
       } else if (msg.t === 'welcome') {
         const players = PLAYER_OPTIONS.includes(msg.mode) ? msg.mode : 2;
         const win = WIN_OPTIONS.includes(msg.win) ? msg.win : DEFAULT_WIN;
-        powersRef.current = msg.powers !== false;
-        setPowersOn(msg.powers !== false);
+        powersRef.current = normPowers(msg.powers);
+        setPowersOn(normPowers(msg.powers));
         winScoreRef.current = win;
         setWinScore(win);
         applyMode(players, win);
@@ -813,6 +822,9 @@ const Pong = () => {
       } else if (msg.t === 'players') {
         setPlayerNames(msg.names || []);
         setPlayersCount(msg.n || 1);
+      } else if (msg.t === 'powers') {
+        powersRef.current = normPowers(msg.v);
+        setPowersOn(normPowers(msg.v));
       } else if (msg.t === 'ready') {
         if (Array.isArray(msg.r)) setReady(msg.r);
       } else if (msg.t === 'full') {
@@ -999,7 +1011,7 @@ const Pong = () => {
                     {host && <small> · {host}</small>}
                   </span>
                   <span className="pong-room-players">
-                    {players}/{cap}{win ? ` · até ${win}` : ''}{powers === false ? ' · sem poderes' : ' · 🎈'}
+                    {players}/{cap}{win ? ` · até ${win}` : ''}{powers === false ? ' · sem poderes' : powers === 'chaos' ? ' · 🌪️ caos' : ' · 🎈'}
                   </span>
                   <button className="pong-btn small" disabled={full} onClick={() => joinRoom(code)}>
                     {full ? 'Cheia' : 'Entrar'}
@@ -1075,6 +1087,7 @@ const Pong = () => {
 
     if (phase === 'over') {
       const othersName = names.filter((_, i) => i !== myIndex && ready[i]).join(' e ');
+      const canPickPowers = !isOnline || role === 'host';
       return (
         <div className="pong-panel">
           <h2>{isOnline || solo ? (youWon ? 'Você venceu! 🏆' : `${winnerName} venceu!`) : `${winnerName} venceu! 🏆`}</h2>
@@ -1084,6 +1097,25 @@ const Pong = () => {
               <span className="pong-dot" />
               {meReady ? 'Aguardando os outros confirmarem' : `${othersName} quer jogar de novo!`} ({readyCount}/{mode})
             </p>
+          )}
+          {canPickPowers ? (
+            <div className="pong-next-powers">
+              <span>Próxima partida</span>
+              <div className="pong-segment">
+                {POWER_MODES.map(([value, label]) => (
+                  <button
+                    key={label}
+                    type="button"
+                    className={powersOn === value ? 'active' : ''}
+                    onClick={() => changeNextPowers(value)}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <p className="pong-next-powers-info">Próxima partida: {powersName(powersOn)}</p>
           )}
           <div className="pong-actions">
             <button className="pong-btn primary" onClick={playAgain} disabled={isOnline && meReady}>
@@ -1119,6 +1151,13 @@ const Pong = () => {
     }
 
     return null;
+  };
+
+  // Troca os poderes da próxima partida (não mexe em quem já confirmou "jogar novamente")
+  const changeNextPowers = (value) => {
+    powersRef.current = value;
+    setPowersOn(value);
+    if (screen === 'online' && role === 'host') send({ t: 'powers', v: value });
   };
 
   const powerLabel = ({ type, owner, picks, victim, hit }) => {
@@ -1315,6 +1354,7 @@ const Pong = () => {
           <li>🎈 Com poderes ligados, a cada 3 rebatidas surge um balão (às vezes dois; até 2 na tela). Acerte a bola nele: 🔵 gigante, ⚡ rápida, 🐢 lenta, ⚽ mais uma bola, 🔹 bola mini, 💨 ventania, 🔦 apagão (só dá para ver perto das raquetes), 🐌 raquetes lentas para os adversários, 💰 gol em dobro (seu próximo gol vale 2), 🌌 portais, 💣 bomba (a bola explode e sai disparada), 🫥 raquetes dos adversários invisíveis, 🔀 troca-troca de raquetes, 💥 estilhaço (+2 bolas), 🧭 volta ao centro, 🪃 bumerangue (a bola volta para quem tocou), 📈 bola acelerando, 🟥 bola quadrada (quica torto), 💓 bola pulsante, 👑 caça ao líder (a bola persegue o gol de quem está ganhando), 🧱 escudo para todos, 🦹 ladrão de ponto (rouba 1 ponto do líder), 😵 quadra tonta, 🙃 quadra de ponta-cabeça, 🚧 barreira no meio, 📳 raquetes dos adversários tremendo, 🍯 raquete de mel (segura a bola um instante), 🌧️ chuva de balões, 🪐 órbita, 👥 bolas falsas, 🏀 paredes elásticas, 💫 repulsão no meio, 🎰 loteria de tamanhos de raquete, ⏪ rebobinar (a bola volta 1 s), 🐇 bola saltitante, 🔆 holofote (só a bola fica iluminada), 🏹 alvo bônus (+1 ponto para quem acertar), 🧨 campo minado, 📐 rebatidas retas, 🪀 bola ioiô, 🕹️ controles trocados, 🔭 zoom na bola, ☄️ meteoro (gigante e rápida), 🧊 raquetes dos adversários escorregando, 🌀 efeito, 👻 fantasma (some e só aparece piscando), 🎱 bumpers de pinball, ⏸️ bola parada no ar (🐢 e ⏸️ só aparecem depois de 10 rebatidas no ponto), 🎲 surpresa (2 poderes de uma vez), 🚀 raquete turbo, 🌪️ desvio maluco, 🕳️ buraco negro, ✨ teleporte, 📏 raquete gigante, 🤏 encolhe os adversários, ❄️ congela os adversários, 🔄 inverte os adversários, 🛡️ escudo no gol, ↩️ bola de ré, 🌫️ neblina no meio, 🥴 bola bêbada, 🧲 ímã na sua raquete ou 🎯 tiro certeiro (sua próxima rebatida sai rápida no canto do gol de um adversário)</li>
           <li>Com 3 ou mais jogadores, se duas raquetes trocarem a bola mais de 4 vezes seguidas, ela sai em direção ao gol de outro jogador; e se a bola bater 5 vezes seguidas nas paredes sem tocar numa raquete, ela muda de direção rumo a um gol</li>
           <li>Poderes iguais se acumulam (ex.: rápida 2x → 4x) e todos acabam quando sai um gol</li>
+          <li>🌪️ Modo Caos: igual ao com poderes, mas as raquetes ocupam 60% do gol e surge um balão a cada rebatida (3x mais). No fim da partida, o anfitrião pode trocar o modo da próxima</li>
         </ul>
       </div>
 
@@ -1413,7 +1453,7 @@ const Pong = () => {
             <div className="pong-modal-field">
               <span>Balões de poder</span>
               <div className="pong-segment">
-                {[[true, '🎈 Com poderes'], [false, 'Sem poderes']].map(([value, label]) => (
+                {POWER_MODES.map(([value, label]) => (
                   <button
                     key={label}
                     type="button"
@@ -1424,6 +1464,9 @@ const Pong = () => {
                   </button>
                 ))}
               </div>
+              {setup.powers === 'chaos' && (
+                <p className="pong-modal-hint">Raquetes gigantes (60% do gol) e balões de poder 3x mais frequentes.</p>
+              )}
             </div>
 
             {notice && setup.kind === 'online' && <p className="pong-notice">{notice}</p>}

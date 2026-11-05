@@ -106,6 +106,11 @@ const BALLOON_R = 18;
 const BALLOON_LIFE = 12 * FPS;
 const HITS_PER_BALLOON = 3;
 const MAX_BALLOONS = 2; // até 2 balões na tela ao mesmo tempo
+// Modo Caos: raquetes com 60% do gol e balões 3x mais frequentes (a cada rebatida)
+const CHAOS_PADDLE = 0.6;
+const CHAOS_HITS_PER_BALLOON = 1;
+const CHAOS_MAX_BALLOONS = 4;
+const isChaos = (s) => s.powersEnabled === 'chaos';
 const DOUBLE_BALLOON_CHANCE = 0.2; // às vezes surgem 2 de uma vez
 const BALLOON_GAP = 90; // distância mínima entre dois balões
 const BUMPER_R = 20;
@@ -293,9 +298,11 @@ const randomPower = (exclude = []) => {
 const onPaddleHit = (s, spawnBalloon) => {
   s.hits += 1;
   s.rallyHits = (s.rallyHits || 0) + 1;
-  if (!s.powersEnabled || s.hits % HITS_PER_BALLOON !== 0) return;
+  const every = isChaos(s) ? CHAOS_HITS_PER_BALLOON : HITS_PER_BALLOON;
+  const maxOnScreen = isChaos(s) ? CHAOS_MAX_BALLOONS : MAX_BALLOONS;
+  if (!s.powersEnabled || s.hits % every !== 0) return;
   const wanted = Math.random() < DOUBLE_BALLOON_CHANCE ? 2 : 1;
-  for (let k = 0; k < wanted && s.balloons.length < MAX_BALLOONS; k++) {
+  for (let k = 0; k < wanted && s.balloons.length < maxOnScreen; k++) {
     let pos = null;
     for (let tries = 0; tries < 12 && !pos; tries++) {
       const p = spawnBalloon();
@@ -1288,7 +1295,8 @@ const PADDLE_H = 80;
 const PADDLE_SPEED = 6;
 const CLASSIC_MAX_SPEED = 15;
 
-const classicPaddleH = (s, i) => PADDLE_H * paddleScale(s, i, 0.6);
+const classicPaddleH = (s, i) =>
+  Math.min(CLASSIC_H * 0.95, (isChaos(s) ? CLASSIC_H * CHAOS_PADDLE : PADDLE_H) * paddleScale(s, i, 0.6));
 
 const serveClassic = (dir) => ({
   x: CLASSIC_W / 2,
@@ -1606,7 +1614,10 @@ const polyGeometry = (n) => {
   return geom;
 };
 
-const polyPaddleLen = (s, g, i) => g.paddleLen * paddleScale(s, i, 0.5);
+const polyPaddleLen = (s, g, i) => {
+  const L = g.goals[i].L;
+  return Math.min(L * 0.95, (isChaos(s) ? L * CHAOS_PADDLE : g.paddleLen) * paddleScale(s, i, 0.5));
+};
 
 /** Converte a posição X do dedo (tela do jogador, gol embaixo) na posição da raquete (0..1). */
 export const polyTouchToTarget = (x, n) => {

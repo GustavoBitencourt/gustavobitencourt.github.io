@@ -907,6 +907,28 @@
   line-height: 1.4;
 }
 
+/* Fim de partida: poderes da próxima */
+.pong-next-powers {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: min(420px, 100%);
+  margin: 4px auto 12px;
+}
+
+.pong-next-powers > span,
+.pong-next-powers-info {
+  font-size: 0.75rem;
+  color: #aaa;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.pong-next-powers .pong-segment button {
+  padding: 7px 8px;
+  font-size: 0.8rem;
+}
+
 /* ---------- Poderes (balões) ---------- */
 .pong-effects {
   position: absolute;
