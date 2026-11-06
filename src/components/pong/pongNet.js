@@ -100,7 +100,7 @@ export const listRooms = async () => {
       const conn = peer.connect(slotPeerId(slot), { metadata: { type: 'probe' }, serialization: 'json' });
       conn.on('data', (msg) => {
         if (msg?.t === 'status' && CODE_PATTERN.test(msg.code || '')) {
-          found.set(msg.code, { players: msg.players, max: msg.max || 2, host: msg.host || '', win: msg.win || null, powers: msg.powers === 'chaos' ? 'chaos' : msg.powers !== false });
+          found.set(msg.code, { players: msg.players, max: msg.max || 2, host: msg.host || '', win: msg.win || null, powers: msg.powers === 'chaos' ? 'chaos' : msg.powers !== false, bots: msg.bots || 0, open: msg.open });
           conn.close();
           done(slot);
         }
