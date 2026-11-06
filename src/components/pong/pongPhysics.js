@@ -128,6 +128,12 @@ const CHAOS_PADDLE = 0.6;
 const CHAOS_HITS_PER_BALLOON = 1;
 const CHAOS_MAX_BALLOONS = 4;
 const isChaos = (s) => s.powersEnabled === 'chaos';
+// Trocação Franca: sem poderes, bola já sai rápida e acelera mais, raquetes sempre turbo
+const isBrawl = (s) => s.powersEnabled === 'brawl';
+const BRAWL_SERVE = 7; // saque já rápido (normal: 3 até o primeiro toque, depois 5)
+const BRAWL_ACCEL = 1.08; // +8% por rebatida (normal: +5%)
+const BRAWL_MAX = 1.6; // teto de velocidade 60% maior que o normal
+const ballAccel = (s) => (isBrawl(s) ? BRAWL_ACCEL : 1.05);
 const DOUBLE_BALLOON_CHANCE = 0.2; // às vezes surgem 2 de uma vez
 const BALLOON_GAP = 90; // distância mínima entre dois balões
 const BUMPER_R = 20;
@@ -329,7 +335,7 @@ const onPaddleHit = (s, spawnBalloon) => {
   s.rallyHits = (s.rallyHits || 0) + 1;
   const every = isChaos(s) ? CHAOS_HITS_PER_BALLOON : HITS_PER_BALLOON;
   const maxOnScreen = isChaos(s) ? CHAOS_MAX_BALLOONS : MAX_BALLOONS;
-  if (!s.powersEnabled || s.hits % every !== 0) return;
+  if (!s.powersEnabled || isBrawl(s) || s.hits % every !== 0) return;
   const wanted = Math.random() < DOUBLE_BALLOON_CHANCE ? 2 : 1;
   for (let k = 0; k < wanted && s.balloons.length < maxOnScreen; k++) {
     let pos = null;
@@ -1015,7 +1021,7 @@ const mapInputs = (s, inputs) => inputs.map((input, i) => {
   const next = s.effects.invert[i] > 0 ? flipInput(input, s.mode) : { ...input };
   next.ice = s.effects.ice[i] > 0;
   next.shake = s.effects.shake[i] > 0;
-  next.speed = (s.effects.turbo[i] > 0 ? TURBO_MUL : 1) * (s.effects.sloth[i] > 0 ? SLOTH_MUL : 1);
+  next.speed = (s.effects.turbo[i] > 0 || isBrawl(s) ? TURBO_MUL : 1) * (s.effects.sloth[i] > 0 ? SLOTH_MUL : 1);
   return next;
 });
 
@@ -1423,12 +1429,12 @@ const CLASSIC_MAX_SPEED = 15;
 const classicPaddleH = (s, i) =>
   Math.min(CLASSIC_H * 0.95, (isChaos(s) ? CLASSIC_H * CHAOS_PADDLE : PADDLE_H) * paddleScale(s, i, 0.6));
 
-const serveClassic = (dir) => ({
+const serveClassic = (dir, brawl = false) => ({
   x: CLASSIC_W / 2,
   y: CLASSIC_H / 2,
-  dx: SERVE_SPEED * 0.9 * dir,
-  dy: SERVE_SPEED * 0.45 * (Math.random() < 0.5 ? -1 : 1),
-  slow: true,
+  dx: (brawl ? BRAWL_SERVE : SERVE_SPEED) * 0.9 * dir,
+  dy: (brawl ? BRAWL_SERVE : SERVE_SPEED) * 0.45 * (Math.random() < 0.5 ? -1 : 1),
+  slow: !brawl,
   lt: null
 });
 
@@ -1439,7 +1445,7 @@ const createClassic = (winScore, powersEnabled) => ({
   scores: [0, 0],
   player1: { x: 20, y: CLASSIC_H / 2 - PADDLE_H / 2, h: PADDLE_H },
   player2: { x: CLASSIC_W - 30, y: CLASSIC_H / 2 - PADDLE_H / 2, h: PADDLE_H },
-  balls: [serveClassic(Math.random() < 0.5 ? 1 : -1)],
+  balls: [serveClassic(Math.random() < 0.5 ? 1 : -1, powersEnabled === 'brawl')],
   effects: newEffects(2),
   balloons: [],
   decoys: [],
@@ -1478,10 +1484,11 @@ const moveClassicPaddle = (s, i, input = {}) => {
   paddle.y = y;
 };
 
-const bounceClassic = (ball, paddle, h, direction) => {
+const bounceClassic = (s, ball, paddle, h, direction) => {
   const currentSpeed = Math.hypot(ball.dx, ball.dy);
   // Primeiro toque após o saque lento volta à velocidade normal; depois, +5% por rebatida
-  const newSpeed = ball.slow ? BALL_SPEED : Math.min(CLASSIC_MAX_SPEED, currentSpeed * 1.05);
+  const max = CLASSIC_MAX_SPEED * (isBrawl(s) ? BRAWL_MAX : 1);
+  const newSpeed = ball.slow ? BALL_SPEED : Math.min(max, currentSpeed * ballAccel(s));
   ball.slow = false;
   const deltaY = clamp((ball.y - (paddle.y + h / 2)) / (h / 2), -1, 1);
   ball.dy = deltaY * newSpeed * 0.75;
@@ -1538,7 +1545,7 @@ const moveClassicBall = (s, ball, r, mul) => {
       const notBehind = dir > 0 ? ball.x > paddle.x - r : ball.x < paddle.x + PADDLE_W + r;
       if (towardGoal && notBehind && circleHitsRect(ball.x, ball.y, r, paddle.x, paddle.y, PADDLE_W, h)) {
         ball.x = dir > 0 ? paddle.x + PADDLE_W + r : paddle.x - r;
-        bounceClassic(ball, paddle, h, dir);
+        bounceClassic(s, ball, paddle, h, dir);
         if (s.effects.straight > 0) {
           const sp = Math.hypot(ball.dx, ball.dy);
           ball.dy = (Math.random() - 0.5) * 0.6;
@@ -1591,7 +1598,7 @@ const moveClassicBall = (s, ball, r, mul) => {
       s.scores[scorer] += double ? 2 : 1;
       resetPowers(s);
       // Saque vai para quem sofreu o gol
-      s.balls = [serveClassic(scorer === 0 ? 1 : -1)];
+      s.balls = [serveClassic(scorer === 0 ? 1 : -1, isBrawl(s))];
       s.serveFrames = SERVE_DELAY_FRAMES;
       s.fx.push('goal');
       return { type: s.scores[scorer] >= s.winScore ? 'over' : 'point', scorer, conceded: 1 - scorer, double };
@@ -1754,12 +1761,13 @@ export const polyTouchToTarget = (x, n) => {
   return clamp((POLY_C + halfSpan - x) / (2 * halfSpan), 0, 1);
 };
 
-const servePolyBall = (g, towardPlayer) => {
+const servePolyBall = (g, towardPlayer, brawl = false) => {
   const { n } = g.goals[towardPlayer];
   const angle = (Math.random() - 0.5) * 0.5;
   const dx = -n.x * Math.cos(angle) + n.y * Math.sin(angle);
   const dy = -n.y * Math.cos(angle) - n.x * Math.sin(angle);
-  return { x: POLY_C, y: POLY_C, dx: dx * SERVE_SPEED, dy: dy * SERVE_SPEED, slow: true, lt: null };
+  const sp = brawl ? BRAWL_SERVE : SERVE_SPEED;
+  return { x: POLY_C, y: POLY_C, dx: dx * sp, dy: dy * sp, slow: !brawl, lt: null };
 };
 
 const createPoly = (n, winScore, powersEnabled) => ({
@@ -1768,7 +1776,7 @@ const createPoly = (n, winScore, powersEnabled) => ({
   powersEnabled,
   scores: filled(n, () => 0),
   paddles: filled(n, () => 0.5),
-  balls: [servePolyBall(polyGeometry(n), Math.floor(Math.random() * n))],
+  balls: [servePolyBall(polyGeometry(n), Math.floor(Math.random() * n), powersEnabled === 'brawl')],
   effects: newEffects(n),
   balloons: [],
   decoys: [],
@@ -1875,7 +1883,7 @@ const movePolyBall = (s, g, ball, r, mul) => {
 
       const offset = clamp((s0 - c) / (len / 2), -1, 1);
       const angle = s.effects.straight > 0 ? 0 : offset * 0.95; // até ~55° de desvio (reto com o poder)
-      const speed = ball.slow ? BALL_SPEED : Math.min(POLY_MAX_SPEED, Math.hypot(ball.dx, ball.dy) * 1.05);
+      const speed = ball.slow ? BALL_SPEED : Math.min(POLY_MAX_SPEED * (isBrawl(s) ? BRAWL_MAX : 1), Math.hypot(ball.dx, ball.dy) * ballAccel(s));
       ball.slow = false;
       ball.dx = (n.x * Math.cos(angle) + u.x * Math.sin(angle)) * speed;
       ball.dy = (n.y * Math.cos(angle) + u.y * Math.sin(angle)) * speed;
@@ -1958,7 +1966,7 @@ const movePolyBall = (s, g, ball, r, mul) => {
       if (scorer === null || scorer === undefined) {
         // Ninguém tocou: não muda nada
         s.fx.push('wall');
-        s.balls = [servePolyBall(g, (i + 1) % g.n)];
+        s.balls = [servePolyBall(g, (i + 1) % g.n, isBrawl(s))];
         return { type: 'nopoint', scorer: null, conceded: i, reason: 'none' };
       }
 
@@ -1967,13 +1975,13 @@ const movePolyBall = (s, g, ball, r, mul) => {
         const penalty = s.scores[i] > 0;
         if (penalty) s.scores[i] -= 1;
         s.fx.push('wall');
-        s.balls = [servePolyBall(g, (i + 1) % g.n)];
+        s.balls = [servePolyBall(g, (i + 1) % g.n, isBrawl(s))];
         return { type: 'nopoint', scorer: null, conceded: i, reason: 'own', penalty };
       }
 
       s.scores[scorer] += double ? 2 : 1;
       s.fx.push('goal');
-      s.balls = [servePolyBall(g, i)];
+      s.balls = [servePolyBall(g, i, isBrawl(s))];
       return { type: s.scores[scorer] >= s.winScore ? 'over' : 'point', scorer, conceded: i, double };
     }
   }
@@ -1981,7 +1989,7 @@ const movePolyBall = (s, g, ball, r, mul) => {
   // Segurança numérica: bola fora do campo sem passar por um gol
   if (Math.hypot(ball.x - POLY_C, ball.y - POLY_C) > g.R + 60 + r) {
     s.balls = s.balls.filter((b) => b !== ball);
-    if (!s.balls.length) s.balls = [servePolyBall(g, Math.floor(Math.random() * g.n))];
+    if (!s.balls.length) s.balls = [servePolyBall(g, Math.floor(Math.random() * g.n), isBrawl(s))];
   }
   return null;
 };

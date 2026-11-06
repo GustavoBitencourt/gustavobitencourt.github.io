@@ -33,14 +33,15 @@ const cleanName = (value) => String(value || '').replace(/\s+/g, ' ').trim().sli
 const emptyInput = () => ({ up: false, down: false, left: false, right: false, target: null });
 const filled = (n, value) => Array.from({ length: n }, () => value);
 
-// Opções de poderes: sem, com e Caos (raquetes enormes e 3x mais balões)
+// Opções de poderes: sem, com, Caos (raquetes enormes e 3x mais balões) e Trocação Franca (sem poderes, tudo rápido)
 const POWER_MODES = [
   [false, 'Sem poderes'],
   [true, '🎈 Com poderes'],
-  ['chaos', '🌪️ Caos']
+  ['chaos', '🌪️ Caos'],
+  ['brawl', '🥊 Trocação Franca']
 ];
-const normPowers = (v) => (v === 'chaos' ? 'chaos' : v !== false);
-const powersName = (v) => (v === 'chaos' ? '🌪️ Caos' : v ? '🎈 Com poderes' : 'Sem poderes');
+const normPowers = (v) => (v === 'chaos' || v === 'brawl' ? v : v !== false);
+const powersName = (v) => (v === 'chaos' ? '🌪️ Caos' : v === 'brawl' ? '🥊 Trocação Franca' : v ? '🎈 Com poderes' : 'Sem poderes');
 
 const Pong = () => {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -1104,7 +1105,7 @@ const Pong = () => {
                     {host && <small> · {host}</small>}
                   </span>
                   <span className="pong-room-players">
-                    {players}/{cap}{bots ? ` · 🤖${bots}` : ''}{win ? ` · até ${win}` : ''}{powers === false ? ' · sem poderes' : powers === 'chaos' ? ' · 🌪️ caos' : ' · 🎈'}
+                    {players}/{cap}{bots ? ` · 🤖${bots}` : ''}{win ? ` · até ${win}` : ''}{powers === false ? ' · sem poderes' : powers === 'chaos' ? ' · 🌪️ caos' : powers === 'brawl' ? ' · 🥊 trocação' : ' · 🎈'}
                   </span>
                   <button className="pong-btn small" disabled={full} onClick={() => joinRoom(code)}>
                     {full ? 'Cheia' : bots ? 'Entrar no lugar do bot' : 'Entrar'}
@@ -1536,6 +1537,7 @@ const Pong = () => {
           <li>Com 3 ou mais jogadores, se duas raquetes trocarem a bola mais de 4 vezes seguidas, ela sai em direção ao gol de outro jogador; e se a bola bater 5 vezes seguidas nas paredes sem tocar numa raquete, ela muda de direção rumo a um gol</li>
           <li>Poderes iguais se acumulam (ex.: rápida 2x → 4x) e todos acabam quando sai um gol</li>
           <li>🌪️ Modo Caos: igual ao com poderes, mas as raquetes ocupam 60% do gol e surge um balão a cada rebatida (3x mais). No fim da partida, o anfitrião pode trocar o modo da próxima</li>
+          <li>🥊 Trocação Franca: sem poderes, a bola já sai rápida e acelera mais a cada rebatida, mas as raquetes ficam sempre em turbo (2x mais rápidas)</li>
         </ul>
       </div>
 
@@ -1645,6 +1647,9 @@ const Pong = () => {
                   </button>
                 ))}
               </div>
+              {setup.powers === 'brawl' && (
+                <p className="pong-modal-hint">Sem poderes: bola já sai rápida e acelera a cada rebatida, raquetes sempre em turbo (2x).</p>
+              )}
               {setup.powers === 'chaos' && (
                 <p className="pong-modal-hint">Raquetes gigantes (60% do gol) e balões de poder 3x mais frequentes.</p>
               )}
