@@ -45,6 +45,14 @@
  */
 
 /**
+ * lil-gui
+ * https://lil-gui.georgealways.com
+ * @version 0.17.0
+ * @author George Michael Brower
+ * @license MIT
+ */
+
+/**
  * react-router v7.9.4
  *
  * Copyright (c) Remix Software Inc.
