@@ -14,6 +14,7 @@ import Weather from './components/weather/Weather';
 import Snake from './components/snake/Snake';
 import Pong from './components/pong/Pong';
 import Football from './components/football/Football';
+import FootballField from './components/footballField/FootballField';
 import StorkKiller from './components/storkKiller/StorkKiller';
 import StorkKiller3D from './components/storkKiller3D/StorkKiller3D';
 import QuizCS from './components/quizcs/QuizCS';
@@ -51,6 +52,8 @@ function App() {
           <Route path="/snake" element={<Snake />} />
           <Route path="/pong" element={<Pong />} />
           <Route path="/football" element={<Football />} />
+          <Route path="/footballField" element={<FootballField />} />
+          <Route path="/footballfield" element={<FootballField />} />
           <Route path="/storkKiller" element={<StorkKiller />} />
           <Route path="/storkKiller3D" element={<StorkKiller3D />} />
           <Route path="/storkkiller3d" element={<StorkKiller3D />} />

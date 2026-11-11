@@ -1,0 +1,236 @@
+.ff-root {
+  --ink: #f3f5ef;
+  --ink-dim: rgba(243, 245, 239, 0.66);
+  --panel: rgba(12, 16, 12, 0.58);
+  --edge: rgba(255, 255, 255, 0.12);
+  --accent: #b9e86a;
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  background: #0b0f0b;
+  color: var(--ink);
+  font-family: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+  text-align: left;
+  z-index: 1;
+}
+.ff-root *,
+.ff-root *::before,
+.ff-root *::after { box-sizing: border-box; }
+
+.ff-root .ff-view {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  cursor: grab;
+  touch-action: none;
+  z-index: 0;
+  opacity: 0;
+  transition: opacity 0.6s ease;
+}
+.ff-root .ff-view:active { cursor: grabbing; }
+.ff-root.ready .ff-view { opacity: 1; }
+
+/* ---- título e medidor ---------------------------------------------------- */
+.ff-brand,
+.ff-back,
+.ff-dock,
+.ff-toast { z-index: 2; }
+
+.ff-brand {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  padding: 10px 14px 11px;
+  background: var(--panel);
+  border: 1px solid var(--edge);
+  border-radius: 10px;
+  backdrop-filter: blur(10px);
+  pointer-events: none;
+}
+.ff-brand h1 {
+  margin: 0;
+  font-size: 19px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+.ff-brand p {
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: var(--ink-dim);
+}
+.ff-stats { font-variant-numeric: tabular-nums; }
+.ff-stats[data-level]::after {
+  content: " · " attr(data-level);
+  color: var(--accent);
+}
+
+.ff-back {
+  position: absolute;
+  top: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 7px 12px;
+  background: var(--panel);
+  border: 1px solid var(--edge);
+  border-radius: 10px;
+  backdrop-filter: blur(10px);
+  color: var(--ink);
+  font-size: 13px;
+  text-decoration: none;
+}
+.ff-back:hover { background: rgba(255, 255, 255, 0.12); }
+
+/* ---- rodapé: ajuda + vistas prontas ---------------------------------------- */
+.ff-dock {
+  position: absolute;
+  left: 14px;
+  right: 14px;
+  bottom: 14px;
+  display: flex;
+  align-items: flex-end;
+  gap: 14px;
+  pointer-events: none;
+}
+.ff-dock > * { pointer-events: auto; }
+
+.ff-help {
+  flex: none;
+  padding: 11px 14px;
+  background: var(--panel);
+  border: 1px solid var(--edge);
+  border-radius: 10px;
+  backdrop-filter: blur(10px);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.ff-help dl {
+  margin: 0;
+  display: grid;
+  grid-template-columns: auto auto;
+  column-gap: 14px;
+}
+.ff-help dt { color: var(--ink); font-weight: 600; white-space: nowrap; }
+.ff-help dd { margin: 0; color: var(--ink-dim); white-space: nowrap; }
+
+.ff-views {
+  margin: 0 auto;
+  min-width: 0;
+  display: flex;
+  gap: 4px;
+  padding: 5px;
+  background: var(--panel);
+  border: 1px solid var(--edge);
+  border-radius: 12px;
+  backdrop-filter: blur(10px);
+  overflow-x: auto;
+}
+.ff-views:empty { display: none; }
+.ff-views button {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  padding: 7px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  transition: background 0.15s ease;
+}
+.ff-views button:hover { background: rgba(255, 255, 255, 0.12); }
+.ff-views button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.ff-views kbd {
+  font: inherit;
+  font-size: 11px;
+  min-width: 18px;
+  padding: 1px 5px;
+  border-radius: 5px;
+  color: #10160c;
+  background: var(--accent);
+  text-align: center;
+  font-weight: 700;
+}
+
+/* ---- aviso e mensagens ---------------------------------------------------- */
+.ff-toast {
+  position: absolute;
+  top: 60px;
+  left: 50%;
+  transform: translate(-50%, -12px);
+  padding: 9px 14px;
+  background: var(--panel);
+  border: 1px solid var(--edge);
+  border-radius: 10px;
+  backdrop-filter: blur(10px);
+  font-size: 13px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s ease, transform 0.25s ease;
+}
+.ff-toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+.ff-notice {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  padding: 32px;
+  text-align: center;
+  background: #0b0f0b;
+  z-index: 20;
+  line-height: 1.6;
+}
+.ff-notice h2 { margin: 0 0 8px; font-size: 22px; }
+.ff-notice p { margin: 4px 0; color: var(--ink-dim); max-width: 46ch; }
+
+/* ---- painel lil-gui --------------------------------------------------------- */
+.ff-root .lil-gui {
+  --background-color: rgba(12, 16, 12, 0.72);
+  --title-background-color: rgba(12, 16, 12, 0.86);
+  --widget-color: rgba(255, 255, 255, 0.12);
+  --hover-color: rgba(255, 255, 255, 0.2);
+  --focus-color: rgba(255, 255, 255, 0.26);
+  --number-color: #b9e86a;
+  --string-color: #b9e86a;
+  --text-color: #f3f5ef;
+  --title-text-color: #f3f5ef;
+  --font-family: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  --font-size: 12px;
+  --input-font-size: 12px;
+  --name-width: 52%;
+  --widget-height: 22px;
+  --spacing: 5px;
+}
+.ff-root .lil-gui.root {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  max-height: calc(100% - 28px);
+  overflow-y: auto;
+  border-radius: 10px;
+  border: 1px solid var(--edge);
+  backdrop-filter: blur(10px);
+  z-index: 5;
+}
+
+/* H esconde a interface; com o mouse preso só fica o essencial */
+.ff-root.clean .ff-brand,
+.ff-root.clean .ff-dock,
+.ff-root.clean .ff-back,
+.ff-root.clean .lil-gui { display: none; }
+.ff-root.locked .ff-view { cursor: none; }
+.ff-root.locked .ff-dock { opacity: 0.35; }
+
+@media (max-width: 1100px) {
+  .ff-help { display: none; }
+}
+@media (max-width: 700px) {
+  .ff-back { top: auto; bottom: 70px; }
+}
